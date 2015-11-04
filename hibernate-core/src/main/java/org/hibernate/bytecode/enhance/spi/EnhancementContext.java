@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.bytecode.enhance.spi;
 
@@ -28,19 +11,18 @@ import javassist.CtField;
 
 /**
  * The context for performing an enhancement.  Enhancement can happen in any number of ways:<ul>
- *     <li>Build time, via Ant</li>
- *     <li>Build time, via Maven</li>
- *     <li>Build time, via Gradle</li>
- *     <li>Runtime, via agent</li>
- *     <li>Runtime, via JPA constructs</li>
+ * <li>Build time, via Ant</li>
+ * <li>Build time, via Maven</li>
+ * <li>Build time, via Gradle</li>
+ * <li>Runtime, via agent</li>
+ * <li>Runtime, via JPA constructs</li>
  * </ul>
- *
+ * <p/>
  * This interface isolates the code that actually does the enhancement from the underlying context in which
  * the enhancement is being performed.
  *
- * @todo Not sure its a great idea to expose Javassist classes this way.  maybe wrap them in our own contracts?
- *
  * @author Steve Ebersole
+ * @todo Not sure its a great idea to expose Javassist classes this way.  maybe wrap them in our own contracts?
  */
 public interface EnhancementContext {
 	/**
@@ -71,14 +53,35 @@ public interface EnhancementContext {
 	public boolean isCompositeClass(CtClass classDescriptor);
 
 	/**
+	 * Should we manage association of bi-directional persistent attributes for this field?
+	 *
+	 * @param field The field to check.
+	 *
+	 * @return {@code true} indicates that the field is enhanced so that for bi-directional persistent fields
+	 * 			the association is managed, i.e. the associations are automatically set; {@code false} indicates that
+	 * 			the management is handled by the user.
+	 */
+	public boolean doBiDirectionalAssociationManagement(CtField field);
+
+	/**
 	 * Should we in-line dirty checking for persistent attributes for this class?
 	 *
 	 * @param classDescriptor The descriptor of the class to check.
 	 *
 	 * @return {@code true} indicates that dirty checking should be in-lined within the entity; {@code false}
-	 * indicates it should not.  In-lined is more easily serializable and probably more performant.
+	 *         indicates it should not.  In-lined is more easily serializable and probably more performant.
 	 */
 	public boolean doDirtyCheckingInline(CtClass classDescriptor);
+
+	/**
+	 * Should we enhance field access to entities from this class?
+	 *
+	 * @param classDescriptor The descriptor of the class to check.
+	 *
+	 * @return {@code true} indicates that any direct access to fields of entities should be routed to the enhanced
+	 *         getter / setter  method.
+	 */
+	public boolean doFieldAccessEnhancement(CtClass classDescriptor);
 
 	/**
 	 * Does the given class define any lazy loadable attributes?
@@ -106,7 +109,7 @@ public interface EnhancementContext {
 	/**
 	 * For fields which are persistent (according to {@link #isPersistentField}), determine the corresponding ordering
 	 * maintained within the Hibernate metamodel.
-
+	 *
 	 * @param persistentFields The persistent field references.
 	 *
 	 * @return The ordered references.
@@ -121,4 +124,11 @@ public interface EnhancementContext {
 	 * @return {@code true} if the field is lazy loadable; {@code false} otherwise.
 	 */
 	public boolean isLazyLoadable(CtField field);
+
+	/**
+	 * @param field the field to check
+	 *
+	 * @return {@code true} if the field is mapped
+	 */
+	public boolean isMappedCollection(CtField field);
 }

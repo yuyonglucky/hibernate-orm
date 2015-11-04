@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.synchronization.work;
 
@@ -29,7 +12,7 @@ import java.util.Map;
 
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.tools.ArraysTools;
 import org.hibernate.persister.entity.EntityPersister;
 
@@ -43,9 +26,13 @@ public class DelWorkUnit extends AbstractAuditWorkUnit implements AuditWorkUnit 
 	private final String[] propertyNames;
 
 	public DelWorkUnit(
-			SessionImplementor sessionImplementor, String entityName, AuditConfiguration verCfg,
-			Serializable id, EntityPersister entityPersister, Object[] state) {
-		super( sessionImplementor, entityName, verCfg, id, RevisionType.DEL );
+			SessionImplementor sessionImplementor,
+			String entityName,
+			EnversService enversService,
+			Serializable id,
+			EntityPersister entityPersister,
+			Object[] state) {
+		super( sessionImplementor, entityName, enversService, id, RevisionType.DEL );
 
 		this.state = state;
 		this.entityPersister = entityPersister;
@@ -62,8 +49,8 @@ public class DelWorkUnit extends AbstractAuditWorkUnit implements AuditWorkUnit 
 		final Map<String, Object> data = new HashMap<String, Object>();
 		fillDataWithId( data, revisionData );
 
-		if ( verCfg.getGlobalCfg().isStoreDataAtDelete() ) {
-			verCfg.getEntCfg().get( getEntityName() ).getPropertyMapper().map(
+		if ( enversService.getGlobalConfiguration().isStoreDataAtDelete() ) {
+			enversService.getEntitiesConfigurations().get( getEntityName() ).getPropertyMapper().map(
 					sessionImplementor,
 					data,
 					propertyNames,
@@ -72,7 +59,7 @@ public class DelWorkUnit extends AbstractAuditWorkUnit implements AuditWorkUnit 
 			);
 		}
 		else {
-			verCfg.getEntCfg().get( getEntityName() ).getPropertyMapper().map(
+			enversService.getEntitiesConfigurations().get( getEntityName() ).getPropertyMapper().map(
 					sessionImplementor,
 					data,
 					propertyNames,
@@ -90,7 +77,7 @@ public class DelWorkUnit extends AbstractAuditWorkUnit implements AuditWorkUnit 
 			// Return null if object's state has not changed.
 			return null;
 		}
-		return new ModWorkUnit( sessionImplementor, entityName, verCfg, id, entityPersister, second.getState(), state );
+		return new ModWorkUnit( sessionImplementor, entityName, enversService, id, entityPersister, second.getState(), state );
 	}
 
 	@Override

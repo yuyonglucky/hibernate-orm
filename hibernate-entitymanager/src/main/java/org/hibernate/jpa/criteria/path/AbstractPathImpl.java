@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria.path;
 
@@ -77,9 +60,9 @@ public abstract class AbstractPathImpl<X>
 	}
 
 	@Override
-    public PathSource<?> getParentPath() {
-        return getPathSource();
-    }
+	public PathSource<?> getParentPath() {
+		return getPathSource();
+	}
 
 	@Override
 	@SuppressWarnings({ "unchecked" })
@@ -95,12 +78,17 @@ public abstract class AbstractPathImpl<X>
 	protected abstract boolean canBeDereferenced();
 
 	protected final RuntimeException illegalDereference() {
-		String message = "Illegal attempt to dereference path source";
-		PathSource<?> source = getPathSource();
-		if ( source != null ) {
-			message += " [" + getPathSource().getPathIdentifier() + "]";
-		}
-		return new IllegalArgumentException(message);
+		return new IllegalStateException(
+				String.format(
+						"Illegal attempt to dereference path source [%s] of basic type",
+						getPathIdentifier()
+				)
+		);
+//		String message = "Illegal attempt to dereference path source [";
+//		if ( source != null ) {
+//			message += " [" + getPathIdentifier() + "]";
+//		}
+//		return new IllegalArgumentException(message);
 	}
 
 	protected final RuntimeException unknownAttribute(String attributeName) {
@@ -134,10 +122,19 @@ public abstract class AbstractPathImpl<X>
 
 		SingularAttributePath<Y> path = (SingularAttributePath<Y>) resolveCachedAttributePath( attribute.getName() );
 		if ( path == null ) {
-			path = new SingularAttributePath<Y>( criteriaBuilder(), attribute.getJavaType(), this, attribute );
+			path = new SingularAttributePath<Y>(
+					criteriaBuilder(),
+					attribute.getJavaType(),
+					getPathSourceForSubPaths(),
+					attribute
+			);
 			registerAttributePath( attribute.getName(), path );
 		}
 		return path;
+	}
+
+	protected PathSource getPathSourceForSubPaths() {
+		return this;
 	}
 
 	@Override

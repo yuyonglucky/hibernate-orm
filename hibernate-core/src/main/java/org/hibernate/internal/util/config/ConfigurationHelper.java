@@ -1,31 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.internal.util.config;
 
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.StringTokenizer;
@@ -144,6 +126,30 @@ public final class ConfigurationHelper {
 	}
 
 	/**
+	 * Get the config value as a boolean (default of false)
+	 *
+	 * @param name The config setting name.
+	 * @param values The map of config values
+	 *
+	 * @return The value.
+	 */
+	public static Boolean getBooleanWrapper(String name, Map values, Boolean defaultValue) {
+		Object value = values.get( name );
+		if ( value == null ) {
+			return defaultValue;
+		}
+		if ( Boolean.class.isInstance( value ) ) {
+			return (Boolean) value;
+		}
+		if ( String.class.isInstance( value ) ) {
+			return Boolean.valueOf( (String) value );
+		}
+		throw new ConfigurationException(
+				"Could not determine how to handle configuration value [name=" + name + ", value=" + value + "] as boolean"
+		);
+	}
+
+	/**
 	 * Get the config value as an int
 	 *
 	 * @param name The config setting name.
@@ -196,6 +202,23 @@ public final class ConfigurationHelper {
 		throw new ConfigurationException(
 				"Could not determine how to handle configuration value [name=" + name +
 						", value=" + value + "(" + value.getClass().getName() + ")] as Integer"
+		);
+	}
+
+	public static long getLong(String name, Map values, int defaultValue) {
+		Object value = values.get( name );
+		if ( value == null ) {
+			return defaultValue;
+		}
+		if ( Long.class.isInstance( value ) ) {
+			return (Long) value;
+		}
+		if ( String.class.isInstance( value ) ) {
+			return Long.parseLong( (String) value );
+		}
+		throw new ConfigurationException(
+				"Could not determine how to handle configuration value [name=" + name +
+						", value=" + value + "(" + value.getClass().getName() + ")] as long"
 		);
 	}
 
@@ -265,6 +288,26 @@ public final class ConfigurationHelper {
 		}
 		return value;
 	}
+	/**
+	 * Extract a property value by name from the given properties object.
+	 * <p/>
+	 * Both <tt>null</tt> and <tt>empty string</tt> are viewed as the same, and return null.
+	 *
+	 * @param propertyName The name of the property for which to extract value
+	 * @param properties The properties object
+	 * @return The property value; may be null.
+	 */
+	public static String extractPropertyValue(String propertyName, Map properties) {
+		String value = (String) properties.get( propertyName );
+		if ( value == null ) {
+			return null;
+		}
+		value = value.trim();
+		if ( StringHelper.isEmpty( value ) ) {
+			return null;
+		}
+		return value;
+	}
 
 	/**
 	 * Constructs a map from a property value.
@@ -280,6 +323,31 @@ public final class ConfigurationHelper {
 	 * @return The resulting map; never null, though perhaps empty.
 	 */
 	public static Map toMap(String propertyName, String delim, Properties properties) {
+		Map map = new HashMap();
+		String value = extractPropertyValue( propertyName, properties );
+		if ( value != null ) {
+			StringTokenizer tokens = new StringTokenizer( value, delim );
+			while ( tokens.hasMoreTokens() ) {
+				map.put( tokens.nextToken(), tokens.hasMoreElements() ? tokens.nextToken() : "" );
+			}
+		}
+		return map;
+	}
+
+	/**
+	 * Constructs a map from a property value.
+	 * <p/>
+	 * The exact behavior here is largely dependant upon what is passed in as
+	 * the delimiter.
+	 *
+	 * @see #extractPropertyValue(String, java.util.Properties)
+	 *
+	 * @param propertyName The name of the property for which to retrieve value
+	 * @param delim The string defining tokens used as both entry and key/value delimiters.
+	 * @param properties The properties object
+	 * @return The resulting map; never null, though perhaps empty.
+	 */
+	public static Map toMap(String propertyName, String delim, Map properties) {
 		Map map = new HashMap();
 		String value = extractPropertyValue( propertyName, properties );
 		if ( value != null ) {

@@ -1,38 +1,20 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
 
 import java.io.Serializable;
 import java.util.Set;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.CacheMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.TransientObjectException;
 import org.hibernate.action.internal.EntityDeleteAction;
+import org.hibernate.action.internal.OrphanRemovalAction;
 import org.hibernate.classic.Lifecycle;
 import org.hibernate.engine.internal.Cascade;
 import org.hibernate.engine.internal.CascadePoint;
@@ -46,6 +28,7 @@ import org.hibernate.engine.spi.Status;
 import org.hibernate.event.spi.DeleteEvent;
 import org.hibernate.event.spi.DeleteEventListener;
 import org.hibernate.event.spi.EventSource;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.collections.IdentitySet;
 import org.hibernate.persister.entity.EntityPersister;
@@ -60,9 +43,7 @@ import org.hibernate.type.TypeHelper;
  * @author Steve Ebersole
  */
 public class DefaultDeleteEventListener implements DeleteEventListener {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class,
-                                                                       DefaultDeleteEventListener.class.getName());
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( DefaultDeleteEventListener.class );
 
 	/**
 	 * Handle the given delete event.
@@ -125,7 +106,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 
 			entityEntry = persistenceContext.addEntity(
 					entity,
-					( persister.isMutable() ? Status.MANAGED : Status.READ_ONLY ),
+					(persister.isMutable() ? Status.MANAGED : Status.READ_ONLY),
 					persister.getPropertyValues( entity ),
 					key,
 					version,
@@ -159,7 +140,15 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 			return;
 		}
 
-		deleteEntity( source, entity, entityEntry, event.isCascadeDeleteEnabled(), persister, transientEntities );
+		deleteEntity(
+				source,
+				entity,
+				entityEntry,
+				event.isCascadeDeleteEnabled(),
+				event.isOrphanRemovalBeforeUpdates(),
+				persister,
+				transientEntities
+		);
 
 		if ( source.getFactory().getSettings().isIdentifierRollbackEnabled() ) {
 			persister.resetIdentifier( entity, id, version, source );
@@ -227,11 +216,15 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 			final Object entity,
 			final EntityEntry entityEntry,
 			final boolean isCascadeDeleteEnabled,
+			final boolean isOrphanRemovalBeforeUpdates,
 			final EntityPersister persister,
 			final Set transientEntities) {
 
 		if ( LOG.isTraceEnabled() ) {
-			LOG.tracev( "Deleting {0}", MessageHelper.infoString( persister, entityEntry.getId(), session.getFactory() ) );
+			LOG.tracev(
+					"Deleting {0}",
+					MessageHelper.infoString( persister, entityEntry.getId(), session.getFactory() )
+			);
 		}
 
 		final PersistenceContext persistenceContext = session.getPersistenceContext();
@@ -239,7 +232,8 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 		final Object version = entityEntry.getVersion();
 
 		final Object[] currentState;
-		if ( entityEntry.getLoadedState() == null ) { //ie. the entity came in from update()
+		if ( entityEntry.getLoadedState() == null ) {
+			//ie. the entity came in from update()
 			currentState = persister.getPropertyValues( entity );
 		}
 		else {
@@ -268,18 +262,35 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 		new Nullability( session ).checkNullability( entityEntry.getDeletedState(), persister, true );
 		persistenceContext.getNullifiableEntityKeys().add( key );
 
-		// Ensures that containing deletions happen before sub-deletions
-		session.getActionQueue().addAction(
-				new EntityDeleteAction(
-						entityEntry.getId(),
-						deletedState,
-						version,
-						entity,
-						persister,
-						isCascadeDeleteEnabled,
-						session
-				)
-		);
+		if ( isOrphanRemovalBeforeUpdates ) {
+			// TODO: The removeOrphan concept is a temporary "hack" for HHH-6484.  This should be removed once action/task
+			// ordering is improved.
+			session.getActionQueue().addAction(
+					new OrphanRemovalAction(
+							entityEntry.getId(),
+							deletedState,
+							version,
+							entity,
+							persister,
+							isCascadeDeleteEnabled,
+							session
+					)
+			);
+		}
+		else {
+			// Ensures that containing deletions happen before sub-deletions
+			session.getActionQueue().addAction(
+					new EntityDeleteAction(
+							entityEntry.getId(),
+							deletedState,
+							version,
+							entity,
+							persister,
+							isCascadeDeleteEnabled,
+							session
+					)
+			);
+		}
 
 		cascadeAfterDelete( session, persister, entity, transientEntities );
 
@@ -302,7 +313,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 	protected boolean invokeDeleteLifecycle(EventSource session, Object entity, EntityPersister persister) {
 		if ( persister.implementsLifecycle() ) {
 			LOG.debug( "Calling onDelete()" );
-			if ( ( ( Lifecycle ) entity ).onDelete( session ) ) {
+			if ( ( (Lifecycle) entity ).onDelete( session ) ) {
 				LOG.debug( "Deletion vetoed by onDelete()" );
 				return true;
 			}
@@ -322,7 +333,10 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 		session.getPersistenceContext().incrementCascadeLevel();
 		try {
 			// cascade-delete to collections BEFORE the collection owner is deleted
-			new Cascade( CascadingActions.DELETE, CascadePoint.AFTER_INSERT_BEFORE_DELETE, session ).cascade(
+			Cascade.cascade(
+					CascadingActions.DELETE,
+					CascadePoint.AFTER_INSERT_BEFORE_DELETE,
+					session,
 					persister,
 					entity,
 					transientEntities
@@ -345,7 +359,10 @@ public class DefaultDeleteEventListener implements DeleteEventListener {
 		session.getPersistenceContext().incrementCascadeLevel();
 		try {
 			// cascade-delete to many-to-one AFTER the parent was deleted
-			new Cascade( CascadingActions.DELETE, CascadePoint.BEFORE_INSERT_AFTER_DELETE, session ).cascade(
+			Cascade.cascade(
+					CascadingActions.DELETE,
+					CascadePoint.BEFORE_INSERT_AFTER_DELETE,
+					session,
 					persister,
 					entity,
 					transientEntities

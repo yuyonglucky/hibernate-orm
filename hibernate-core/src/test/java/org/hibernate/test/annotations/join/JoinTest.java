@@ -1,41 +1,27 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.join;
 
 import java.util.ArrayList;
 import java.util.Date;
-
-import org.junit.Test;
+import java.util.Locale;
 
 import org.hibernate.Criteria;
 import org.hibernate.HibernateException;
 import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
+import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.mapping.Join;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -45,10 +31,10 @@ import static org.junit.Assert.fail;
 /**
  * @author Emmanuel Bernard
  */
-public class JoinTest extends BaseCoreFunctionalTestCase {
+public class JoinTest extends BaseNonConfigCoreFunctionalTestCase {
 	@Test
 	public void testDefaultValue() throws Exception {
-		Join join = (Join) configuration().getClassMapping( Life.class.getName() ).getJoinClosureIterator().next();
+		Join join = (Join) metadata().getEntityBinding( Life.class.getName() ).getJoinClosureIterator().next();
 		assertEquals( "ExtendedLife", join.getTable().getName() );
 		org.hibernate.mapping.Column owner = new org.hibernate.mapping.Column();
 		owner.setName( "LIFE_ID" );
@@ -73,7 +59,7 @@ public class JoinTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testCompositePK() throws Exception {
-		Join join = (Join) configuration().getClassMapping( Dog.class.getName() ).getJoinClosureIterator().next();
+		Join join = (Join) metadata().getEntityBinding( Dog.class.getName() ).getJoinClosureIterator().next();
 		assertEquals( "DogThoroughbred", join.getTable().getName() );
 		org.hibernate.mapping.Column owner = new org.hibernate.mapping.Column();
 		owner.setName( "OWNER_NAME" );
@@ -178,9 +164,9 @@ public class JoinTest extends BaseCoreFunctionalTestCase {
 		}
 		catch (HibernateException e) {
 			//success
+			tx.rollback();
 		}
 		finally {
-			if ( tx != null ) tx.rollback();
 			s.close();
 		}
 	}
@@ -216,7 +202,7 @@ public class JoinTest extends BaseCoreFunctionalTestCase {
 		s.clear();
 
 		Cat c = (Cat) s.get( Cat.class, cat.getId() );
-		assertEquals( storyPart2.toUpperCase(), c.getStoryPart2() );
+		assertEquals( storyPart2.toUpperCase(Locale.ROOT), c.getStoryPart2() );
 
 		tx.rollback();
 		s.close();
@@ -238,6 +224,12 @@ public class JoinTest extends BaseCoreFunctionalTestCase {
 		assertNotNull( c.getName() );
 		s.getTransaction().rollback();
 		s.close();
+	}
+
+	@Override
+	protected void configureMetadataBuilder(MetadataBuilder metadataBuilder) {
+		super.configureMetadataBuilder( metadataBuilder );
+		metadataBuilder.applyImplicitNamingStrategy( ImplicitNamingStrategyLegacyJpaImpl.INSTANCE );
 	}
 
 	@Override

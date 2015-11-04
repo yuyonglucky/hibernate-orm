@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.jdbc.internal;
 
@@ -32,6 +15,7 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 
 import org.hibernate.Session;
+import org.hibernate.Transaction;
 import org.hibernate.engine.jdbc.batch.internal.BasicBatchKey;
 import org.hibernate.engine.jdbc.batch.internal.BatchBuilderImpl;
 import org.hibernate.engine.jdbc.batch.internal.BatchingBatch;
@@ -40,12 +24,12 @@ import org.hibernate.engine.jdbc.batch.spi.Batch;
 import org.hibernate.engine.jdbc.batch.spi.BatchBuilder;
 import org.hibernate.engine.jdbc.batch.spi.BatchKey;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
-import org.hibernate.engine.jdbc.spi.LogicalConnectionImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.engine.transaction.spi.TransactionCoordinator;
-import org.hibernate.engine.transaction.spi.TransactionImplementor;
 import org.hibernate.jdbc.Expectation;
 import org.hibernate.jdbc.Expectations;
+import org.hibernate.resource.jdbc.spi.LogicalConnectionImplementor;
+import org.hibernate.resource.transaction.TransactionCoordinator;
+
 import org.hibernate.test.common.JournalingBatchObserver;
 import org.hibernate.test.common.JournalingTransactionObserver;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
@@ -71,11 +55,7 @@ public class BatchingTest extends BaseCoreFunctionalTestCase implements BatchKey
 		Session session = openSession();
 		SessionImplementor sessionImpl = (SessionImplementor) session;
 		
-		TransactionCoordinator transactionCoordinator = sessionImpl.getTransactionCoordinator();
-		JournalingTransactionObserver observer = new JournalingTransactionObserver();
-		transactionCoordinator.addObserver( observer );
-
-		final JdbcCoordinator jdbcCoordinator = transactionCoordinator.getJdbcCoordinator();
+		final JdbcCoordinator jdbcCoordinator = sessionImpl.getJdbcCoordinator();
 		LogicalConnectionImplementor logicalConnection = jdbcCoordinator.getLogicalConnection();
 
 		// set up some tables to use
@@ -88,16 +68,15 @@ public class BatchingTest extends BaseCoreFunctionalTestCase implements BatchKey
 			// ignore if the DB doesn't support "if exists" and the table doesn't exist
 		}
 		jdbcCoordinator.getResultSetReturn().execute( statement, "create table SANDBOX_JDBC_TST ( ID integer, NAME varchar(100) )" );
-		assertTrue( jdbcCoordinator.hasRegisteredResources() );
+		assertTrue( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 		assertTrue( logicalConnection.isPhysicallyConnected() );
-		jdbcCoordinator.release( statement );
-		assertFalse( jdbcCoordinator.hasRegisteredResources() );
+		jdbcCoordinator.getResourceRegistry().release( statement );
+		assertFalse( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 		assertTrue( logicalConnection.isPhysicallyConnected() ); // after_transaction specified
 
 		// ok, now we can get down to it...
-		TransactionImplementor txn = transactionCoordinator.getTransaction();  // same as Session#getTransaction
+		Transaction txn = session.getTransaction();  // same as Session#getTransaction
 		txn.begin();
-		assertEquals( 1, observer.getBegins() );
 
 		final String insertSql = "insert into SANDBOX_JDBC_TST( ID, NAME ) values ( ?, ? )";
 
@@ -117,12 +96,12 @@ public class BatchingTest extends BaseCoreFunctionalTestCase implements BatchKey
 		insertBatch.addToBatch();
 		assertEquals( 0, batchObserver.getExplicitExecutionCount() );
 		assertEquals( 1, batchObserver.getImplicitExecutionCount() );
-		assertFalse( jdbcCoordinator.hasRegisteredResources() );
+		assertFalse( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 
 		insertBatch.execute();
 		assertEquals( 1, batchObserver.getExplicitExecutionCount() );
 		assertEquals( 1, batchObserver.getImplicitExecutionCount() );
-		assertFalse( jdbcCoordinator.hasRegisteredResources() );
+		assertFalse( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 
 		insertBatch.release();
 
@@ -135,11 +114,7 @@ public class BatchingTest extends BaseCoreFunctionalTestCase implements BatchKey
 		Session session = openSession();
 		SessionImplementor sessionImpl = (SessionImplementor) session;
 		
-		TransactionCoordinator transactionCoordinator = sessionImpl.getTransactionCoordinator();
-		JournalingTransactionObserver observer = new JournalingTransactionObserver();
-		transactionCoordinator.addObserver( observer );
-
-		final JdbcCoordinator jdbcCoordinator = transactionCoordinator.getJdbcCoordinator();
+		final JdbcCoordinator jdbcCoordinator = sessionImpl.getJdbcCoordinator();
 		LogicalConnectionImplementor logicalConnection = jdbcCoordinator.getLogicalConnection();
 
 		// set up some tables to use
@@ -151,16 +126,15 @@ public class BatchingTest extends BaseCoreFunctionalTestCase implements BatchKey
 		catch ( Exception e ) {
 			// ignore if the DB doesn't support "if exists" and the table doesn't exist
 		}		jdbcCoordinator.getResultSetReturn().execute( statement, "create table SANDBOX_JDBC_TST ( ID integer, NAME varchar(100) )" );
-		assertTrue( jdbcCoordinator.hasRegisteredResources() );
+		assertTrue( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 		assertTrue( logicalConnection.isPhysicallyConnected() );
-		jdbcCoordinator.release( statement );
-		assertFalse( jdbcCoordinator.hasRegisteredResources() );
+		jdbcCoordinator.getResourceRegistry().release( statement );
+		assertFalse( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 		assertTrue( logicalConnection.isPhysicallyConnected() ); // after_transaction specified
 
 		// ok, now we can get down to it...
-		TransactionImplementor txn = transactionCoordinator.getTransaction();  // same as Session#getTransaction
+		Transaction txn = session.getTransaction();  // same as Session#getTransaction
 		txn.begin();
-		assertEquals( 1, observer.getBegins() );
 
 		final BatchBuilder batchBuilder = new BatchBuilderImpl( 2 );
 		final BatchKey batchKey = new BasicBatchKey( "this", Expectations.BASIC );
@@ -180,7 +154,7 @@ public class BatchingTest extends BaseCoreFunctionalTestCase implements BatchKey
 		insertBatch.addToBatch();
 		assertEquals( 0, batchObserver.getExplicitExecutionCount() );
 		assertEquals( 0, batchObserver.getImplicitExecutionCount() );
-		assertTrue( jdbcCoordinator.hasRegisteredResources() );
+		assertTrue( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 
 		PreparedStatement insert2 = insertBatch.getBatchStatement( insertSql, false );
 		assertSame( insert, insert2 );
@@ -192,12 +166,12 @@ public class BatchingTest extends BaseCoreFunctionalTestCase implements BatchKey
 		insertBatch.addToBatch();
 		assertEquals( 0, batchObserver.getExplicitExecutionCount() );
 		assertEquals( 1, batchObserver.getImplicitExecutionCount() );
-		assertTrue( jdbcCoordinator.hasRegisteredResources() );
+		assertTrue( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 
 		insertBatch.execute();
 		assertEquals( 1, batchObserver.getExplicitExecutionCount() );
 		assertEquals( 1, batchObserver.getImplicitExecutionCount() );
-		assertFalse( jdbcCoordinator.hasRegisteredResources() );
+		assertFalse( jdbcCoordinator.getResourceRegistry().hasRegisteredResources() );
 
 		insertBatch.release();
 

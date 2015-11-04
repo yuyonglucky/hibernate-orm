@@ -1,43 +1,26 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.access.jpa;
 
+import org.hibernate.MappingException;
+import org.hibernate.SessionFactory;
+import org.hibernate.cfg.Configuration;
+import org.hibernate.cfg.Environment;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.property.access.spi.GetterFieldImpl;
+import org.hibernate.property.access.spi.GetterMethodImpl;
+import org.hibernate.service.ServiceRegistry;
+import org.hibernate.tuple.entity.EntityTuplizer;
+
+import org.hibernate.testing.ServiceRegistryBuilder;
+import org.hibernate.testing.TestForIssue;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import org.hibernate.MappingException;
-import org.hibernate.SessionFactory;
-import org.hibernate.cfg.AnnotationConfiguration;
-import org.hibernate.cfg.Environment;
-import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.property.BasicPropertyAccessor;
-import org.hibernate.property.DirectPropertyAccessor;
-import org.hibernate.service.ServiceRegistry;
-import org.hibernate.testing.ServiceRegistryBuilder;
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.tuple.entity.EntityTuplizer;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -66,7 +49,7 @@ public class AccessMappingTest {
 
     @Test
     public void testInconsistentAnnotationPlacement() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         cfg.addAnnotatedClass( Course1.class );
         cfg.addAnnotatedClass( Student.class );
 		SessionFactory sf = null;
@@ -85,7 +68,7 @@ public class AccessMappingTest {
 
     @Test
     public void testFieldAnnotationPlacement() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         Class<?> classUnderTest = Course6.class;
         cfg.addAnnotatedClass( classUnderTest );
         cfg.addAnnotatedClass( Student.class );
@@ -95,14 +78,14 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Field access should be used.",
-                tuplizer.getIdentifierGetter() instanceof DirectPropertyAccessor.DirectGetter
+				tuplizer.getIdentifierGetter() instanceof GetterFieldImpl
         );
 		factory.close();
     }
 
     @Test
     public void testPropertyAnnotationPlacement() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         Class<?> classUnderTest = Course7.class;
         cfg.addAnnotatedClass( classUnderTest );
         cfg.addAnnotatedClass( Student.class );
@@ -112,14 +95,14 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Property access should be used.",
-                tuplizer.getIdentifierGetter() instanceof BasicPropertyAccessor.BasicGetter
+                tuplizer.getIdentifierGetter() instanceof GetterMethodImpl
         );
 		factory.close();
     }
 
     @Test
     public void testExplicitPropertyAccessAnnotationsOnProperty() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         Class<?> classUnderTest = Course2.class;
         cfg.addAnnotatedClass( classUnderTest );
         cfg.addAnnotatedClass( Student.class );
@@ -129,14 +112,14 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Property access should be used.",
-                tuplizer.getIdentifierGetter() instanceof BasicPropertyAccessor.BasicGetter
+                tuplizer.getIdentifierGetter() instanceof GetterMethodImpl
         );
 		factory.close();
     }
 
     @Test
     public void testExplicitPropertyAccessAnnotationsOnField() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         cfg.addAnnotatedClass( Course4.class );
         cfg.addAnnotatedClass( Student.class );
 		SessionFactory sf= null;
@@ -155,7 +138,7 @@ public class AccessMappingTest {
 
     @Test
     public void testExplicitPropertyAccessAnnotationsWithHibernateStyleOverride() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         Class<?> classUnderTest = Course3.class;
         cfg.addAnnotatedClass( classUnderTest );
         cfg.addAnnotatedClass( Student.class );
@@ -165,19 +148,19 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Field access should be used.",
-                tuplizer.getIdentifierGetter() instanceof DirectPropertyAccessor.DirectGetter
+                tuplizer.getIdentifierGetter() instanceof GetterFieldImpl
         );
 
         assertTrue(
                 "Property access should be used.",
-                tuplizer.getGetter( 0 ) instanceof BasicPropertyAccessor.BasicGetter
+                tuplizer.getGetter( 0 ) instanceof GetterMethodImpl
         );
 		factory.close();
     }
 
     @Test
     public void testExplicitPropertyAccessAnnotationsWithJpaStyleOverride() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         Class<?> classUnderTest = Course5.class;
         cfg.addAnnotatedClass( classUnderTest );
         cfg.addAnnotatedClass( Student.class );
@@ -187,19 +170,19 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Field access should be used.",
-                tuplizer.getIdentifierGetter() instanceof DirectPropertyAccessor.DirectGetter
+                tuplizer.getIdentifierGetter() instanceof GetterFieldImpl
         );
 
         assertTrue(
                 "Property access should be used.",
-                tuplizer.getGetter( 0 ) instanceof BasicPropertyAccessor.BasicGetter
+                tuplizer.getGetter( 0 ) instanceof GetterMethodImpl
         );
 		factory.close();
     }
 
     @Test
     public void testDefaultFieldAccessIsInherited() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         Class<?> classUnderTest = User.class;
         cfg.addAnnotatedClass( classUnderTest );
         cfg.addAnnotatedClass( Person.class );
@@ -210,14 +193,14 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Field access should be used since the default access mode gets inherited",
-                tuplizer.getIdentifierGetter() instanceof DirectPropertyAccessor.DirectGetter
+                tuplizer.getIdentifierGetter() instanceof GetterFieldImpl
         );
 		factory.close();
     }
 
     @Test
     public void testDefaultPropertyAccessIsInherited() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         cfg.addAnnotatedClass( Horse.class );
         cfg.addAnnotatedClass( Animal.class );
 
@@ -227,7 +210,7 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Property access should be used since explicity configured via @Access",
-                tuplizer.getIdentifierGetter() instanceof BasicPropertyAccessor.BasicGetter
+                tuplizer.getIdentifierGetter() instanceof GetterMethodImpl
         );
 
         tuplizer = factory.getEntityPersister( Horse.class.getName() )
@@ -235,7 +218,7 @@ public class AccessMappingTest {
                 .getTuplizer();
         assertTrue(
                 "Field access should be used since the default access mode gets inherited",
-                tuplizer.getGetter( 0 ) instanceof DirectPropertyAccessor.DirectGetter
+                tuplizer.getGetter( 0 ) instanceof GetterFieldImpl
         );
 		factory.close();
     }
@@ -243,7 +226,7 @@ public class AccessMappingTest {
     @TestForIssue(jiraKey = "HHH-5004")
     @Test
     public void testAccessOnClassAndId() throws Exception {
-        AnnotationConfiguration cfg = new AnnotationConfiguration();
+        Configuration cfg = new Configuration();
         cfg.addAnnotatedClass( Course8.class );
         cfg.addAnnotatedClass( Student.class );
         cfg.buildSessionFactory( serviceRegistry ).close();

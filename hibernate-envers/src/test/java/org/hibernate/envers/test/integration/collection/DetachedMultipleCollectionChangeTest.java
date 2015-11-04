@@ -1,13 +1,19 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.collection;
 
-import javax.persistence.EntityManager;
-import javax.persistence.Query;
-import javax.transaction.Status;
-import javax.transaction.TransactionManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import javax.persistence.EntityManager;
+import javax.persistence.Query;
+import javax.transaction.Status;
+import javax.transaction.TransactionManager;
 
 import org.hibernate.dialect.Oracle8iDialect;
 import org.hibernate.envers.RevisionType;
@@ -18,12 +24,11 @@ import org.hibernate.envers.test.entities.collection.MultipleCollectionEntity;
 import org.hibernate.envers.test.entities.collection.MultipleCollectionRefEntity1;
 import org.hibernate.envers.test.entities.collection.MultipleCollectionRefEntity2;
 
-import org.junit.Test;
-
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.jta.TestingJtaBootstrap;
 import org.hibernate.testing.jta.TestingJtaPlatformImpl;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;

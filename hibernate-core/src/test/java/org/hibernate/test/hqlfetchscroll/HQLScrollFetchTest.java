@@ -1,4 +1,26 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.hqlfetchscroll;
+
+import org.hibernate.Hibernate;
+import org.hibernate.ScrollableResults;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.hibernate.transform.DistinctRootEntityResultTransformer;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -7,60 +29,42 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-
-import org.hibernate.Hibernate;
-import org.hibernate.ScrollableResults;
-import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.dialect.DB2Dialect;
-import org.hibernate.dialect.H2Dialect;
-import org.hibernate.dialect.Oracle8iDialect;
-import org.hibernate.dialect.SQLServerDialect;
-import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.hibernate.transform.DistinctRootEntityResultTransformer;
-import org.junit.Test;
-
-@SkipForDialect( value = { Oracle8iDialect.class },
-		comment = "Oracle does not support the identity column used in the mapping.  Extended by NoIdentityHQLScrollFetchTest" )
 public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	private static final String QUERY = "select p from Parent p join fetch p.children c";
 
 	@Test
 	public void testNoScroll() {
 		Session s = openSession();
+		s.beginTransaction();
 		List list = s.createQuery( QUERY ).setResultTransformer( DistinctRootEntityResultTransformer.INSTANCE ).list();
 		assertResultFromAllUsers( list );
+		s.getTransaction().commit();
 		s.close();
 	}
 
 	@Test
-	@SkipForDialect( { SQLServerDialect.class,  Oracle8iDialect.class, H2Dialect.class, DB2Dialect.class } )
 	public void testScroll() {
 		Session s = openSession();
-		ScrollableResults results = s.createQuery( QUERY ).scroll();
+		s.beginTransaction();
+		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc, c.name asc" ).scroll();
 		List list = new ArrayList();
 		while ( results.next() ) {
 			list.add( results.get( 0 ) );
 		}
 		assertResultFromAllUsers( list );
+		s.getTransaction().commit();
 		s.close();
 	}
 
 	@Test
 	public void testIncompleteScrollFirstResult() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc" ).scroll();
 		results.next();
 		Parent p = (Parent) results.get( 0 );
 		assertResultFromOneUser( p );
+		s.getTransaction().commit();
 		s.close();
 	}
 
@@ -68,6 +72,7 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	@TestForIssue( jiraKey = "HHH-1283" )
 	public void testIncompleteScrollSecondResult() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc" ).scroll();
 		results.next();
 		Parent p = (Parent) results.get( 0 );
@@ -75,6 +80,7 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 		results.next();
 		p = (Parent) results.get( 0 );
 		assertResultFromOneUser( p );
+		s.getTransaction().commit();
 		s.close();
 	}
 
@@ -110,6 +116,7 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	@TestForIssue( jiraKey = "HHH-1283")
 	public void testIncompleteScroll() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc" ).scroll();
 		results.next();
 		Parent p = (Parent) results.get( 0 );
@@ -142,6 +149,7 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 		// check that the same second parent is obtained by calling Session.get()
 		assertNull( pOther );
 		assertNull( cOther );
+		s.getTransaction().commit();
 		s.close();
 	}
 
@@ -149,6 +157,7 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	@TestForIssue( jiraKey = "HHH-1283" )
 	public void testIncompleteScrollLast() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc" ).scroll();
 		results.next();
 		Parent p = (Parent) results.get( 0 );
@@ -184,6 +193,7 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 		assertTrue( Hibernate.isInitialized( pOther.getChildren() ) );
 		assertEquals( childrenOther, pOther.getChildren() );
 		assertResultFromOneUser( pOther );
+		s.getTransaction().commit();
 		s.close();
 	}
 
@@ -191,12 +201,14 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	@TestForIssue( jiraKey = "HHH-1283" )
 	public void testScrollOrderParentAsc() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc" ).scroll();
 		List list = new ArrayList();
 		while ( results.next() ) {
 			list.add( results.get( 0 ) );
 		}
 		assertResultFromAllUsers( list );
+		s.getTransaction().commit();
 		s.close();
 	}
 
@@ -204,12 +216,14 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	@TestForIssue( jiraKey = "HHH-1283" )
 	public void testScrollOrderParentDesc() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name desc" ).scroll();
 		List list = new ArrayList();
 		while ( results.next() ) {
 			list.add( results.get( 0 ) );
 		}
 		assertResultFromAllUsers( list );
+		s.getTransaction().commit();
 		s.close();
 	}
 
@@ -217,12 +231,14 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	@TestForIssue( jiraKey = "HHH-1283" )
 	public void testScrollOrderParentAscChildrenAsc() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc, c.name asc" ).scroll();
 		List list = new ArrayList();
 		while ( results.next() ) {
 			list.add( results.get( 0 ) );
 		}
 		assertResultFromAllUsers( list );
+		s.getTransaction().commit();
 		s.close();
 	}
 
@@ -230,12 +246,14 @@ public class HQLScrollFetchTest extends BaseCoreFunctionalTestCase {
 	@TestForIssue( jiraKey = "HHH-1283" )
 	public void testScrollOrderParentAscChildrenDesc() {
 		Session s = openSession();
+		s.beginTransaction();
 		ScrollableResults results = s.createQuery( QUERY + " order by p.name asc, c.name desc" ).scroll();
 		List list = new ArrayList();
 		while ( results.next() ) {
 			list.add( results.get( 0 ) );
 		}
 		assertResultFromAllUsers( list );
+		s.getTransaction().commit();
 		s.close();
 	}
 

@@ -1,7 +1,15 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.basic;
 
+import java.util.Map;
+
 import org.hibernate.Session;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.dialect.MySQL5Dialect;
 import org.hibernate.envers.configuration.EnversSettings;
 import org.hibernate.envers.exception.AuditException;
 import org.hibernate.envers.test.BaseEnversFunctionalTestCase;
@@ -9,14 +17,16 @@ import org.hibernate.envers.test.entities.StrTestEntity;
 import org.hibernate.envers.test.integration.collection.norevision.Name;
 import org.hibernate.envers.test.integration.collection.norevision.Person;
 
-import org.junit.Test;
-
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
+
+import org.junit.Test;
 
 /**
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
  */
 @TestForIssue(jiraKey = "HHH-5565")
+@SkipForDialect(value = MySQL5Dialect.class, comment = "The test hangs on")
 public class OutsideTransactionTest extends BaseEnversFunctionalTestCase {
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
@@ -24,9 +34,11 @@ public class OutsideTransactionTest extends BaseEnversFunctionalTestCase {
 	}
 
 	@Override
-	protected void configure(Configuration configuration) {
-		configuration.setProperty( EnversSettings.STORE_DATA_AT_DELETE, "true" );
-		configuration.setProperty( EnversSettings.REVISION_ON_COLLECTION_CHANGE, "true" );
+	protected void addSettings(Map settings) {
+		super.addSettings( settings );
+
+		settings.put( EnversSettings.STORE_DATA_AT_DELETE, "true" );
+		settings.put( EnversSettings.REVISION_ON_COLLECTION_CHANGE, "true" );
 	}
 
 	@Test(expected = AuditException.class)

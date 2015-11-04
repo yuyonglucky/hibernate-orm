@@ -1,28 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.criteria;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import javax.persistence.EntityManager;
@@ -38,6 +22,7 @@ import org.hibernate.jpa.test.metamodel.AbstractMetamodelSpecificTest;
 import org.hibernate.jpa.test.metamodel.Customer;
 import org.hibernate.jpa.test.metamodel.Customer_;
 import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.TestForIssue;
 import org.junit.Test;
 
 /**
@@ -106,9 +91,29 @@ public class ManipulationCriteriaTest extends AbstractMetamodelSpecificTest {
 			em.createQuery( updateCriteria ).executeUpdate();
 			fail( "Expecting failure due to no assignments" );
 		}
-		catch (IllegalStateException ise) {
+		catch (IllegalArgumentException iae) {
 			// expected
 		}
+
+		// changed to rollback since HHH-8442 causes transaction to be marked for rollback only
+		assertTrue( em.getTransaction().getRollbackOnly() );
+		em.getTransaction().rollback();
+		em.close();
+	}
+	
+	@Test
+	@TestForIssue(jiraKey = "HHH-8434")
+	public void basicMultipleAssignments() {
+		EntityManager em = getOrCreateEntityManager();
+		em.getTransaction().begin();
+
+		CriteriaBuilder builder = em.getCriteriaBuilder();
+
+		CriteriaUpdate<Customer> updateCriteria = builder.createCriteriaUpdate( Customer.class );
+		updateCriteria.from( Customer.class );
+		updateCriteria.set( Customer_.name, "Bob" );
+		updateCriteria.set( Customer_.age, 99 );
+		em.createQuery( updateCriteria ).executeUpdate();
 
 		em.getTransaction().commit();
 		em.close();

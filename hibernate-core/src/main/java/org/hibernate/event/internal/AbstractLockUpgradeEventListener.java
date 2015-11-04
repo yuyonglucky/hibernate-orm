@@ -1,41 +1,23 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.ObjectDeletedException;
-import org.hibernate.cache.spi.CacheKey;
+import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
 import org.hibernate.cache.spi.access.SoftLock;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.Status;
 import org.hibernate.event.spi.EventSource;
-import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
+import org.jboss.logging.Logger;
 
 /**
  * A convenience base class for listeners that respond to requests to perform a
@@ -43,9 +25,8 @@ import org.hibernate.pretty.MessageHelper;
  *
  * @author Gavin King
  */
-public class AbstractLockUpgradeEventListener extends AbstractReassociateEventListener {
-
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, AbstractLockUpgradeEventListener.class.getName() );
+public abstract class AbstractLockUpgradeEventListener extends AbstractReassociateEventListener {
+	private static final Logger log = CoreLogging.logger( AbstractLockUpgradeEventListener.class );
 
 	/**
 	 * Performs a pessimistic lock upgrade on a given entity, if needed.
@@ -72,22 +53,24 @@ public class AbstractLockUpgradeEventListener extends AbstractReassociateEventLi
 
 			final EntityPersister persister = entry.getPersister();
 
-			if ( LOG.isTraceEnabled() ) {
-				LOG.tracev( "Locking {0} in mode: {1}", MessageHelper.infoString( persister, entry.getId(), source.getFactory() ), requestedLockMode );
+			if ( log.isTraceEnabled() ) {
+				log.tracev(
+						"Locking {0} in mode: {1}",
+						MessageHelper.infoString( persister, entry.getId(), source.getFactory() ),
+						requestedLockMode
+				);
 			}
 
-			final SoftLock lock;
-			final CacheKey ck;
-			if ( persister.hasCache() ) {
-				ck = source.generateCacheKey( entry.getId(), persister.getIdentifierType(), persister.getRootEntityName() );
-				lock = persister.getCacheAccessStrategy().lockItem( ck, entry.getVersion() );
-			}
-			else {
-				ck = null;
-				lock = null;
-			}
-
+			final boolean cachingEnabled = persister.hasCache();
+			SoftLock lock = null;
+			Object ck = null;
 			try {
+				if ( cachingEnabled ) {
+					EntityRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+					ck = cache.generateCacheKey( entry.getId(), persister, source.getFactory(), source.getTenantIdentifier() );
+					lock = cache.lockItem( source, ck, entry.getVersion() );
+				}
+
 				if ( persister.isVersioned() && requestedLockMode == LockMode.FORCE  ) {
 					// todo : should we check the current isolation mode explicitly?
 					Object nextVersion = persister.forceVersionIncrement(
@@ -103,8 +86,8 @@ public class AbstractLockUpgradeEventListener extends AbstractReassociateEventLi
 			finally {
 				// the database now holds a lock + the object is flushed from the cache,
 				// so release the soft lock
-				if ( persister.hasCache() ) {
-					persister.getCacheAccessStrategy().unlockItem( ck, lock );
+				if ( cachingEnabled ) {
+					persister.getCacheAccessStrategy().unlockItem( source, ck, lock );
 				}
 			}
 

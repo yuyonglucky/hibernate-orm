@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.bytecode.enhance.spi;
 
@@ -28,7 +11,8 @@ package org.hibernate.bytecode.enhance.spi;
  *
  * @author Steve Ebersole
  */
-public class EnhancerConstants {
+public final class EnhancerConstants {
+
 	/**
 	 * Prefix for persistent-field reader methods.
 	 */
@@ -65,7 +49,7 @@ public class EnhancerConstants {
 
 	/**
 	 * Name of the field used to hold the previous {@link org.hibernate.engine.spi.ManagedEntity}.
-	 *
+	 * <p/>
 	 * Together, previous/next are used to define a "linked list"
 	 *
 	 * @see #NEXT_FIELD_NAME
@@ -88,7 +72,7 @@ public class EnhancerConstants {
 
 	/**
 	 * Name of the field used to hold the previous {@link org.hibernate.engine.spi.ManagedEntity}.
-	 *
+	 * <p/>
 	 * Together, previous/next are used to define a "linked list"
 	 *
 	 * @see #PREVIOUS_FIELD_NAME
@@ -127,6 +111,76 @@ public class EnhancerConstants {
 	 * @see #INTERCEPTOR_FIELD_NAME
 	 */
 	public static final String INTERCEPTOR_SETTER_NAME = "$$_hibernate_setInterceptor";
+
+	/**
+	 * Name of tracker field
+	 */
+	public static final String TRACKER_FIELD_NAME = "$$_hibernate_tracker";
+
+	/**
+	 * Name of method that add changed fields
+	 */
+	public static final String TRACKER_CHANGER_NAME = "$$_hibernate_trackChange";
+
+	/**
+	 * Name of method to see if any fields has changed
+	 */
+	public static final String TRACKER_HAS_CHANGED_NAME = "$$_hibernate_hasDirtyAttributes";
+
+	/**
+	 * Name of method to fetch dirty attributes
+	 */
+	public static final String TRACKER_GET_NAME = "$$_hibernate_getDirtyAttributes";
+
+	/**
+	 * Name of method to clear stored dirty attributes
+	 */
+	public static final String TRACKER_CLEAR_NAME = "$$_hibernate_clearDirtyAttributes";
+
+	/**
+	 * Name of method to suspend dirty tracking
+	 */
+	public static final String TRACKER_SUSPEND_NAME = "$$_hibernate_suspendDirtyTracking";
+
+	/**
+	 * Name of method to check if collection fields are dirty
+	 */
+	public static final String TRACKER_COLLECTION_GET_NAME = "$$_hibernate_getCollectionTracker";
+
+	/**
+	 * Name of method to check if collection fields are dirty
+	 */
+	public static final String TRACKER_COLLECTION_CHANGED_NAME = "$$_hibernate_areCollectionFieldsDirty";
+
+	/**
+	 * Name of the field that holds the collection tracker
+	 */
+	public static final String TRACKER_COLLECTION_NAME = "$$_hibernate_collectionTracker";
+
+	/**
+	 * Name of method to get dirty collection field names
+	 */
+	public static final String TRACKER_COLLECTION_CHANGED_FIELD_NAME = "$$_hibernate_getCollectionFieldDirtyNames";
+
+	/**
+	 * Name of method to clear dirty attribute on collection fields
+	 */
+	public static final String TRACKER_COLLECTION_CLEAR_NAME = "$$_hibernate_clearDirtyCollectionNames";
+
+	/**
+	 * Field to hold the track the owner of the embeddable entity
+	 */
+	public static final String TRACKER_COMPOSITE_FIELD_NAME = "$$_hibernate_compositeOwners";
+
+	/**
+	 * Method to set the owner of the embedded entity
+	 */
+	public static final String TRACKER_COMPOSITE_SET_OWNER = "$$_hibernate_setOwner";
+
+	/**
+	 * Method to clear the owner of the embedded entity
+	 */
+	public static final String TRACKER_COMPOSITE_CLEAR_OWNER = "$$_hibernate_clearOwner";
 
 	private EnhancerConstants() {
 	}

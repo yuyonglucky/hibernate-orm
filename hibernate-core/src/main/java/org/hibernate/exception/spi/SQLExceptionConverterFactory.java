@@ -1,33 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.exception.spi;
 
 import java.lang.reflect.Constructor;
 import java.sql.SQLException;
 import java.util.Properties;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.HibernateException;
 import org.hibernate.JDBCException;
@@ -38,13 +19,14 @@ import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.ReflectHelper;
 import org.hibernate.internal.util.StringHelper;
 
+import org.jboss.logging.Logger;
+
 /**
  * A factory for building SQLExceptionConverter instances.
  *
  * @author Steve Ebersole
  */
 public class SQLExceptionConverterFactory {
-
 	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, SQLExceptionConverterFactory.class.getName() );
 
 	private SQLExceptionConverterFactory() {
@@ -67,7 +49,7 @@ public class SQLExceptionConverterFactory {
 	public static SQLExceptionConverter buildSQLExceptionConverter(Dialect dialect, Properties properties) throws HibernateException {
 		SQLExceptionConverter converter = null;
 
-		String converterClassName = ( String ) properties.get( Environment.SQL_EXCEPTION_CONVERTER );
+		String converterClassName = (String) properties.get( Environment.SQL_EXCEPTION_CONVERTER );
 		if ( StringHelper.isNotEmpty( converterClassName ) ) {
 			converter = constructConverter( converterClassName, dialect.getViolatedConstraintNameExtracter() );
 		}
@@ -81,7 +63,7 @@ public class SQLExceptionConverterFactory {
 			try {
 				( (Configurable) converter ).configure( properties );
 			}
-			catch ( HibernateException e ) {
+			catch (HibernateException e) {
 				LOG.unableToConfigureSqlExceptionConverter( e );
 				throw e;
 			}
@@ -107,18 +89,17 @@ public class SQLExceptionConverterFactory {
 	private static SQLExceptionConverter constructConverter(String converterClassName, ViolatedConstraintNameExtracter violatedConstraintNameExtracter) {
 		try {
 			LOG.tracev( "Attempting to construct instance of specified SQLExceptionConverter [{0}]", converterClassName );
-			Class converterClass = ReflectHelper.classForName( converterClassName );
+			final Class converterClass = ReflectHelper.classForName( converterClassName );
 
 			// First, try to find a matching constructor accepting a ViolatedConstraintNameExtracter param...
-			Constructor[] ctors = converterClass.getDeclaredConstructors();
-			for ( int i = 0; i < ctors.length; i++ ) {
-				if ( ctors[i].getParameterTypes() != null && ctors[i].getParameterTypes().length == 1 ) {
-					if ( ViolatedConstraintNameExtracter.class.isAssignableFrom( ctors[i].getParameterTypes()[0] ) ) {
+			final Constructor[] ctors = converterClass.getDeclaredConstructors();
+			for ( Constructor ctor : ctors ) {
+				if ( ctor.getParameterTypes() != null && ctor.getParameterTypes().length == 1 ) {
+					if ( ViolatedConstraintNameExtracter.class.isAssignableFrom( ctor.getParameterTypes()[0] ) ) {
 						try {
-							return ( SQLExceptionConverter )
-									ctors[i].newInstance( new Object[]{violatedConstraintNameExtracter} );
+							return (SQLExceptionConverter) ctor.newInstance( violatedConstraintNameExtracter );
 						}
-						catch ( Throwable t ) {
+						catch (Throwable ignore) {
 							// eat it and try next
 						}
 					}
@@ -126,10 +107,10 @@ public class SQLExceptionConverterFactory {
 			}
 
 			// Otherwise, try to use the no-arg constructor
-			return ( SQLExceptionConverter ) converterClass.newInstance();
+			return (SQLExceptionConverter) converterClass.newInstance();
 
 		}
-		catch ( Throwable t ) {
+		catch (Throwable t) {
 			LOG.unableToConstructSqlExceptionConverter( t );
 		}
 

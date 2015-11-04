@@ -1,45 +1,29 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.infinispan.impl;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.transaction.SystemException;
 import javax.transaction.Transaction;
 import javax.transaction.TransactionManager;
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicReference;
 
+import org.hibernate.cache.CacheException;
+import org.hibernate.cache.infinispan.access.PutFromLoadValidator;
+import org.hibernate.cache.infinispan.util.Caches;
+import org.hibernate.cache.spi.Region;
+import org.hibernate.cache.spi.RegionFactory;
+
+import org.hibernate.cache.spi.access.AccessType;
 import org.infinispan.AdvancedCache;
 import org.infinispan.context.Flag;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
-
-import org.hibernate.cache.CacheException;
-import org.hibernate.cache.infinispan.util.Caches;
-import org.hibernate.cache.spi.Region;
-import org.hibernate.cache.spi.RegionFactory;
 
 /**
  * Support for Infinispan {@link Region}s. Handles common "utility" methods for an underlying named
@@ -54,34 +38,31 @@ public abstract class BaseRegion implements Region {
 
 	private static final Log log = LogFactory.getLog( BaseRegion.class );
 
-	private enum InvalidateState {
-		INVALID, CLEARING, VALID
-	}
-
-	private final String name;
-	private final AdvancedCache regionClearCache;
-	private final TransactionManager tm;
-	private final Object invalidationMutex = new Object();
-	private final AtomicReference<InvalidateState> invalidateState =
-			new AtomicReference<InvalidateState>( InvalidateState.VALID );
+	protected final String name;
+	protected final AdvancedCache cache;
+	protected final AdvancedCache localAndSkipLoadCache;
+	protected final TransactionManager tm;
 	private final RegionFactory factory;
 
-	protected final AdvancedCache cache;
+	protected volatile long lastRegionInvalidation = Long.MIN_VALUE;
+	protected int invalidations = 0;
 
-   /**
+	/**
     * Base region constructor.
     *
     * @param cache instance for the region
     * @param name of the region
+	 * @param transactionManager transaction manager may be needed even for non-transactional caches.
     * @param factory for this region
     */
-	public BaseRegion(AdvancedCache cache, String name, RegionFactory factory) {
+	public BaseRegion(AdvancedCache cache, String name, TransactionManager transactionManager, RegionFactory factory) {
 		this.cache = cache;
 		this.name = name;
-		this.tm = cache.getTransactionManager();
+		this.tm = transactionManager;
 		this.factory = factory;
-		this.regionClearCache = cache.withFlags(
-				Flag.CACHE_MODE_LOCAL, Flag.ZERO_LOCK_ACQUISITION_TIMEOUT
+		this.localAndSkipLoadCache = cache.withFlags(
+				Flag.CACHE_MODE_LOCAL, Flag.ZERO_LOCK_ACQUISITION_TIMEOUT,
+				Flag.SKIP_CACHE_LOAD
 		);
 	}
 
@@ -93,7 +74,7 @@ public abstract class BaseRegion implements Region {
 	@Override
 	public long getElementCountInMemory() {
 		if ( checkValid() ) {
-			return cache.size();
+			return localAndSkipLoadCache.size();
 		}
 
 		return 0;
@@ -122,7 +103,7 @@ public abstract class BaseRegion implements Region {
 	@Override
 	public int getTimeout() {
 		// 60 seconds
-		return 600;
+		return 60000;
 	}
 
 	@Override
@@ -141,12 +122,7 @@ public abstract class BaseRegion implements Region {
 
 	@Override
 	public void destroy() throws CacheException {
-		try {
-			cache.stop();
-		}
-		finally {
-			cache.removeListener( this );
-		}
+		cache.stop();
 	}
 
 	@Override
@@ -161,49 +137,7 @@ public abstract class BaseRegion implements Region {
     * @return true if the region is valid, false otherwise
     */
 	public boolean checkValid() {
-		boolean valid = isValid();
-		if ( !valid ) {
-			synchronized (invalidationMutex) {
-				if ( invalidateState.compareAndSet(
-						InvalidateState.INVALID, InvalidateState.CLEARING
-				) ) {
-					final Transaction tx = suspend();
-					try {
-						// Clear region in a separate transaction
-						Caches.withinTx(
-								cache, new Callable<Void>() {
-							@Override
-							public Void call() throws Exception {
-								regionClearCache.clear();
-								return null;
-							}
-						}
-						);
-						invalidateState.compareAndSet(
-								InvalidateState.CLEARING, InvalidateState.VALID
-						);
-					}
-					catch (Exception e) {
-						if ( log.isTraceEnabled() ) {
-							log.trace(
-									"Could not invalidate region: "
-											+ e.getLocalizedMessage()
-							);
-						}
-					}
-					finally {
-						resume( tx );
-					}
-				}
-			}
-			valid = isValid();
-		}
-
-		return valid;
-	}
-
-	protected boolean isValid() {
-		return invalidateState.get() == InvalidateState.VALID;
+		return lastRegionInvalidation != Long.MAX_VALUE;
 	}
 
 	/**
@@ -241,14 +175,35 @@ public abstract class BaseRegion implements Region {
 		}
 	}
 
-   /**
-    * Invalidates the region.
-    */
+	/**
+	 * Invalidates the region.
+	 */
 	public void invalidateRegion() {
-		if ( log.isTraceEnabled() ) {
-			log.trace( "Invalidate region: " + name );
+		// this is called only from EvictAllCommand, we don't have any ongoing transaction
+		beginInvalidation();
+		endInvalidation();
+	}
+
+	public void beginInvalidation() {
+		if (log.isTraceEnabled()) {
+			log.trace( "Begin invalidating region: " + name );
 		}
-		invalidateState.set( InvalidateState.INVALID );
+		synchronized (this) {
+			lastRegionInvalidation = Long.MAX_VALUE;
+			++invalidations;
+		}
+		runInvalidation(getCurrentTransaction() != null);
+	}
+
+	public void endInvalidation() {
+		synchronized (this) {
+			if (--invalidations == 0) {
+				lastRegionInvalidation = nextTimestamp();
+			}
+		}
+		if (log.isTraceEnabled()) {
+			log.trace( "End invalidating region: " + name );
+		}
 	}
 
 	public TransactionManager getTransactionManager() {
@@ -265,4 +220,38 @@ public abstract class BaseRegion implements Region {
 		return cache;
 	}
 
+	protected Transaction getCurrentTransaction() {
+		try {
+			// Transaction manager could be null
+			return tm != null ? tm.getTransaction() : null;
+		}
+		catch (SystemException e) {
+			throw new CacheException("Unable to get current transaction", e);
+		}
+	}
+
+	protected void checkAccessType(AccessType accessType) {
+		if (accessType == AccessType.TRANSACTIONAL && !cache.getCacheConfiguration().transaction().transactionMode().isTransactional()) {
+			log.warn("Requesting TRANSACTIONAL cache concurrency strategy but the cache is not configured as transactional.");
+		}
+		else if (accessType == AccessType.READ_WRITE && cache.getCacheConfiguration().transaction().transactionMode().isTransactional()) {
+			log.warn("Requesting READ_WRITE cache concurrency strategy but the cache was configured as transactional.");
+		}
+	}
+
+	protected void runInvalidation(boolean inTransaction) {
+		// If we're running inside a transaction, we need to remove elements one-by-one
+		// to clean the context as well (cache.clear() does not do that).
+		// When we don't have transaction, we can do a clear operation (since we don't
+		// case about context) and can't do the one-by-one remove: remove() on tx cache
+		// requires transactional context.
+		if ( inTransaction ) {
+			log.tracef( "Transaction, clearing one element at the time" );
+			Caches.removeAll( localAndSkipLoadCache );
+		}
+		else {
+			log.tracef( "Non-transactional, clear in one go" );
+			localAndSkipLoadCache.clear();
+		}
+	}
 }

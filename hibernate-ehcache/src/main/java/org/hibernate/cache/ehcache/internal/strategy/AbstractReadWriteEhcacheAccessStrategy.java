@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.ehcache.internal.strategy;
 
@@ -28,13 +11,14 @@ import java.util.Comparator;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.jboss.logging.Logger;
-
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.ehcache.EhCacheMessageLogger;
 import org.hibernate.cache.ehcache.internal.regions.EhcacheTransactionalDataRegion;
+import org.hibernate.cache.spi.access.RegionAccessStrategy;
 import org.hibernate.cache.spi.access.SoftLock;
-import org.hibernate.cfg.Settings;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.jboss.logging.Logger;
 
 /**
  * Superclass for all Ehcache specific read/write AccessStrategy implementations.
@@ -44,8 +28,7 @@ import org.hibernate.cfg.Settings;
  * @author Chris Dennis
  * @author Alex Snaps
  */
-abstract class AbstractReadWriteEhcacheAccessStrategy<T
-		extends EhcacheTransactionalDataRegion>
+abstract class AbstractReadWriteEhcacheAccessStrategy<T extends EhcacheTransactionalDataRegion>
 		extends AbstractEhcacheAccessStrategy<T> {
 
 	private static final EhCacheMessageLogger LOG = Logger.getMessageLogger(
@@ -61,7 +44,7 @@ abstract class AbstractReadWriteEhcacheAccessStrategy<T
 	/**
 	 * Creates a read/write cache access strategy around the given cache region.
 	 */
-	public AbstractReadWriteEhcacheAccessStrategy(T region, Settings settings) {
+	public AbstractReadWriteEhcacheAccessStrategy(T region, SessionFactoryOptions settings) {
 		super( region, settings );
 		this.versionComparator = region.getCacheDataDescription().getVersionComparator();
 	}
@@ -70,10 +53,10 @@ abstract class AbstractReadWriteEhcacheAccessStrategy<T
 	 * Returns <code>null</code> if the item is not readable.  Locked items are not readable, nor are items created
 	 * after the start of this transaction.
 	 *
-	 * @see org.hibernate.cache.spi.access.EntityRegionAccessStrategy#get(java.lang.Object, long)
-	 * @see org.hibernate.cache.spi.access.CollectionRegionAccessStrategy#get(java.lang.Object, long)
+	 * @see RegionAccessStrategy#get(SessionImplementor, Object, long)
+	 * @see RegionAccessStrategy#get(SessionImplementor, Object, long)
 	 */
-	public final Object get(Object key, long txTimestamp) throws CacheException {
+	public final Object get(SessionImplementor session, Object key, long txTimestamp) throws CacheException {
 		readLockIfNeeded( key );
 		try {
 			final Lockable item = (Lockable) region().get( key );
@@ -95,11 +78,12 @@ abstract class AbstractReadWriteEhcacheAccessStrategy<T
 	 * Returns <code>false</code> and fails to put the value if there is an existing un-writeable item mapped to this
 	 * key.
 	 *
-	 * @see org.hibernate.cache.spi.access.EntityRegionAccessStrategy#putFromLoad(java.lang.Object, java.lang.Object, long, java.lang.Object, boolean)
-	 * @see org.hibernate.cache.spi.access.CollectionRegionAccessStrategy#putFromLoad(java.lang.Object, java.lang.Object, long, java.lang.Object, boolean)
+	 * @see RegionAccessStrategy#putFromLoad(SessionImplementor, Object, Object, long, Object, boolean)
+	 * @see RegionAccessStrategy#putFromLoad(SessionImplementor, Object, Object, long, Object, boolean)
 	 */
 	@Override
 	public final boolean putFromLoad(
+			SessionImplementor session,
 			Object key,
 			Object value,
 			long txTimestamp,
@@ -126,10 +110,10 @@ abstract class AbstractReadWriteEhcacheAccessStrategy<T
 	/**
 	 * Soft-lock a cache item.
 	 *
-	 * @see org.hibernate.cache.spi.access.EntityRegionAccessStrategy#lockItem(java.lang.Object, java.lang.Object)
-	 * @see org.hibernate.cache.spi.access.CollectionRegionAccessStrategy#lockItem(java.lang.Object, java.lang.Object)
+	 * @see RegionAccessStrategy#lockItem(SessionImplementor, Object, Object)
+	 * @see RegionAccessStrategy#lockItem(SessionImplementor, Object, Object)
 	 */
-	public final SoftLock lockItem(Object key, Object version) throws CacheException {
+	public final SoftLock lockItem(SessionImplementor session, Object key, Object version) throws CacheException {
 		region().writeLock( key );
 		try {
 			final Lockable item = (Lockable) region().get( key );
@@ -150,10 +134,10 @@ abstract class AbstractReadWriteEhcacheAccessStrategy<T
 	/**
 	 * Soft-unlock a cache item.
 	 *
-	 * @see org.hibernate.cache.spi.access.EntityRegionAccessStrategy#unlockItem(java.lang.Object, org.hibernate.cache.spi.access.SoftLock)
-	 * @see org.hibernate.cache.spi.access.CollectionRegionAccessStrategy#unlockItem(java.lang.Object, org.hibernate.cache.spi.access.SoftLock)
+	 * @see RegionAccessStrategy#unlockItem(SessionImplementor, Object, SoftLock)
+	 * @see RegionAccessStrategy#unlockItem(SessionImplementor, Object, SoftLock)
 	 */
-	public final void unlockItem(Object key, SoftLock lock) throws CacheException {
+	public final void unlockItem(SessionImplementor session, Object key, SoftLock lock) throws CacheException {
 		region().writeLock( key );
 		try {
 			final Lockable item = (Lockable) region().get( key );
@@ -401,4 +385,3 @@ abstract class AbstractReadWriteEhcacheAccessStrategy<T
 		}
 	}
 }
-

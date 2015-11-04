@@ -1,49 +1,30 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.testing.cache;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.cache.CacheException;
+import org.hibernate.cache.internal.DefaultCacheKeysFactory;
 import org.hibernate.cache.spi.EntityRegion;
 import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
 import org.hibernate.cache.spi.access.SoftLock;
-import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.persister.entity.EntityPersister;
 
 /**
  * @author Strong Liu
  */
 class BaseEntityRegionAccessStrategy extends BaseRegionAccessStrategy implements EntityRegionAccessStrategy {
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger(
-			CoreMessageLogger.class, BaseEntityRegionAccessStrategy.class.getName()
-	);
+
 	private final EntityRegionImpl region;
 
 	BaseEntityRegionAccessStrategy(EntityRegionImpl region) {
 		this.region = region;
 	}
-
 
 	@Override
 	public EntityRegion getRegion() {
@@ -51,23 +32,23 @@ class BaseEntityRegionAccessStrategy extends BaseRegionAccessStrategy implements
 	}
 
 	@Override
-	public boolean insert(Object key, Object value, Object version) throws CacheException {
-		return putFromLoad( key, value, 0, version );
+	public boolean insert(SessionImplementor session, Object key, Object value, Object version) throws CacheException {
+		return putFromLoad( session, key, value, 0, version );
 	}
 
 	@Override
-	public boolean afterInsert(Object key, Object value, Object version) throws CacheException {
+	public boolean afterInsert(SessionImplementor session, Object key, Object value, Object version) throws CacheException {
 		return true;
 	}
 
 	@Override
-	public boolean update(Object key, Object value, Object currentVersion, Object previousVersion)
+	public boolean update(SessionImplementor session, Object key, Object value, Object currentVersion, Object previousVersion)
 			throws CacheException {
 		return false;
 	}
 
 	@Override
-	public boolean afterUpdate(Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock)
+	public boolean afterUpdate(SessionImplementor session, Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock)
 			throws CacheException {
 		return false;
 	}
@@ -80,5 +61,15 @@ class BaseEntityRegionAccessStrategy extends BaseRegionAccessStrategy implements
 	@Override
 	protected boolean isDefaultMinimalPutOverride() {
 		return region.getSettings().isMinimalPutsEnabled();
+	}
+
+	@Override
+	public Object generateCacheKey(Object id, EntityPersister persister, SessionFactoryImplementor factory, String tenantIdentifier) {
+		return DefaultCacheKeysFactory.createEntityKey( id, persister, factory, tenantIdentifier );
+	}
+
+	@Override
+	public Object getCacheKeyId(Object cacheKey) {
+		return DefaultCacheKeysFactory.getEntityId(cacheKey);
 	}
 }

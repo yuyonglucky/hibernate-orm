@@ -1,5 +1,11 @@
 <?xml version="1.0"?>
-<!DOCTYPE hibernate-mapping PUBLIC 
+<!--
+  ~ Hibernate, Relational Persistence for Idiomatic Java
+  ~
+  ~ License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+  ~ See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+  -->
+<!DOCTYPE hibernate-mapping PUBLIC
 	"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
 	"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
 <hibernate-mapping default-lazy="false">
@@ -120,7 +126,7 @@
 	
 		<idbag name="idFooBag" lazy="true" table="baz_id_foo" cascade="all">
 			<collection-id column="pkid" type="long"> 
-				<generator class="hilo"/>
+				<generator class="increment"/>
 			</collection-id>
 			<key column="baz"/>
 			<many-to-many class="org.hibernate.test.legacy.Foo" column="foo" outer-join="true"/>
@@ -128,7 +134,7 @@
 	
 		<idbag name="byteBag" lazy="true" table="baz_byte_bag">
 			<collection-id column="pkid" type="long"> 
-				<generator class="hilo"/>
+				<generator class="increment"/>
 			</collection-id>
 			<key column="baz"/>
 			<element type="binary" column="bytez" not-null="true"/>

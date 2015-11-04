@@ -1,43 +1,60 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.mapping;
 import java.util.Iterator;
 
 import org.hibernate.dialect.Dialect;
+import org.hibernate.internal.util.StringHelper;
+
+import org.jboss.logging.Logger;
 
 /**
  * A primary key constraint
+ *
  * @author Gavin King
+ * @author Steve Ebersole
  */
 public class PrimaryKey extends Constraint {
+	private static final Logger log = Logger.getLogger( PrimaryKey.class );
+
+	@Override
+	public void addColumn(Column column) {
+		if ( column.isNullable() ) {
+			if ( log.isDebugEnabled() ) {
+				final String columnName = column.getCanonicalName();
+				log.debugf(
+						"Forcing column [%s] to be non-null as it is part of the primary key for table [%s]",
+						columnName,
+						getTableNameForLogging( column )
+				);
+			}
+			column.setNullable( false );
+		}
+		super.addColumn( column );
+	}
+
+	protected String getTableNameForLogging(Column column) {
+		if ( getTable() != null ) {
+			return getTable().getNameIdentifier().getCanonicalName();
+		}
+		else if ( column.getValue() != null && column.getValue().getTable() != null ) {
+			return column.getValue().getTable().getNameIdentifier().getCanonicalName();
+		}
+		return "<unknown>";
+	}
 
 	public String sqlConstraintString(Dialect dialect) {
 		StringBuilder buf = new StringBuilder("primary key (");
 		Iterator iter = getColumnIterator();
 		while ( iter.hasNext() ) {
 			buf.append( ( (Column) iter.next() ).getQuotedName(dialect) );
-			if ( iter.hasNext() ) buf.append(", ");
+			if ( iter.hasNext() ) {
+				buf.append(", ");
+			}
 		}
 		return buf.append(')').toString();
 	}
@@ -49,12 +66,19 @@ public class PrimaryKey extends Constraint {
 		Iterator iter = getColumnIterator();
 		while ( iter.hasNext() ) {
 			buf.append( ( (Column) iter.next() ).getQuotedName(dialect) );
-			if ( iter.hasNext() ) buf.append(", ");
+			if ( iter.hasNext() ) {
+				buf.append(", ");
+			}
 		}
 		return buf.append(')').toString();
 	}
 	
 	public String generatedConstraintNamePrefix() {
 		return "PK_";
+	}
+
+	@Override
+	public String getExportIdentifier() {
+		return StringHelper.qualify( getTable().getName(), "PK-" + getName() );
 	}
 }

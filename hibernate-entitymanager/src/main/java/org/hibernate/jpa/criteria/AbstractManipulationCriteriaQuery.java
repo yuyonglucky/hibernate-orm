@@ -1,28 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import javax.persistence.Query;
 import javax.persistence.criteria.CommonAbstractCriteria;
 import javax.persistence.criteria.Expression;
@@ -30,16 +16,14 @@ import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
 import javax.persistence.criteria.Subquery;
 import javax.persistence.metamodel.EntityType;
-import java.util.List;
-import java.util.Map;
 
-import org.hibernate.jpa.internal.QueryImpl;
 import org.hibernate.jpa.criteria.compile.CompilableCriteria;
 import org.hibernate.jpa.criteria.compile.CriteriaInterpretation;
 import org.hibernate.jpa.criteria.compile.ImplicitParameterBinding;
 import org.hibernate.jpa.criteria.compile.InterpretedParameterMetadata;
 import org.hibernate.jpa.criteria.compile.RenderingContext;
 import org.hibernate.jpa.criteria.path.RootImpl;
+import org.hibernate.jpa.internal.QueryImpl;
 import org.hibernate.jpa.spi.HibernateEntityManagerImplementor;
 
 /**
@@ -123,11 +107,13 @@ public abstract class AbstractManipulationCriteriaQuery<T> implements Compilable
 					HibernateEntityManagerImplementor entityManager,
 					final InterpretedParameterMetadata interpretedParameterMetadata) {
 
+				final Map<String,Class> implicitParameterTypes = extractTypeMap( interpretedParameterMetadata.implicitParameterBindings() );
+
 				QueryImpl jpaqlQuery = entityManager.createQuery(
 						jpaqlString,
 						null,
 						null,
-						new HibernateEntityManagerImplementor.Options() {
+						new HibernateEntityManagerImplementor.QueryOptions() {
 							@Override
 							public List<ValueHandlerFactory.ValueHandler> getValueHandlers() {
 								return null;
@@ -135,7 +121,7 @@ public abstract class AbstractManipulationCriteriaQuery<T> implements Compilable
 
 							@Override
 							public Map<String, Class> getNamedParameterExplicitTypes() {
-								return interpretedParameterMetadata.implicitParameterTypes();
+								return implicitParameterTypes;
 							}
 
 							@Override
@@ -150,6 +136,14 @@ public abstract class AbstractManipulationCriteriaQuery<T> implements Compilable
 				}
 
 				return jpaqlQuery;
+			}
+
+			private Map<String, Class> extractTypeMap(List<ImplicitParameterBinding> implicitParameterBindings) {
+				final HashMap<String,Class> map = new HashMap<String, Class>();
+				for ( ImplicitParameterBinding implicitParameter : implicitParameterBindings ) {
+					map.put( implicitParameter.getParameterName(), implicitParameter.getJavaType() );
+				}
+				return map;
 			}
 		};
 	}

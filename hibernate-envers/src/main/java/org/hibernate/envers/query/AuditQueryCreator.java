@@ -1,29 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.query;
 
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
 import org.hibernate.envers.query.internal.impl.EntitiesAtRevisionQuery;
 import org.hibernate.envers.query.internal.impl.EntitiesModifiedAtRevisionQuery;
@@ -39,11 +22,11 @@ import static org.hibernate.envers.internal.tools.EntityTools.getTargetClassIfPr
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
  */
 public class AuditQueryCreator {
-	private final AuditConfiguration auditCfg;
+	private final EnversService enversService;
 	private final AuditReaderImplementor auditReaderImplementor;
 
-	public AuditQueryCreator(AuditConfiguration auditCfg, AuditReaderImplementor auditReaderImplementor) {
-		this.auditCfg = auditCfg;
+	public AuditQueryCreator(EnversService enversService, AuditReaderImplementor auditReaderImplementor) {
+		this.enversService = enversService;
 		this.auditReaderImplementor = auditReaderImplementor;
 	}
 
@@ -62,7 +45,7 @@ public class AuditQueryCreator {
 		checkNotNull( revision, "Entity revision" );
 		checkPositive( revision, "Entity revision" );
 		c = getTargetClassIfProxied( c );
-		return new EntitiesAtRevisionQuery( auditCfg, auditReaderImplementor, c, revision, false );
+		return new EntitiesAtRevisionQuery( enversService, auditReaderImplementor, c, revision, false );
 	}
 
 	/**
@@ -100,7 +83,7 @@ public class AuditQueryCreator {
 		checkPositive( revision, "Entity revision" );
 		c = getTargetClassIfProxied( c );
 		return new EntitiesAtRevisionQuery(
-				auditCfg,
+				enversService,
 				auditReaderImplementor,
 				c,
 				entityName,
@@ -128,7 +111,7 @@ public class AuditQueryCreator {
 		checkNotNull( revision, "Entity revision" );
 		checkPositive( revision, "Entity revision" );
 		c = getTargetClassIfProxied( c );
-		return new EntitiesModifiedAtRevisionQuery( auditCfg, auditReaderImplementor, c, entityName, revision );
+		return new EntitiesModifiedAtRevisionQuery( enversService, auditReaderImplementor, c, entityName, revision );
 	}
 
 	/**
@@ -149,7 +132,7 @@ public class AuditQueryCreator {
 		checkNotNull( revision, "Entity revision" );
 		checkPositive( revision, "Entity revision" );
 		c = getTargetClassIfProxied( c );
-		return new EntitiesModifiedAtRevisionQuery( auditCfg, auditReaderImplementor, c, revision );
+		return new EntitiesModifiedAtRevisionQuery( enversService, auditReaderImplementor, c, revision );
 	}
 
 	/**
@@ -177,7 +160,7 @@ public class AuditQueryCreator {
 	public AuditQuery forRevisionsOfEntity(Class<?> c, boolean selectEntitiesOnly, boolean selectDeletedEntities) {
 		c = getTargetClassIfProxied( c );
 		return new RevisionsOfEntityQuery(
-				auditCfg,
+				enversService,
 				auditReaderImplementor,
 				c,
 				selectEntitiesOnly,
@@ -215,7 +198,7 @@ public class AuditQueryCreator {
 			boolean selectDeletedEntities) {
 		c = getTargetClassIfProxied( c );
 		return new RevisionsOfEntityQuery(
-				auditCfg,
+				enversService,
 				auditReaderImplementor,
 				c,
 				entityName,

@@ -1,32 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.proxy;
 
 import java.io.Serializable;
 
-import javax.naming.NamingException;
-
+import org.hibernate.FlushMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LazyInitializationException;
 import org.hibernate.Session;
@@ -37,6 +19,7 @@ import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.internal.SessionFactoryRegistry;
 import org.hibernate.persister.entity.EntityPersister;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -59,7 +42,7 @@ public abstract class AbstractLazyInitializer implements LazyInitializer {
 	private Boolean readOnlyBeforeAttachedToSession;
 
 	private String sessionFactoryUuid;
-	private boolean specjLazyLoad = false;
+	private boolean allowLoadOutsideTransaction;
 
 	/**
 	 * For serialization from the non-pojo initializers (HHH-3309)
@@ -132,7 +115,7 @@ public abstract class AbstractLazyInitializer implements LazyInitializer {
 				}
 				else {
 					// use the read-only/modifiable setting indicated during deserialization
-					setReadOnly( readOnlyBeforeAttachedToSession.booleanValue() );
+					setReadOnly( readOnlyBeforeAttachedToSession );
 					readOnlyBeforeAttachedToSession = null;
 				}
 			}
@@ -148,7 +131,7 @@ public abstract class AbstractLazyInitializer implements LazyInitializer {
 
 	@Override
 	public final void unsetSession() {
-		prepareForPossibleSpecialSpecjInitialization();
+		prepareForPossibleLoadingOutsideTransaction();
 		session = null;
 		readOnly = false;
 		readOnlyBeforeAttachedToSession = null;
@@ -157,8 +140,8 @@ public abstract class AbstractLazyInitializer implements LazyInitializer {
 	@Override
 	public final void initialize() throws HibernateException {
 		if ( !initialized ) {
-			if ( specjLazyLoad ) {
-				specialSpecjInitialization();
+			if ( allowLoadOutsideTransaction ) {
+				permissiveInitialization();
 			}
 			else if ( session == null ) {
 				throw new LazyInitializationException( "could not initialize proxy - no Session" );
@@ -180,7 +163,7 @@ public abstract class AbstractLazyInitializer implements LazyInitializer {
 		}
 	}
 
-	protected void specialSpecjInitialization() {
+	protected void permissiveInitialization() {
 		if ( session == null ) {
 			//we have a detached collection thats set to null, reattach
 			if ( sessionFactoryUuid == null ) {
@@ -190,14 +173,11 @@ public abstract class AbstractLazyInitializer implements LazyInitializer {
 				SessionFactoryImplementor sf = (SessionFactoryImplementor)
 						SessionFactoryRegistry.INSTANCE.getSessionFactory( sessionFactoryUuid );
 				SessionImplementor session = (SessionImplementor) sf.openSession();
-				
-				// TODO: On the next major release, add an
-				// 'isJTA' or 'getTransactionFactory' method to Session.
-				boolean isJTA = session.getTransactionCoordinator()
-						.getTransactionContext().getTransactionEnvironment()
-						.getTransactionFactory()
-						.compatibleWithJtaSynchronization();
-				
+				session.getPersistenceContext().setDefaultReadOnly( true );
+				session.setFlushMode( FlushMode.MANUAL );
+
+				boolean isJTA = session.getTransactionCoordinator().getTransactionCoordinatorBuilder().isJta();
+
 				if ( !isJTA ) {
 					// Explicitly handle the transactions only if we're not in
 					// a JTA environment.  A lazy loading temporary session can
@@ -240,17 +220,12 @@ public abstract class AbstractLazyInitializer implements LazyInitializer {
 		}
 	}
 
-	protected void prepareForPossibleSpecialSpecjInitialization() {
+	protected void prepareForPossibleLoadingOutsideTransaction() {
 		if ( session != null ) {
-			specjLazyLoad = session.getFactory().getSettings().isInitializeLazyStateOutsideTransactionsEnabled();
+			allowLoadOutsideTransaction = session.getFactory().getSessionFactoryOptions().isInitializeLazyStateOutsideTransactionsEnabled();
 
-			if ( specjLazyLoad && sessionFactoryUuid == null ) {
-				try {
-					sessionFactoryUuid = (String) session.getFactory().getReference().get( "uuid" ).getContent();
-				}
-				catch (NamingException e) {
-					//not much we can do if this fails...
-				}
+			if ( allowLoadOutsideTransaction && sessionFactoryUuid == null ) {
+				sessionFactoryUuid = session.getFactory().getUuid();
 			}
 		}
 	}

@@ -1,45 +1,36 @@
-/* 
+/*
  * Hibernate, Relational Persistence for Idiomatic Java
- * 
- * JBoss, Home of Professional Open Source
- * Copyright 2013 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
  *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.osgi;
 
-import java.util.List;
-
 import org.hibernate.SessionFactory;
+import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.model.TypeContributor;
+import org.hibernate.boot.registry.BootstrapServiceRegistry;
 import org.hibernate.boot.registry.BootstrapServiceRegistryBuilder;
+import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.boot.registry.selector.StrategyRegistrationProvider;
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.cfg.Configuration;
 import org.hibernate.integrator.spi.Integrator;
-import org.hibernate.metamodel.spi.TypeContributor;
-import org.hibernate.service.ServiceRegistry;
+import org.hibernate.internal.CoreMessageLogger;
+import org.jboss.logging.Logger;
 import org.osgi.framework.Bundle;
-import org.osgi.framework.BundleContext;
+import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceFactory;
 import org.osgi.framework.ServiceRegistration;
+import org.osgi.framework.wiring.BundleWiring;
+
+import java.util.Collection;
 
 /**
  * Hibernate 4.2 and 4.3 still heavily rely on TCCL for ClassLoading.  Although
- * our ClassLoaderService removed some of the reliance, the service is
- * unfortunately not available during Configuration.  An OSGi
+ * our ClassLoaderService removed some of the reliance, access to the proper ClassLoader
+ * via TCCL is still required in a few cases where we call out to external libs.  An OSGi
  * bundle manually creating a SessionFactory would require numerous ClassLoader
  * tricks (or may be impossible altogether).
  * <p/>
@@ -55,56 +46,96 @@ import org.osgi.framework.ServiceRegistration;
  * @author Tim Ward
  */
 public class OsgiSessionFactoryService implements ServiceFactory {
-	private OsgiClassLoader osgiClassLoader;
+	private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class,
+			OsgiSessionFactoryService.class.getName());
+
 	private OsgiJtaPlatform osgiJtaPlatform;
-	private BundleContext context;
+	private OsgiServiceUtil osgiServiceUtil;
 
 	/**
 	 * Constructs a OsgiSessionFactoryService
 	 *
-	 * @param osgiClassLoader The OSGi-specific ClassLoader created in HibernateBundleActivator
 	 * @param osgiJtaPlatform The OSGi-specific JtaPlatform created in HibernateBundleActivator
-	 * @param context The OSGi context
+	 * @param osgiServiceUtil Util object built in HibernateBundleActivator
 	 */
-	public OsgiSessionFactoryService(
-			OsgiClassLoader osgiClassLoader,
-			OsgiJtaPlatform osgiJtaPlatform,
-			BundleContext context) {
-		this.osgiClassLoader = osgiClassLoader;
+	public OsgiSessionFactoryService(OsgiJtaPlatform osgiJtaPlatform, OsgiServiceUtil osgiServiceUtil) {
 		this.osgiJtaPlatform = osgiJtaPlatform;
-		this.context = context;
+		this.osgiServiceUtil = osgiServiceUtil;
 	}
 
 	@Override
 	public Object getService(Bundle requestingBundle, ServiceRegistration registration) {
+		final OsgiClassLoader osgiClassLoader = new OsgiClassLoader();
+
+		// First, add the client bundle that's requesting the OSGi services.
 		osgiClassLoader.addBundle( requestingBundle );
 
-		final Configuration configuration = new Configuration();
-		configuration.getProperties().put( AvailableSettings.JTA_PLATFORM, osgiJtaPlatform );
-		configuration.configure();
+		// Then, automatically add hibernate-core.  These are needed to load resources
+		// contained in the core jar.
+		osgiClassLoader.addBundle( FrameworkUtil.getBundle(SessionFactory.class) );
 
-		final BootstrapServiceRegistryBuilder builder = new BootstrapServiceRegistryBuilder();
-		builder.with( osgiClassLoader );
+		// Some "boot time" code does still rely on TCCL.  "run time" code should all be using
+		// ClassLoaderService now.
 
-		final List<Integrator> integrators = OsgiServiceUtil.getServiceImpls( Integrator.class, context );
+		final ClassLoader originalTccl = Thread.currentThread().getContextClassLoader();
+		Thread.currentThread().setContextClassLoader( osgiClassLoader );
+		try {
+			return buildSessionFactory( requestingBundle, osgiClassLoader );
+		}
+		finally {
+			Thread.currentThread().setContextClassLoader( originalTccl );
+		}
+	}
+
+	private Object buildSessionFactory(
+			Bundle requestingBundle,
+			OsgiClassLoader osgiClassLoader) {
+		final BootstrapServiceRegistryBuilder bsrBuilder = new BootstrapServiceRegistryBuilder();
+		bsrBuilder.applyClassLoaderService( new OSGiClassLoaderServiceImpl( osgiClassLoader, osgiServiceUtil ) );
+
+		final Integrator[] integrators = osgiServiceUtil.getServiceImpls( Integrator.class );
 		for ( Integrator integrator : integrators ) {
-			builder.with( integrator );
+			bsrBuilder.applyIntegrator( integrator );
 		}
 
-		final List<StrategyRegistrationProvider> strategyRegistrationProviders
-				= OsgiServiceUtil.getServiceImpls( StrategyRegistrationProvider.class, context );
+		final StrategyRegistrationProvider[] strategyRegistrationProviders
+				= osgiServiceUtil.getServiceImpls( StrategyRegistrationProvider.class );
 		for ( StrategyRegistrationProvider strategyRegistrationProvider : strategyRegistrationProviders ) {
-			builder.withStrategySelectors( strategyRegistrationProvider );
+			bsrBuilder.applyStrategySelectors( strategyRegistrationProvider );
 		}
-        
-        final List<TypeContributor> typeContributors = OsgiServiceUtil.getServiceImpls( TypeContributor.class, context );
-        for (TypeContributor typeContributor : typeContributors) {
-        	configuration.registerTypeContributor( typeContributor );
-        }
 
-		final ServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder( builder.build() )
-				.applySettings( configuration.getProperties() ).build();
-		return configuration.buildSessionFactory( serviceRegistry );
+		final BootstrapServiceRegistry bsr = bsrBuilder.build();
+		final StandardServiceRegistryBuilder ssrBuilder = new StandardServiceRegistryBuilder( bsr );
+
+		// Allow bundles to put the config file somewhere other than the root level.
+		final BundleWiring bundleWiring = (BundleWiring) requestingBundle.adapt( BundleWiring.class );
+		final Collection<String> cfgResources = bundleWiring.listResources(
+				"/",
+				"hibernate.cfg.xml",
+				BundleWiring.LISTRESOURCES_RECURSE
+		);
+		if (cfgResources.size() == 0) {
+			ssrBuilder.configure();
+		}
+		else {
+			if (cfgResources.size() > 1) {
+				LOG.warn( "Multiple hibernate.cfg.xml files found in the persistence bundle.  Using the first one discovered." );
+			}
+			String cfgResource = "/" + cfgResources.iterator().next();
+			ssrBuilder.configure( cfgResource );
+		}
+
+		ssrBuilder.applySetting( AvailableSettings.JTA_PLATFORM, osgiJtaPlatform );
+
+		final StandardServiceRegistry ssr = ssrBuilder.build();
+
+		final MetadataBuilder metadataBuilder = new MetadataSources( ssr ).getMetadataBuilder();
+		final TypeContributor[] typeContributors = osgiServiceUtil.getServiceImpls( TypeContributor.class );
+		for ( TypeContributor typeContributor : typeContributors ) {
+			metadataBuilder.applyTypes( typeContributor );
+		}
+
+		return metadataBuilder.build().buildSessionFactory();
 	}
 
 	@Override

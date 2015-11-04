@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009, 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.internal;
 
@@ -32,6 +15,7 @@ import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.jpa.spi.AbstractEntityManagerImpl;
 import org.hibernate.jpa.spi.HibernateEntityManagerImplementor;
+import org.hibernate.resource.transaction.spi.TransactionStatus;
 
 /**
  * @author Gavin King
@@ -54,7 +38,7 @@ public class TransactionImpl implements EntityTransaction {
 	public void begin() {
 		try {
 			rollbackOnly = false;
-			if ( tx != null && tx.isActive() ) {
+			if ( tx != null && tx.getStatus() == TransactionStatus.ACTIVE ) {
 				throw new IllegalStateException( "Transaction already active" );
 			}
 			//entityManager.adjustFlushMode();
@@ -66,7 +50,7 @@ public class TransactionImpl implements EntityTransaction {
 	}
 
 	public void commit() {
-		if ( tx == null || !tx.isActive() ) {
+		if ( tx == null || tx.getStatus() != TransactionStatus.ACTIVE ) {
 			throw new IllegalStateException( "Transaction not active" );
 		}
 		if ( rollbackOnly ) {
@@ -77,9 +61,17 @@ public class TransactionImpl implements EntityTransaction {
 			tx.commit();
 		}
 		catch (Exception e) {
-			Exception wrappedException;
-			if (e instanceof HibernateException) {
-				wrappedException = entityManager.convert( (HibernateException)e );
+			Throwable wrappedException;
+			if ( e instanceof PersistenceException ) {
+				if ( e.getCause() instanceof HibernateException ) {
+					wrappedException = entityManager.convert( (HibernateException) e.getCause() );
+				}
+				else {
+					wrappedException = e.getCause();
+				}
+			}
+			else if ( e instanceof HibernateException ) {
+				wrappedException = entityManager.convert( (HibernateException) e );
 			}
 			else {
 				wrappedException = e;
@@ -101,7 +93,7 @@ public class TransactionImpl implements EntityTransaction {
 	}
 
 	public void rollback() {
-		if ( tx == null || !tx.isActive() ) {
+		if ( tx == null || tx.getStatus() != TransactionStatus.ACTIVE ) {
 			throw new IllegalStateException( "Transaction not active" );
 		}
 		try {
@@ -112,9 +104,11 @@ public class TransactionImpl implements EntityTransaction {
 		}
 		finally {
 			try {
-				if (entityManager !=  null) {
+				if ( entityManager != null ) {
 					Session session = getSession();
-					if ( session != null && session.isOpen() ) session.clear();
+					if ( session != null && session.isOpen() ) {
+						session.clear();
+					}
 				}
 			}
 			catch (Throwable t) {
@@ -125,18 +119,22 @@ public class TransactionImpl implements EntityTransaction {
 	}
 
 	public void setRollbackOnly() {
-		if ( ! isActive() ) throw new IllegalStateException( "Transaction not active" );
+		if ( !isActive() ) {
+			throw new IllegalStateException( "Transaction not active" );
+		}
 		this.rollbackOnly = true;
 	}
 
 	public boolean getRollbackOnly() {
-		if ( ! isActive() ) throw new IllegalStateException( "Transaction not active" );
+		if ( !isActive() ) {
+			throw new IllegalStateException( "Transaction not active" );
+		}
 		return rollbackOnly;
 	}
 
 	public boolean isActive() {
 		try {
-			return tx != null && tx.isActive();
+			return tx != null && tx.getStatus() == TransactionStatus.ACTIVE;
 		}
 		catch (RuntimeException e) {
 			throw new PersistenceException( "unexpected error when checking transaction status", e );

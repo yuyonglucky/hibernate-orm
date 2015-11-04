@@ -1,32 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.proxy;
 
 import java.math.BigDecimal;
 import java.util.List;
-
-import org.junit.Test;
 
 import org.hibernate.FlushMode;
 import org.hibernate.Hibernate;
@@ -41,8 +22,10 @@ import org.hibernate.cfg.Environment;
 import org.hibernate.internal.SessionImpl;
 import org.hibernate.internal.util.SerializationHelper;
 import org.hibernate.proxy.HibernateProxy;
+
 import org.hibernate.testing.FailureExpected;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -63,11 +46,6 @@ public class ProxyTest extends BaseCoreFunctionalTestCase {
 	public void configure(Configuration cfg) {
 		super.configure( cfg );
 		cfg.setProperty( Environment.STATEMENT_BATCH_SIZE, "0" ); // problem on HSQLDB (go figure)
-	}
-
-	@Override
-	public String getCacheConcurrencyStrategy() {
-		return null;
 	}
 
 	@Test
@@ -260,7 +238,7 @@ public class ProxyTest extends BaseCoreFunctionalTestCase {
 
 		dp = (DataPoint) s.load( DataPoint.class, new Long (dp.getId() ));
 		assertFalse( Hibernate.isInitialized(dp) );
-		dp2 = (DataPoint) s.get( DataPoint.class, new Long ( dp.getId() ) , LockMode.READ );
+		dp2 = (DataPoint) s.byId( DataPoint.class ).with( LockOptions.READ ).load( dp.getId() );
 		assertSame(dp, dp2);
 		assertTrue( Hibernate.isInitialized(dp) );
 		s.clear();

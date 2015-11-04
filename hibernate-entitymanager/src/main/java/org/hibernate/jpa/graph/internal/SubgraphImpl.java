@@ -1,45 +1,29 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.graph.internal;
 
+import java.util.List;
 import javax.persistence.AttributeNode;
 import javax.persistence.Subgraph;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.ManagedType;
-import java.util.List;
 
-import org.hibernate.jpa.HibernateEntityManagerFactory;
+import org.hibernate.graph.spi.GraphNodeImplementor;
+import org.hibernate.jpa.internal.EntityManagerFactoryImpl;
 
 /**
  * @author Steve Ebersole
  */
-public class SubgraphImpl<T> extends AbstractGraphNode<T> implements Subgraph<T> {
+public class SubgraphImpl<T> extends AbstractGraphNode<T> implements Subgraph<T>, GraphNodeImplementor {
 	private final ManagedType managedType;
 	private final Class<T> subclass;
 
 	public SubgraphImpl(
-			HibernateEntityManagerFactory entityManagerFactory,
+			EntityManagerFactoryImpl entityManagerFactory,
 			ManagedType managedType,
 			Class<T> subclass) {
 		super( entityManagerFactory, true );
@@ -121,7 +105,7 @@ public class SubgraphImpl<T> extends AbstractGraphNode<T> implements Subgraph<T>
 	@Override
 	@SuppressWarnings("unchecked")
 	protected Attribute<T,?> resolveAttribute(String attributeName) {
-		final Attribute<T,?> attribute = managedType.getDeclaredAttribute( attributeName );
+		final Attribute<T,?> attribute = managedType.getAttribute( attributeName );
 		if ( attribute == null ) {
 			throw new IllegalArgumentException(
 					String.format(

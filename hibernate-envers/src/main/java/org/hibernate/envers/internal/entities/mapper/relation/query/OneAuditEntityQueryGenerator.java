@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.entities.mapper.relation.query;
 
@@ -73,7 +56,7 @@ public final class OneAuditEntityQueryGenerator extends AbstractRelationQueryGen
 		final QueryBuilder validQuery = commonPart.deepCopy();
 		final QueryBuilder removedQuery = commonPart.deepCopy();
 		createValidDataRestrictions(
-				globalCfg, auditStrategy, referencedIdData, validQuery, validQuery.getRootParameters(), true
+				globalCfg, auditStrategy, referencedIdData, validQuery, validQuery.getRootParameters()
 		);
 		createValidAndRemovedDataRestrictions( globalCfg, auditStrategy, referencedIdData, removedQuery );
 
@@ -99,8 +82,7 @@ public final class OneAuditEntityQueryGenerator extends AbstractRelationQueryGen
 	 */
 	private void createValidDataRestrictions(
 			GlobalConfiguration globalCfg, AuditStrategy auditStrategy,
-			MiddleIdData referencedIdData, QueryBuilder qb, Parameters rootParameters,
-			boolean inclusive) {
+			MiddleIdData referencedIdData, QueryBuilder qb, Parameters rootParameters) {
 		final String revisionPropertyPath = verEntCfg.getRevisionNumberPath();
 		// (selecting e entities at revision :revision)
 		// --> based on auditStrategy (see above)
@@ -108,7 +90,7 @@ public final class OneAuditEntityQueryGenerator extends AbstractRelationQueryGen
 				globalCfg, qb, rootParameters, revisionPropertyPath,
 				verEntCfg.getRevisionEndFieldName(), true, referencedIdData, revisionPropertyPath,
 				verEntCfg.getOriginalIdPropName(), REFERENCED_ENTITY_ALIAS, REFERENCED_ENTITY_ALIAS_DEF_AUD_STR,
-				inclusive
+				true
 		);
 		// e.revision_type != DEL
 		rootParameters.addWhereWithNamedParam( getRevisionTypePath(), false, "!=", DEL_REVISION_TYPE_PARAMETER );
@@ -126,7 +108,7 @@ public final class OneAuditEntityQueryGenerator extends AbstractRelationQueryGen
 		// Restrictions to match all rows deleted at exactly given revision.
 		final Parameters removed = disjoint.addSubParameters( "and" );
 		// Excluding current revision, because we need to match data valid at the previous one.
-		createValidDataRestrictions( globalCfg, auditStrategy, referencedIdData, remQb, valid, false );
+		createValidDataRestrictions( globalCfg, auditStrategy, referencedIdData, remQb, valid );
 		// e.revision = :revision
 		removed.addWhereWithNamedParam( verEntCfg.getRevisionNumberPath(), false, "=", REVISION_PARAMETER );
 		// e.revision_type = DEL

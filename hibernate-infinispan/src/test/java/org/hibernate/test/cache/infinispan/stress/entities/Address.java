@@ -1,24 +1,8 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2012 Red Hat Inc. and/or its affiliates and other
- * contributors as indicated by the @author tags. All rights reserved.
- * See the copyright.txt in the distribution for a full listing of
- * individual contributors.
+ * Hibernate, Relational Persistence for Idiomatic Java
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 
 package org.hibernate.test.cache.infinispan.stress.entities;
@@ -169,14 +153,13 @@ public final class Address {
 
       Address address = (Address) o;
 
+      // inhabitants must not be in the comparison since we would end up in infinite recursion
       if (id != address.id) return false;
       if (streetNumber != address.streetNumber) return false;
       if (version != address.version) return false;
       if (cityName != null ? !cityName.equals(address.cityName) : address.cityName != null)
          return false;
       if (countryName != null ? !countryName.equals(address.countryName) : address.countryName != null)
-         return false;
-      if (inhabitants != null ? !inhabitants.equals(address.inhabitants) : address.inhabitants != null)
          return false;
       if (streetName != null ? !streetName.equals(address.streetName) : address.streetName != null)
          return false;
@@ -193,7 +176,6 @@ public final class Address {
       result = 31 * result + (cityName != null ? cityName.hashCode() : 0);
       result = 31 * result + (countryName != null ? countryName.hashCode() : 0);
       result = 31 * result + (zipCode != null ? zipCode.hashCode() : 0);
-      result = 31 * result + (inhabitants != null ? inhabitants.hashCode() : 0);
       result = 31 * result + id;
       result = 31 * result + version;
       return result;

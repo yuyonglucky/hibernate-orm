@@ -1,4 +1,11 @@
 /*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
+
+/*
  * Created on 20-Dec-2004
  *
  */
@@ -11,7 +18,7 @@ import java.io.Serializable;
  */
 public class CompositeIdId implements Serializable {
 
-    String system;
+    String user;
     String id;
     String name;
     CompositeElement composite;
@@ -23,11 +30,11 @@ public class CompositeIdId implements Serializable {
     public void setId(String id) {
         this.id = id;
     }
-    public String getSystem() {
-        return system;
+    public String getUser() {
+        return user;
     }
-    public void setSystem(String system) {
-        this.system = system;
+    public void setUser(String user) {
+        this.user = user;
     }
     public String getName() {
         return name;
@@ -43,7 +50,7 @@ public class CompositeIdId implements Serializable {
         // not totally NP or type safe equals, but enough for the unittests. 
         CompositeIdId o = (CompositeIdId) obj;
         if(o==null) return false;
-        return o.getSystem().equals(getSystem()) && o.getId().equals(getId());
+        return o.getUser().equals( getUser()) && o.getId().equals(getId());
     }
     public CompositeElement getComposite() {
         return composite;

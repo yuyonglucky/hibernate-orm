@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.entities;
 
@@ -41,19 +24,31 @@ public class RelationDescription {
 	private final boolean insertable;
 	private boolean bidirectional;
 
-	public static RelationDescription toOne(String fromPropertyName, RelationType relationType, String toEntityName,
-											String mappedByPropertyName, IdMapper idMapper, PropertyMapper fakeBidirectionalRelationMapper,
-											PropertyMapper fakeBidirectionalRelationIndexMapper, boolean insertable,
-											boolean ignoreNotFound) {
+	public static RelationDescription toOne(
+			String fromPropertyName,
+			RelationType relationType,
+			String toEntityName,
+			String mappedByPropertyName,
+			IdMapper idMapper,
+			PropertyMapper fakeBidirectionalRelationMapper,
+			PropertyMapper fakeBidirectionalRelationIndexMapper,
+			boolean insertable,
+			boolean ignoreNotFound) {
 		return new RelationDescription(
-				fromPropertyName, relationType, toEntityName, mappedByPropertyName, idMapper, fakeBidirectionalRelationMapper,
-				fakeBidirectionalRelationIndexMapper, insertable, ignoreNotFound
+				fromPropertyName, relationType, toEntityName, mappedByPropertyName, idMapper,
+				fakeBidirectionalRelationMapper, fakeBidirectionalRelationIndexMapper, insertable, ignoreNotFound
 		);
 	}
 
-	public static RelationDescription toMany(String fromPropertyName, RelationType relationType, String toEntityName,
-											 String mappedByPropertyName, IdMapper idMapper, PropertyMapper fakeBidirectionalRelationMapper,
-											 PropertyMapper fakeBidirectionalRelationIndexMapper, boolean insertable) {
+	public static RelationDescription toMany(
+			String fromPropertyName,
+			RelationType relationType,
+			String toEntityName,
+			String mappedByPropertyName,
+			IdMapper idMapper,
+			PropertyMapper fakeBidirectionalRelationMapper,
+			PropertyMapper fakeBidirectionalRelationIndexMapper,
+			boolean insertable) {
 		// Envers populates collections by executing dedicated queries. Special handling of
 		// @NotFound(action = NotFoundAction.IGNORE) can be omitted in such case as exceptions
 		// (e.g. EntityNotFoundException, ObjectNotFoundException) are never thrown.
@@ -64,9 +59,16 @@ public class RelationDescription {
 		);
 	}
 
-	private RelationDescription(String fromPropertyName, RelationType relationType, String toEntityName,
-								String mappedByPropertyName, IdMapper idMapper, PropertyMapper fakeBidirectionalRelationMapper,
-								PropertyMapper fakeBidirectionalRelationIndexMapper, boolean insertable, boolean ignoreNotFound) {
+	private RelationDescription(
+			String fromPropertyName,
+			RelationType relationType,
+			String toEntityName,
+			String mappedByPropertyName,
+			IdMapper idMapper,
+			PropertyMapper fakeBidirectionalRelationMapper,
+			PropertyMapper fakeBidirectionalRelationIndexMapper,
+			boolean insertable,
+			boolean ignoreNotFound) {
 		this.fromPropertyName = fromPropertyName;
 		this.relationType = relationType;
 		this.toEntityName = toEntityName;

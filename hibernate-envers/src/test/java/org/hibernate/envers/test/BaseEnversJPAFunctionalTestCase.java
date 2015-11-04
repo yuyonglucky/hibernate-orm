@@ -1,61 +1,46 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.test;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.transaction.SystemException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.jboss.logging.Logger;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.spi.PersistenceUnitTransactionType;
+import javax.transaction.SystemException;
 
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.engine.transaction.internal.jta.JtaStatusHelper;
 import org.hibernate.envers.AuditReader;
 import org.hibernate.envers.AuditReaderFactory;
+import org.hibernate.envers.boot.internal.EnversIntegrator;
 import org.hibernate.envers.configuration.EnversSettings;
-import org.hibernate.envers.event.spi.EnversIntegrator;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.jpa.AvailableSettings;
+import org.hibernate.jpa.HibernateEntityManagerFactory;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
-import org.hibernate.jpa.internal.EntityManagerFactoryImpl;
+import org.hibernate.jpa.internal.EntityManagerImpl;
 import org.hibernate.jpa.test.PersistenceUnitDescriptorAdapter;
-
-import org.junit.After;
 
 import org.hibernate.testing.AfterClassOnce;
 import org.hibernate.testing.BeforeClassOnce;
 import org.hibernate.testing.jta.TestingJtaPlatformImpl;
 import org.hibernate.testing.junit4.Helper;
+
+import org.junit.After;
+
+import org.jboss.logging.Logger;
 
 /**
  * @author Strong Liu (stliu@hibernate.org)
@@ -67,7 +52,7 @@ public abstract class BaseEnversJPAFunctionalTestCase extends AbstractEnversTest
 
 	private EntityManagerFactoryBuilderImpl entityManagerFactoryBuilder;
 	private StandardServiceRegistryImpl serviceRegistry;
-	private EntityManagerFactoryImpl entityManagerFactory;
+	private HibernateEntityManagerFactory entityManagerFactory;
 
 	private EntityManager em;
 	private AuditReader auditReader;
@@ -85,8 +70,8 @@ public abstract class BaseEnversJPAFunctionalTestCase extends AbstractEnversTest
 		return serviceRegistry;
 	}
 
-	protected Configuration getCfg() {
-		return entityManagerFactoryBuilder.getHibernateConfiguration();
+	protected MetadataImplementor metadata() {
+		return entityManagerFactoryBuilder.getMetadata();
 	}
 
 	@BeforeClassOnce
@@ -98,7 +83,7 @@ public abstract class BaseEnversJPAFunctionalTestCase extends AbstractEnversTest
 				buildPersistenceUnitDescriptor(),
 				buildSettings()
 		);
-		entityManagerFactory = (EntityManagerFactoryImpl) entityManagerFactoryBuilder.build();
+		entityManagerFactory = entityManagerFactoryBuilder.build().unwrap( HibernateEntityManagerFactory.class );
 
 		serviceRegistry = (StandardServiceRegistryImpl) entityManagerFactory.getSessionFactory()
 				.getServiceRegistry()
@@ -281,10 +266,28 @@ public abstract class BaseEnversJPAFunctionalTestCase extends AbstractEnversTest
 	}
 
 	protected AuditReader getAuditReader() {
+		EntityManager entityManager = getOrCreateEntityManager();
+		PersistenceUnitTransactionType transactionType = ((EntityManagerImpl) entityManager).getTransactionType();
+
+		if ( transactionType == PersistenceUnitTransactionType.JTA ) {
+			if ( !JtaStatusHelper.isActive( TestingJtaPlatformImpl.INSTANCE.getTransactionManager() ) ) {
+				try {
+					TestingJtaPlatformImpl.INSTANCE.getTransactionManager().begin();
+				}
+				catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		else if ( !entityManager.getTransaction().isActive() ) {
+			entityManager.getTransaction().begin();
+		}
+
 		if ( auditReader != null ) {
 			return auditReader;
 		}
-		return auditReader = AuditReaderFactory.get( getOrCreateEntityManager() );
+
+		return auditReader = AuditReaderFactory.get( entityManager );
 	}
 
 	protected EntityManager createIsolatedEntityManager() {

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.tools.query;
 
@@ -30,9 +13,12 @@ import java.util.Map;
 
 import org.hibernate.Query;
 import org.hibernate.Session;
+import org.hibernate.envers.RevisionType;
+import org.hibernate.envers.internal.entities.RevisionTypeType;
 import org.hibernate.envers.internal.tools.MutableInteger;
 import org.hibernate.envers.internal.tools.StringTools;
 import org.hibernate.envers.tools.Pair;
+import org.hibernate.type.CustomType;
 
 /**
  * A class for incrementally building a HQL query.
@@ -239,9 +225,18 @@ public class QueryBuilder {
 
 		final Query query = session.createQuery( querySb.toString() );
 		for ( Map.Entry<String, Object> paramValue : queryParamValues.entrySet() ) {
-			query.setParameter( paramValue.getKey(), paramValue.getValue() );
+			if ( paramValue.getValue() instanceof RevisionType ) {
+				// this is needed when the ClassicQueryTranslatorFactory is used
+				query.setParameter(
+						paramValue.getKey(),
+						paramValue.getValue(),
+						new CustomType( new RevisionTypeType() )
+				);
+			}
+			else {
+				query.setParameter( paramValue.getKey(), paramValue.getValue() );
+			}
 		}
-
 		return query;
 	}
 }

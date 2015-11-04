@@ -1,31 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.procedure;
 
-import javax.persistence.ParameterMode;
 import java.util.List;
 import java.util.Map;
+import javax.persistence.ParameterMode;
 
 import org.hibernate.BasicQueryContract;
 import org.hibernate.MappingException;
@@ -82,6 +65,9 @@ public interface ProcedureCall extends BasicQueryContract, SynchronizeableQuery 
 	 * @param position The parameter position
 	 *
 	 * @return The parameter registration memento
+	 *
+	 * @throws ParameterStrategyException If the ProcedureCall is defined using named parameters
+	 * @throws NoSuchParameterException If no parameter with that position exists
 	 */
 	public ParameterRegistration getParameterRegistration(int position);
 
@@ -122,6 +108,9 @@ public interface ProcedureCall extends BasicQueryContract, SynchronizeableQuery 
 	 * @param name The parameter name
 	 *
 	 * @return The parameter registration memento
+	 *
+	 * @throws ParameterStrategyException If the ProcedureCall is defined using positional parameters
+	 * @throws NoSuchParameterException If no parameter with that name exists
 	 */
 	public ParameterRegistration getParameterRegistration(String name);
 
@@ -134,13 +123,14 @@ public interface ProcedureCall extends BasicQueryContract, SynchronizeableQuery 
 
 	/**
 	 * Retrieves access to outputs of this procedure call.  Can be called multiple times, returning the same
-	 * Output instance each time.
+	 * ProcedureOutputs instance each time.
 	 * <p/>
-	 * Note that the procedure will not actually be executed until the outputs are actually accessed.
+	 * If the procedure call has not actually be executed yet, it will be executed and then the ProcedureOutputs
+	 * will be returned.
 	 *
-	 * @return The outputs representation
+	 * @return The ProcedureOutputs representation
 	 */
-	public ProcedureResult getResult();
+	public ProcedureOutputs getOutputs();
 
 	/**
 	 * Extract the disconnected representation of this call.  Used in HEM to allow redefining a named query

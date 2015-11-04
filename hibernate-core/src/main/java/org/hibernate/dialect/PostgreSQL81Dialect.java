@@ -1,34 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.dialect;
 
-import java.sql.CallableStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
-
 import org.hibernate.JDBCException;
+import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.PessimisticLockException;
 import org.hibernate.cfg.Environment;
@@ -37,16 +16,35 @@ import org.hibernate.dialect.function.PositionSubstringFunction;
 import org.hibernate.dialect.function.SQLFunctionTemplate;
 import org.hibernate.dialect.function.StandardSQLFunction;
 import org.hibernate.dialect.function.VarArgsSQLFunction;
+import org.hibernate.dialect.identity.IdentityColumnSupport;
+import org.hibernate.dialect.identity.PostgreSQL81IdentityColumnSupport;
+import org.hibernate.dialect.pagination.AbstractLimitHandler;
+import org.hibernate.dialect.pagination.LimitHandler;
+import org.hibernate.dialect.pagination.LimitHelper;
+import org.hibernate.engine.spi.RowSelection;
 import org.hibernate.exception.LockAcquisitionException;
 import org.hibernate.exception.spi.SQLExceptionConversionDelegate;
 import org.hibernate.exception.spi.TemplatedViolatedConstraintNameExtracter;
 import org.hibernate.exception.spi.ViolatedConstraintNameExtracter;
-import org.hibernate.id.SequenceGenerator;
+import org.hibernate.hql.spi.id.IdTableSupportStandardImpl;
+import org.hibernate.hql.spi.id.MultiTableBulkIdStrategy;
+import org.hibernate.hql.spi.id.local.AfterUseAction;
+import org.hibernate.hql.spi.id.local.LocalTemporaryTableBulkIdStrategy;
+import org.hibernate.id.enhanced.SequenceStyleGenerator;
 import org.hibernate.internal.util.JdbcExceptionHelper;
+import org.hibernate.procedure.internal.PostgresCallableStatementSupport;
+import org.hibernate.procedure.spi.CallableStatementSupport;
 import org.hibernate.type.StandardBasicTypes;
 import org.hibernate.type.descriptor.sql.BlobTypeDescriptor;
 import org.hibernate.type.descriptor.sql.ClobTypeDescriptor;
 import org.hibernate.type.descriptor.sql.SqlTypeDescriptor;
+
+import java.sql.CallableStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * An SQL dialect for Postgres
@@ -59,6 +57,24 @@ import org.hibernate.type.descriptor.sql.SqlTypeDescriptor;
  */
 @SuppressWarnings("deprecation")
 public class PostgreSQL81Dialect extends Dialect {
+
+	private static final AbstractLimitHandler LIMIT_HANDLER = new AbstractLimitHandler() {
+		@Override
+		public String processSql(String sql, RowSelection selection) {
+			final boolean hasOffset = LimitHelper.hasFirstRow( selection );
+			return sql + (hasOffset ? " limit ? offset ?" : " limit ?");
+		}
+
+		@Override
+		public boolean supportsLimit() {
+			return true;
+		}
+
+		@Override
+		public boolean bindLimitParametersInReverseOrder() {
+			return true;
+		}
+	};
 
 	/**
 	 * Constructs a PostgreSQL81Dialect
@@ -231,6 +247,11 @@ public class PostgreSQL81Dialect extends Dialect {
 	}
 
 	@Override
+	public LimitHandler getLimitHandler() {
+		return LIMIT_HANDLER;
+	}
+
+	@Override
 	public boolean supportsLimit() {
 		return true;
 	}
@@ -246,30 +267,28 @@ public class PostgreSQL81Dialect extends Dialect {
 	}
 
 	@Override
-	public boolean supportsIdentityColumns() {
-		return true;
-	}
-
-	@Override
 	public String getForUpdateString(String aliases) {
 		return getForUpdateString() + " of " + aliases;
 	}
 
 	@Override
-	public String getIdentitySelectString(String table, String column, int type) {
-		return "select currval('" + table + '_' + column + "_seq')";
-	}
-
-	@Override
-	public String getIdentityColumnString(int type) {
-		return type==Types.BIGINT ?
-			"bigserial not null" :
-			"serial not null";
-	}
-
-	@Override
-	public boolean hasDataTypeInIdentityColumn() {
-		return false;
+	public String getForUpdateString(String aliases, LockOptions lockOptions) {
+		/*
+		 * Parent's implementation for (aliases, lockOptions) ignores aliases.
+		 */
+		if ( "".equals( aliases ) ) {
+			LockMode lockMode = lockOptions.getLockMode();
+			final Iterator<Map.Entry<String, LockMode>> itr = lockOptions.getAliasLockIterator();
+			while ( itr.hasNext() ) {
+				// seek the highest lock mode
+				final Map.Entry<String, LockMode> entry = itr.next();
+				final LockMode lm = entry.getValue();
+				if ( lm.greaterThan( lockMode ) ) {
+					aliases = entry.getKey();
+				}
+			}
+		}
+		return getForUpdateString( aliases );
 	}
 
 	@Override
@@ -289,7 +308,7 @@ public class PostgreSQL81Dialect extends Dialect {
 
 	@Override
 	public Class getNativeIdentifierGeneratorClass() {
-		return SequenceGenerator.class;
+		return SequenceStyleGenerator.class;
 	}
 
 	@Override
@@ -329,18 +348,22 @@ public class PostgreSQL81Dialect extends Dialect {
 	}
 
 	@Override
-	public boolean supportsTemporaryTables() {
-		return true;
-	}
+	public MultiTableBulkIdStrategy getDefaultMultiTableBulkIdStrategy() {
+		return new LocalTemporaryTableBulkIdStrategy(
+				new IdTableSupportStandardImpl() {
+					@Override
+					public String getCreateIdTableCommand() {
+						return "create temporary table";
+					}
 
-	@Override
-	public String getCreateTemporaryTableString() {
-		return "create temporary table";
-	}
-
-	@Override
-	public String getCreateTemporaryTablePostfix() {
-		return "on commit drop";
+					@Override
+					public String getCreateIdTableStatementOptions() {
+						return "on commit drop";
+					}
+				},
+				AfterUseAction.CLEAN,
+				null
+		);
 	}
 
 	@Override
@@ -359,8 +382,8 @@ public class PostgreSQL81Dialect extends Dialect {
 	}
 
 	@Override
-	public boolean supportsTupleDistinctCounts() {
-		return false;
+	public boolean requiresParensForTupleDistinctCounts() {
+		return true;
 	}
 
 	@Override
@@ -378,26 +401,22 @@ public class PostgreSQL81Dialect extends Dialect {
 	 * Orginally contributed by Denny Bartelt.
 	 */
 	private static final ViolatedConstraintNameExtracter EXTRACTER = new TemplatedViolatedConstraintNameExtracter() {
-		public String extractConstraintName(SQLException sqle) {
-			try {
-				final int sqlState = Integer.valueOf( JdbcExceptionHelper.extractSqlState( sqle ) );
-				switch (sqlState) {
-					// CHECK VIOLATION
-					case 23514: return extractUsingTemplate( "violates check constraint \"","\"", sqle.getMessage() );
-					// UNIQUE VIOLATION
-					case 23505: return extractUsingTemplate( "violates unique constraint \"","\"", sqle.getMessage() );
-					// FOREIGN KEY VIOLATION
-					case 23503: return extractUsingTemplate( "violates foreign key constraint \"","\"", sqle.getMessage() );
-					// NOT NULL VIOLATION
-					case 23502: return extractUsingTemplate( "null value in column \"","\" violates not-null constraint", sqle.getMessage() );
-					// TODO: RESTRICT VIOLATION
-					case 23001: return null;
-					// ALL OTHER
-					default: return null;
-				}
-			}
-			catch (NumberFormatException nfe) {
-				return null;
+		@Override
+		protected String doExtractConstraintName(SQLException sqle) throws NumberFormatException {
+			final int sqlState = Integer.valueOf( JdbcExceptionHelper.extractSqlState( sqle ) );
+			switch (sqlState) {
+				// CHECK VIOLATION
+				case 23514: return extractUsingTemplate( "violates check constraint \"","\"", sqle.getMessage() );
+				// UNIQUE VIOLATION
+				case 23505: return extractUsingTemplate( "violates unique constraint \"","\"", sqle.getMessage() );
+				// FOREIGN KEY VIOLATION
+				case 23503: return extractUsingTemplate( "violates foreign key constraint \"","\"", sqle.getMessage() );
+				// NOT NULL VIOLATION
+				case 23502: return extractUsingTemplate( "null value in column \"","\" violates not-null constraint", sqle.getMessage() );
+				// TODO: RESTRICT VIOLATION
+				case 23001: return null;
+				// ALL OTHER
+				default: return null;
 			}
 		}
 	};
@@ -513,5 +532,33 @@ public class PostgreSQL81Dialect extends Dialect {
 	@Override
 	public String getForUpdateNowaitString(String aliases) {
 		return getForUpdateString( aliases ) + " nowait ";
+	}
+
+	@Override
+	public CallableStatementSupport getCallableStatementSupport() {
+		return PostgresCallableStatementSupport.INSTANCE;
+	}
+
+	@Override
+	public ResultSet getResultSet(CallableStatement statement, int position) throws SQLException {
+		if ( position != 1 ) {
+			throw new UnsupportedOperationException( "PostgreSQL only supports REF_CURSOR parameters as the first parameter" );
+		}
+		return (ResultSet) statement.getObject( 1 );
+	}
+
+	@Override
+	public ResultSet getResultSet(CallableStatement statement, String name) throws SQLException {
+		throw new UnsupportedOperationException( "PostgreSQL only supports accessing REF_CURSOR parameters by name" );
+	}
+
+	@Override
+	public boolean qualifyIndexName() {
+		return false;
+	}
+
+	@Override
+	public IdentityColumnSupport getIdentityColumnSupport() {
+		return new PostgreSQL81IdentityColumnSupport();
 	}
 }

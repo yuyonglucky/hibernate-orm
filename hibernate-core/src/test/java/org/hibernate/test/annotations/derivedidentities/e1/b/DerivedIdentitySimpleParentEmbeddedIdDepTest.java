@@ -1,33 +1,16 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.derivedidentities.e1.b;
 
-import org.junit.Test;
-
 import org.hibernate.Session;
+
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.hibernate.test.util.SchemaUtil;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -35,11 +18,12 @@ import static org.junit.Assert.assertTrue;
 /**
  * @author Emmanuel Bernard
  */
-public class DerivedIdentitySimpleParentEmbeddedIdDepTest extends BaseCoreFunctionalTestCase {
+public class DerivedIdentitySimpleParentEmbeddedIdDepTest extends BaseNonConfigCoreFunctionalTestCase {
 	@Test
 	public void testManyToOne() throws Exception {
-		assertTrue( SchemaUtil.isColumnPresent( "Dependent", "emp_empId", configuration() ) );
-		assertTrue( ! SchemaUtil.isColumnPresent( "Dependent", "empPK", configuration() ) );
+		assertTrue( SchemaUtil.isColumnPresent( "Dependent", "emp_empId", metadata() ) );
+		assertTrue( ! SchemaUtil.isColumnPresent( "Dependent", "empPK", metadata() ) );
+
 		Employee e = new Employee();
 		e.empId = 1;
 		e.empName = "Emmanuel";
@@ -62,8 +46,9 @@ public class DerivedIdentitySimpleParentEmbeddedIdDepTest extends BaseCoreFuncti
 
 	@Test
 	public void testOneToOne() throws Exception {
-		assertTrue( SchemaUtil.isColumnPresent( "ExclusiveDependent", "FK", configuration() ) );
-		assertTrue( ! SchemaUtil.isColumnPresent( "ExclusiveDependent", "empPK", configuration() ) );
+		assertTrue( SchemaUtil.isColumnPresent( "ExclusiveDependent", "FK", metadata() ) );
+		assertTrue( ! SchemaUtil.isColumnPresent( "ExclusiveDependent", "empPK", metadata() ) );
+
 		Employee e = new Employee();
 		e.empId = 1;
 		e.empName = "Emmanuel";

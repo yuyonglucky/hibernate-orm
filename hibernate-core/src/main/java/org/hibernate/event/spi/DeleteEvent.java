@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.spi;
 
@@ -32,6 +15,9 @@ public class DeleteEvent extends AbstractEvent {
 	private Object object;
 	private String entityName;
 	private boolean cascadeDeleteEnabled;
+	// TODO: The removeOrphan concept is a temporary "hack" for HHH-6484.  This should be removed once action/task
+	// ordering is improved.
+	private boolean orphanRemovalBeforeUpdates;
 
 	/**
 	 * Constructs a new DeleteEvent instance.
@@ -54,10 +40,18 @@ public class DeleteEvent extends AbstractEvent {
 		this.entityName = entityName;
 	}
 
-	public DeleteEvent(String entityName, Object object, boolean isCascadeDeleteEnabled, EventSource source) {
+	public DeleteEvent(String entityName, Object object, boolean cascadeDeleteEnabled, EventSource source) {
 		this(object, source);
 		this.entityName = entityName;
-		cascadeDeleteEnabled = isCascadeDeleteEnabled;
+		this.cascadeDeleteEnabled = cascadeDeleteEnabled;
+	}
+
+	public DeleteEvent(String entityName, Object object, boolean cascadeDeleteEnabled,
+			boolean orphanRemovalBeforeUpdates, EventSource source) {
+		this(object, source);
+		this.entityName = entityName;
+		this.cascadeDeleteEnabled = cascadeDeleteEnabled;
+		this.orphanRemovalBeforeUpdates = orphanRemovalBeforeUpdates;
 	}
 
 	/**
@@ -75,6 +69,10 @@ public class DeleteEvent extends AbstractEvent {
 	
 	public boolean isCascadeDeleteEnabled() {
 		return cascadeDeleteEnabled;
+	}
+	
+	public boolean isOrphanRemovalBeforeUpdates() {
+		return orphanRemovalBeforeUpdates;
 	}
 
 }

@@ -1,39 +1,23 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.connections;
 
-import org.junit.Test;
+import java.util.Map;
 
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
-import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
 import org.hibernate.context.internal.ThreadLocalSessionContext;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.engine.transaction.spi.LocalStatus;
+import org.hibernate.resource.transaction.spi.TransactionStatus;
+
 import org.hibernate.testing.RequiresDialect;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -46,10 +30,12 @@ import static org.junit.Assert.fail;
 @RequiresDialect(H2Dialect.class)
 public class ThreadLocalCurrentSessionTest extends ConnectionManagementTestCase {
 	@Override
-	public void configure(Configuration cfg) {
-		super.configure( cfg );
-		cfg.setProperty( Environment.CURRENT_SESSION_CONTEXT_CLASS, TestableThreadLocalContext.class.getName() );
-		cfg.setProperty( Environment.GENERATE_STATISTICS, "true" );
+	@SuppressWarnings("unchecked")
+	protected void addSettings(Map settings) {
+		super.addSettings( settings );
+
+		settings.put( Environment.CURRENT_SESSION_CONTEXT_CLASS, TestableThreadLocalContext.class.getName() );
+		settings.put( Environment.GENERATE_STATISTICS, "true" );
 	}
 
 	@Override
@@ -61,7 +47,7 @@ public class ThreadLocalCurrentSessionTest extends ConnectionManagementTestCase 
 
 	@Override
 	protected void release(Session session) {
-		if ( session.getTransaction().getLocalStatus() != LocalStatus.ACTIVE ) {
+		if ( session.getTransaction().getStatus() != TransactionStatus.ACTIVE ) {
 			TestableThreadLocalContext.unbind( sessionFactory() );
 			return;
 		}

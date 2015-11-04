@@ -1,99 +1,81 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.id;
 
-import static org.junit.Assert.assertEquals;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Properties;
 
 import org.hibernate.Session;
-import org.hibernate.testing.env.TestingDatabaseInfo;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.cfg.Environment;
-import org.hibernate.cfg.NamingStrategy;
-import org.hibernate.cfg.ObjectNameNormalizer;
-import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.H2Dialect;
+import org.hibernate.Transaction;
+import org.hibernate.boot.Metadata;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistry;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.boot.spi.MetadataBuildingContext;
+import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.dialect.PostgreSQL81Dialect;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.exception.GenericJDBCException;
 import org.hibernate.internal.SessionImpl;
-import org.hibernate.jdbc.Work;
-import org.hibernate.mapping.SimpleAuxiliaryDatabaseObject;
-import org.hibernate.service.ServiceRegistry;
-import org.hibernate.testing.ServiceRegistryBuilder;
-import org.hibernate.testing.junit4.BaseUnitTestCase;
 import org.hibernate.type.StandardBasicTypes;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import org.hibernate.testing.DialectChecks;
+import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.boot.MetadataBuildingContextTestingImpl;
+import org.hibernate.testing.junit4.BaseUnitTestCase;
+
+import static org.junit.Assert.assertEquals;
+
 /**
  * I went back to 3.3 source and grabbed the code/logic as it existed back then and crafted this
  * unit test so that we can make sure the value keep being generated in the expected manner
- * 
+ *
  * @author Steve Ebersole
  */
-@SuppressWarnings({ "deprecation" })
+@SuppressWarnings({"deprecation"})
+@RequiresDialectFeature(DialectChecks.SupportsSequences.class)
 public class SequenceHiLoGeneratorTest extends BaseUnitTestCase {
 	private static final String TEST_SEQUENCE = "test_sequence";
 
-	private Configuration cfg;
-	private ServiceRegistry serviceRegistry;
+	private StandardServiceRegistry serviceRegistry;
 	private SessionFactoryImplementor sessionFactory;
 	private SequenceHiLoGenerator generator;
+	private SessionImplementor sessionImpl;
+	private SequenceValueExtractor sequenceValueExtractor;
 
 	@Before
 	public void setUp() throws Exception {
+		serviceRegistry = new StandardServiceRegistryBuilder()
+				.enableAutoClose()
+				.applySetting( AvailableSettings.HBM2DDL_AUTO, "create-drop" )
+				.build();
+
+		MetadataBuildingContext buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
+
 		Properties properties = new Properties();
 		properties.setProperty( SequenceGenerator.SEQUENCE, TEST_SEQUENCE );
 		properties.setProperty( SequenceHiLoGenerator.MAX_LO, "3" );
-		properties.put( PersistentIdentifierGenerator.IDENTIFIER_NORMALIZER, new ObjectNameNormalizer() {
-			@Override
-			protected boolean isUseQuotedIdentifiersGlobally() {
-				return false;
-			}
-
-			@Override
-			protected NamingStrategy getNamingStrategy() {
-				return cfg.getNamingStrategy();
-			}
-		} );
-
-		Dialect dialect = TestingDatabaseInfo.DIALECT;
+		properties.put(
+				PersistentIdentifierGenerator.IDENTIFIER_NORMALIZER,
+				buildingContext.getObjectNameNormalizer()
+		);
 
 		generator = new SequenceHiLoGenerator();
-		generator.configure( StandardBasicTypes.LONG, properties, dialect );
+		generator.configure( StandardBasicTypes.LONG, properties, serviceRegistry );
 
-		cfg = TestingDatabaseInfo.buildBaseConfiguration().setProperty( Environment.HBM2DDL_AUTO, "create-drop" );
-		cfg.addAuxiliaryDatabaseObject( new SimpleAuxiliaryDatabaseObject( generator.sqlCreateStrings( dialect )[0],
-				generator.sqlDropStrings( dialect )[0] ) );
-		serviceRegistry = ServiceRegistryBuilder.buildServiceRegistry( cfg.getProperties() );
-		sessionFactory = (SessionFactoryImplementor) cfg.buildSessionFactory( serviceRegistry );
+		Metadata metadata = new MetadataSources( serviceRegistry ).buildMetadata();
+		generator.registerExportables( metadata.getDatabase() );
+
+		sessionFactory = (SessionFactoryImplementor) metadata.buildSessionFactory();
+		sequenceValueExtractor = new SequenceValueExtractor( sessionFactory.getDialect(), TEST_SEQUENCE );
 	}
 
 	@After
@@ -102,67 +84,66 @@ public class SequenceHiLoGeneratorTest extends BaseUnitTestCase {
 			sessionFactory.close();
 		}
 		if ( serviceRegistry != null ) {
-			ServiceRegistryBuilder.destroy( serviceRegistry );
+			StandardServiceRegistryBuilder.destroy( serviceRegistry );
 		}
 	}
 
 	@Test
 	public void testHiLoAlgorithm() {
-		SessionImpl session = (SessionImpl) sessionFactory.openSession();
-		session.beginTransaction();
+		sessionImpl = (SessionImpl) sessionFactory.openSession();
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		// initially sequence should be uninitialized
-		assertEquals( 0L, extractSequenceValue( session ) );
+		if ( sessionFactory.getDialect() instanceof PostgreSQL81Dialect ) {
+			try {
+				assertEquals( 0L, extractSequenceValue() );
+			}
+			catch (GenericJDBCException ge) {
+				// PostgreSQL throws an exception if currval is called before nextval for this sequence in this session
+			}
+		}
+		else {
+			assertEquals( 0L, extractSequenceValue() );
+		}
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		// historically the hilo generators skipped the initial block of values;
 		// so the first generated id value is maxlo + 1, here be 4
-		Long generatedValue = (Long) generator.generate( session, null );
-		assertEquals( 4L, generatedValue.longValue() );
+		assertEquals( 4L, generateValue() );
 		// which should also perform the first read on the sequence which should set it to its "start with" value (1)
-		assertEquals( 1L, extractSequenceValue( session ) );
+		assertEquals( 1L, extractSequenceValue() );
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-		generatedValue = (Long) generator.generate( session, null );
-		assertEquals( 5L, generatedValue.longValue() );
-		assertEquals( 1L, extractSequenceValue( session ) );
+		assertEquals( 5L, generateValue() );
+		assertEquals( 1L, extractSequenceValue() );
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-		generatedValue = (Long) generator.generate( session, null );
-		assertEquals( 6L, generatedValue.longValue() );
-		assertEquals( 1L, extractSequenceValue( session ) );
+		assertEquals( 6L, generateValue() );
+		assertEquals( 1L, extractSequenceValue() );
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-		generatedValue = (Long) generator.generate( session, null );
-		assertEquals( 7L, generatedValue.longValue() );
+		assertEquals( 7L, generateValue() );
 		// unlike the newer strategies, the db value will not get update here. It gets updated on the next invocation
 		// after a clock over
-		assertEquals( 1L, extractSequenceValue( session ) );
+		assertEquals( 1L, extractSequenceValue() );
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-		generatedValue = (Long) generator.generate( session, null );
-		assertEquals( 8L, generatedValue.longValue() );
+		assertEquals( 8L, generateValue() );
 		// this should force an increment in the sequence value
-		assertEquals( 2L, extractSequenceValue( session ) );
+		assertEquals( 2L, extractSequenceValue() );
 
-		session.getTransaction().commit();
-		session.close();
+		((Session) sessionImpl).close();
 	}
 
-	private long extractSequenceValue(final SessionImplementor session) {
-		class WorkImpl implements Work {
-			private long value;
+	private long extractSequenceValue() {
+		return sequenceValueExtractor.extractSequenceValue( sessionImpl );
+	}
 
-			public void execute(Connection connection) throws SQLException {
-				PreparedStatement query = session.getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().prepareStatement( "select currval('" + TEST_SEQUENCE + "');" );
-				ResultSet resultSet = session.getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( query );
-				resultSet.next();
-				value = resultSet.getLong( 1 );
-			}
-		}
-		WorkImpl work = new WorkImpl();
-		( (Session) session ).doWork( work );
-		return work.value;
+	private long generateValue() {
+		Long generatedValue;
+		Transaction transaction = ((Session) sessionImpl).beginTransaction();
+		generatedValue = (Long) generator.generate( sessionImpl, null );
+		transaction.commit();
+		return generatedValue.longValue();
 	}
 }

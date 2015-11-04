@@ -1,39 +1,22 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.query.internal.impl;
 
-import javax.persistence.NoResultException;
-import javax.persistence.NonUniqueResultException;
 import java.util.ArrayList;
 import java.util.List;
+import javax.persistence.NoResultException;
+import javax.persistence.NonUniqueResultException;
 
 import org.hibernate.CacheMode;
 import org.hibernate.FlushMode;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.Query;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.exception.AuditException;
 import org.hibernate.envers.internal.entities.EntityInstantiator;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
@@ -64,29 +47,30 @@ public abstract class AbstractAuditQuery implements AuditQuery {
 	protected boolean hasProjection;
 	protected boolean hasOrder;
 
-	protected final AuditConfiguration verCfg;
+	protected final EnversService enversService;
 	protected final AuditReaderImplementor versionsReader;
 
 	protected AbstractAuditQuery(
-			AuditConfiguration verCfg, AuditReaderImplementor versionsReader,
+			EnversService enversService,
+			AuditReaderImplementor versionsReader,
 			Class<?> cls) {
-		this( verCfg, versionsReader, cls, cls.getName() );
+		this( enversService, versionsReader, cls, cls.getName() );
 	}
 
 	protected AbstractAuditQuery(
-			AuditConfiguration verCfg,
-			AuditReaderImplementor versionsReader, Class<?> cls, String entityName) {
-		this.verCfg = verCfg;
+			EnversService enversService,
+			AuditReaderImplementor versionsReader,
+			Class<?> cls,
+			String entityName) {
+		this.enversService = enversService;
 		this.versionsReader = versionsReader;
 
 		criterions = new ArrayList<AuditCriterion>();
-		entityInstantiator = new EntityInstantiator( verCfg, versionsReader );
+		entityInstantiator = new EntityInstantiator( enversService, versionsReader );
 
 		entityClassName = cls.getName();
 		this.entityName = entityName;
-		versionsEntityName = verCfg.getAuditEntCfg().getAuditEntityName(
-				entityName
-		);
+		versionsEntityName = enversService.getAuditEntitiesConfiguration().getAuditEntityName( entityName );
 
 		qb = new QueryBuilder( versionsEntityName, REFERENCED_ENTITY_ALIAS );
 	}
@@ -131,10 +115,10 @@ public abstract class AbstractAuditQuery implements AuditQuery {
 	// Projection and order
 
 	public AuditQuery addProjection(AuditProjection projection) {
-		Triple<String, String, Boolean> projectionData = projection.getData( verCfg );
+		Triple<String, String, Boolean> projectionData = projection.getData( enversService );
 		hasProjection = true;
 		String propertyName = CriteriaTools.determinePropertyName(
-				verCfg,
+				enversService,
 				versionsReader,
 				entityName,
 				projectionData.getSecond()
@@ -145,9 +129,9 @@ public abstract class AbstractAuditQuery implements AuditQuery {
 
 	public AuditQuery addOrder(AuditOrder order) {
 		hasOrder = true;
-		Pair<String, Boolean> orderData = order.getData( verCfg );
+		Pair<String, Boolean> orderData = order.getData( enversService );
 		String propertyName = CriteriaTools.determinePropertyName(
-				verCfg,
+				enversService,
 				versionsReader,
 				entityName,
 				orderData.getFirst()
@@ -217,6 +201,7 @@ public abstract class AbstractAuditQuery implements AuditQuery {
 	 *
 	 * @deprecated Instead use setLockOptions
 	 */
+	@Deprecated
 	public AuditQuery setLockMode(LockMode lockMode) {
 		lockOptions.setLockMode( lockMode );
 		return this;

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.action.internal;
 
@@ -31,6 +14,7 @@ import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.event.service.spi.EventListenerGroup;
 import org.hibernate.event.spi.EventType;
+import org.hibernate.event.spi.PostCommitInsertEventListener;
 import org.hibernate.event.spi.PostInsertEvent;
 import org.hibernate.event.spi.PostInsertEventListener;
 import org.hibernate.event.spi.PreInsertEvent;
@@ -149,7 +133,7 @@ public final class EntityIdentityInsertAction extends AbstractEntityInsertAction
 		if ( success && persister.hasCache() && !persister.isCacheInvalidationRequired() ) {
 			persister.getCache().afterInsert( getGeneratedId(), cacheEntry );
 		}*/
-		postCommitInsert();
+		postCommitInsert( success );
 	}
 
 	private void postInsert() {
@@ -173,7 +157,7 @@ public final class EntityIdentityInsertAction extends AbstractEntityInsertAction
 		}
 	}
 
-	private void postCommitInsert() {
+	private void postCommitInsert(boolean success) {
 		final EventListenerGroup<PostInsertEventListener> listenerGroup = listenerGroup( EventType.POST_COMMIT_INSERT );
 		if ( listenerGroup.isEmpty() ) {
 			return;
@@ -186,7 +170,18 @@ public final class EntityIdentityInsertAction extends AbstractEntityInsertAction
 				eventSource()
 		);
 		for ( PostInsertEventListener listener : listenerGroup.listeners() ) {
-			listener.onPostInsert( event );
+			if ( PostCommitInsertEventListener.class.isInstance( listener ) ) {
+				if ( success ) {
+					listener.onPostInsert( event );
+				}
+				else {
+					((PostCommitInsertEventListener) listener).onPostInsertCommitFailed( event );
+				}
+			}
+			else {
+				//default to the legacy implementation that always fires the event
+				listener.onPostInsert( event );
+			}
 		}
 	}
 
@@ -236,7 +231,7 @@ public final class EntityIdentityInsertAction extends AbstractEntityInsertAction
 		return entityKey != null ? entityKey : delayedEntityKey;
 	}
 
-	private static synchronized DelayedPostInsertIdentifier generateDelayedPostInsertIdentifier() {
+	private static DelayedPostInsertIdentifier generateDelayedPostInsertIdentifier() {
 		return new DelayedPostInsertIdentifier();
 	}
 

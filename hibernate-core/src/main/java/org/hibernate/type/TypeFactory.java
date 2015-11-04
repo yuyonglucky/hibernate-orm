@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type;
 
@@ -29,30 +12,32 @@ import java.util.Properties;
 
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
+import org.hibernate.boot.cfgxml.spi.CfgXmlAccessService;
 import org.hibernate.classic.Lifecycle;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.internal.SessionFactoryRegistry;
 import org.hibernate.internal.util.ReflectHelper;
 import org.hibernate.tuple.component.ComponentMetamodel;
 import org.hibernate.usertype.CompositeUserType;
 import org.hibernate.usertype.ParameterizedType;
 import org.hibernate.usertype.UserType;
-import org.jboss.logging.Logger;
+
+import static org.hibernate.internal.CoreLogging.messageLogger;
 
 /**
  * Used internally to build instances of {@link Type}, specifically it builds instances of
- *
- *
+ * <p/>
+ * <p/>
  * Used internally to obtain instances of <tt>Type</tt>. Applications should use static methods
  * and constants on <tt>org.hibernate.Hibernate</tt>.
  *
  * @author Gavin King
  * @author Steve Ebersole
  */
-@SuppressWarnings({ "unchecked" })
+@SuppressWarnings({"unchecked"})
 public final class TypeFactory implements Serializable {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, TypeFactory.class.getName());
+	private static final CoreMessageLogger LOG = messageLogger( TypeFactory.class );
 
 	private final TypeScopeImpl typeScope = new TypeScopeImpl();
 
@@ -61,7 +46,9 @@ public final class TypeFactory implements Serializable {
 	}
 
 	private static class TypeScopeImpl implements TypeFactory.TypeScope {
-		private SessionFactoryImplementor factory;
+		private transient SessionFactoryImplementor factory;
+		private String sessionFactoryName;
+		private String sessionFactoryUuid;
 
 		public void injectSessionFactory(SessionFactoryImplementor factory) {
 			if ( this.factory != null ) {
@@ -69,13 +56,31 @@ public final class TypeFactory implements Serializable {
 			}
 			else {
 				LOG.tracev( "Scoping types to session factory {0}", factory );
+				sessionFactoryUuid = factory.getUuid();
+				String sfName = factory.getSettings().getSessionFactoryName();
+				if ( sfName == null ) {
+					final CfgXmlAccessService cfgXmlAccessService = factory.getServiceRegistry()
+							.getService( CfgXmlAccessService.class );
+					if ( cfgXmlAccessService.getAggregatedConfig() != null ) {
+						sfName = cfgXmlAccessService.getAggregatedConfig().getSessionFactoryName();
+					}
+				}
+				sessionFactoryName = sfName;
 			}
 			this.factory = factory;
 		}
 
 		public SessionFactoryImplementor resolveFactory() {
 			if ( factory == null ) {
-				throw new HibernateException( "SessionFactory for type scoping not yet known" );
+				factory = (SessionFactoryImplementor) SessionFactoryRegistry.INSTANCE.findSessionFactory(
+						sessionFactoryUuid,
+						sessionFactoryName
+				);
+				if ( factory == null ) {
+					throw new HibernateException(
+							"Could not find a SessionFactory [uuid=" + sessionFactoryUuid + ",name=" + sessionFactoryName + "]"
+					);
+				}
 			}
 			return factory;
 		}
@@ -125,11 +130,19 @@ public final class TypeFactory implements Serializable {
 		}
 	}
 
+	// todo : can a Properties be wrapped in unmodifiable in any way?
+	private final static Properties EMPTY_PROPERTIES = new Properties();
+
 	public static void injectParameters(Object type, Properties parameters) {
 		if ( ParameterizedType.class.isInstance( type ) ) {
-			( (ParameterizedType) type ).setParameterValues(parameters);
+			if ( parameters == null ) {
+				( (ParameterizedType) type ).setParameterValues( EMPTY_PROPERTIES );
+			}
+			else {
+				( (ParameterizedType) type ).setParameterValues( parameters );
+			}
 		}
-		else if ( parameters!=null && !parameters.isEmpty() ) {
+		else if ( parameters != null && !parameters.isEmpty() ) {
 			throw new MappingException( "type is not parameterized: " + type.getClass().getName() );
 		}
 	}
@@ -142,42 +155,19 @@ public final class TypeFactory implements Serializable {
 	 * @deprecated Only for use temporary use by {@link org.hibernate.Hibernate}
 	 */
 	@Deprecated
-    @SuppressWarnings({ "JavaDoc" })
-	public static CompositeCustomType customComponent(Class<CompositeUserType> typeClass, Properties parameters, TypeScope scope) {
+	@SuppressWarnings({"JavaDoc"})
+	public static CompositeCustomType customComponent(
+			Class<CompositeUserType> typeClass,
+			Properties parameters,
+			TypeScope scope) {
 		try {
 			CompositeUserType userType = typeClass.newInstance();
 			injectParameters( userType, parameters );
 			return new CompositeCustomType( userType );
 		}
-		catch ( Exception e ) {
+		catch (Exception e) {
 			throw new MappingException( "Unable to instantiate custom type: " + typeClass.getName(), e );
 		}
-	}
-
-	/**
-	 * @deprecated Use {@link #customCollection(String, java.util.Properties, String, String)}
-	 * instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType customCollection(
-			String typeName,
-			Properties typeParameters,
-			String role,
-			String propertyRef,
-			boolean embedded) {
-		Class typeClass;
-		try {
-			typeClass = ReflectHelper.classForName( typeName );
-		}
-		catch ( ClassNotFoundException cnfe ) {
-			throw new MappingException( "user collection type class not found: " + typeName, cnfe );
-		}
-		CustomCollectionType result = new CustomCollectionType( typeScope, typeClass, role, propertyRef, embedded );
-		if ( typeParameters != null ) {
-			injectParameters( result.getUserType(), typeParameters );
-		}
-		return result;
 	}
 
 	public CollectionType customCollection(
@@ -189,7 +179,7 @@ public final class TypeFactory implements Serializable {
 		try {
 			typeClass = ReflectHelper.classForName( typeName );
 		}
-		catch ( ClassNotFoundException cnfe ) {
+		catch (ClassNotFoundException cnfe) {
 			throw new MappingException( "user collection type class not found: " + typeName, cnfe );
 		}
 		CustomCollectionType result = new CustomCollectionType( typeScope, typeClass, role, propertyRef );
@@ -207,13 +197,13 @@ public final class TypeFactory implements Serializable {
 	 * @deprecated Only for use temporary use by {@link org.hibernate.Hibernate}
 	 */
 	@Deprecated
-    public static CustomType custom(Class<UserType> typeClass, Properties parameters, TypeScope scope) {
+	public static CustomType custom(Class<UserType> typeClass, Properties parameters, TypeScope scope) {
 		try {
 			UserType userType = typeClass.newInstance();
 			injectParameters( userType, parameters );
 			return new CustomType( userType );
 		}
-		catch ( Exception e ) {
+		catch (Exception e) {
 			throw new MappingException( "Unable to instantiate custom type: " + typeClass.getName(), e );
 		}
 	}
@@ -233,40 +223,6 @@ public final class TypeFactory implements Serializable {
 
 	// one-to-one type builders ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	/**
-	 * @deprecated Use {@link #oneToOne(String, ForeignKeyDirection, String, boolean, boolean, String, String, boolean)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public EntityType oneToOne(
-			String persistentClass,
-			ForeignKeyDirection foreignKeyType,
-			String uniqueKeyPropertyName,
-			boolean lazy,
-			boolean unwrapProxy,
-			boolean isEmbeddedInXML,
-			String entityName,
-			String propertyName) {
-		return oneToOne( persistentClass, foreignKeyType, uniqueKeyPropertyName == null, uniqueKeyPropertyName, lazy, unwrapProxy, entityName,
-				propertyName );
-	}
-
-	/**
-	 * @deprecated Use {@link #oneToOne(String, ForeignKeyDirection, String, boolean, boolean, String, String, boolean)} instead.
-	 */
-	@Deprecated
-	public EntityType oneToOne(
-			String persistentClass,
-			ForeignKeyDirection foreignKeyType,
-			String uniqueKeyPropertyName,
-			boolean lazy,
-			boolean unwrapProxy,
-			String entityName,
-			String propertyName) {
-		return oneToOne( persistentClass, foreignKeyType, uniqueKeyPropertyName == null, uniqueKeyPropertyName, lazy, unwrapProxy, entityName,
-				propertyName );
-	}
-
 	public EntityType oneToOne(
 			String persistentClass,
 			ForeignKeyDirection foreignKeyType,
@@ -276,24 +232,10 @@ public final class TypeFactory implements Serializable {
 			boolean unwrapProxy,
 			String entityName,
 			String propertyName) {
-		return new OneToOneType( typeScope, persistentClass, foreignKeyType, referenceToPrimaryKey,
-				uniqueKeyPropertyName, lazy, unwrapProxy, entityName, propertyName );
-	}
-	
-	/**
-	 * @deprecated Use {@link #specialOneToOne(String, ForeignKeyDirection, String, boolean, boolean, String, String, boolean)} instead.
-	 */
-	@Deprecated
-	public EntityType specialOneToOne(
-			String persistentClass,
-			ForeignKeyDirection foreignKeyType,
-			String uniqueKeyPropertyName,
-			boolean lazy,
-			boolean unwrapProxy,
-			String entityName,
-			String propertyName) {
-		return specialOneToOne( persistentClass, foreignKeyType, uniqueKeyPropertyName == null, uniqueKeyPropertyName, lazy, unwrapProxy,
-				entityName, propertyName );
+		return new OneToOneType(
+				typeScope, persistentClass, foreignKeyType, referenceToPrimaryKey,
+				uniqueKeyPropertyName, lazy, unwrapProxy, entityName, propertyName
+		);
 	}
 
 	public EntityType specialOneToOne(
@@ -305,8 +247,10 @@ public final class TypeFactory implements Serializable {
 			boolean unwrapProxy,
 			String entityName,
 			String propertyName) {
-		return new SpecialOneToOneType( typeScope, persistentClass, foreignKeyType, referenceToPrimaryKey,
-				uniqueKeyPropertyName, lazy, unwrapProxy, entityName, propertyName );
+		return new SpecialOneToOneType(
+				typeScope, persistentClass, foreignKeyType, referenceToPrimaryKey,
+				uniqueKeyPropertyName, lazy, unwrapProxy, entityName, propertyName
+		);
 	}
 
 
@@ -322,23 +266,6 @@ public final class TypeFactory implements Serializable {
 
 	/**
 	 * @deprecated Use {@link #manyToOne(String, boolean, String, boolean, boolean, boolean, boolean)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public EntityType manyToOne(
-			String persistentClass,
-			String uniqueKeyPropertyName,
-			boolean lazy,
-			boolean unwrapProxy,
-			boolean isEmbeddedInXML,
-			boolean ignoreNotFound,
-			boolean isLogicalOneToOne) {
-		return manyToOne( persistentClass, uniqueKeyPropertyName == null, uniqueKeyPropertyName, lazy, unwrapProxy, ignoreNotFound,
-				isLogicalOneToOne );
-	}
-
-	/**
-	 * @deprecated Use {@link #manyToOne(String, boolean, String, boolean, boolean, boolean, boolean)} instead.
 	 */
 	@Deprecated
 	public EntityType manyToOne(
@@ -348,8 +275,15 @@ public final class TypeFactory implements Serializable {
 			boolean unwrapProxy,
 			boolean ignoreNotFound,
 			boolean isLogicalOneToOne) {
-		return manyToOne( persistentClass, uniqueKeyPropertyName == null, uniqueKeyPropertyName, lazy, unwrapProxy, ignoreNotFound,
-				isLogicalOneToOne );
+		return manyToOne(
+				persistentClass,
+				uniqueKeyPropertyName == null,
+				uniqueKeyPropertyName,
+				lazy,
+				unwrapProxy,
+				ignoreNotFound,
+				isLogicalOneToOne
+		);
 	}
 
 	public EntityType manyToOne(
@@ -374,130 +308,40 @@ public final class TypeFactory implements Serializable {
 
 	// collection type builders ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	/**
-	 * @deprecated Use {@link #array(String, String, Class)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType array(String role, String propertyRef, boolean embedded, Class elementClass) {
-		return new ArrayType( typeScope, role, propertyRef, elementClass, embedded );
-	}
-
 	public CollectionType array(String role, String propertyRef, Class elementClass) {
 		return new ArrayType( typeScope, role, propertyRef, elementClass );
-	}
-
-	/**
-	 * @deprecated Use {@link #list(String, String)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType list(String role, String propertyRef, boolean embedded) {
-		return new ListType( typeScope, role, propertyRef, embedded );
 	}
 
 	public CollectionType list(String role, String propertyRef) {
 		return new ListType( typeScope, role, propertyRef );
 	}
 
-	/**
-	 * @deprecated Use {@link #bag(String, String)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType bag(String role, String propertyRef, boolean embedded) {
-		return new BagType( typeScope, role, propertyRef, embedded );
-	}
-
 	public CollectionType bag(String role, String propertyRef) {
 		return new BagType( typeScope, role, propertyRef );
-	}
-
-	/**
-	 * @deprecated Use {@link #idbag(String, String)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType idbag(String role, String propertyRef, boolean embedded) {
-		return new IdentifierBagType( typeScope, role, propertyRef, embedded );
 	}
 
 	public CollectionType idbag(String role, String propertyRef) {
 		return new IdentifierBagType( typeScope, role, propertyRef );
 	}
 
-	/**
-	 * @deprecated Use {@link #map(String, String)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType map(String role, String propertyRef, boolean embedded) {
-		return new MapType( typeScope, role, propertyRef, embedded );
-	}
-
 	public CollectionType map(String role, String propertyRef) {
 		return new MapType( typeScope, role, propertyRef );
-	}
-
-	/**
-	 * @deprecated Use {@link #orderedMap(String, String)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType orderedMap(String role, String propertyRef, boolean embedded) {
-		return new OrderedMapType( typeScope, role, propertyRef, embedded );
 	}
 
 	public CollectionType orderedMap(String role, String propertyRef) {
 		return new OrderedMapType( typeScope, role, propertyRef );
 	}
 
-	/**
-	 * @deprecated Use {@link #sortedMap(String, String, java.util.Comparator)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType sortedMap(String role, String propertyRef, boolean embedded, Comparator comparator) {
-		return new SortedMapType( typeScope, role, propertyRef, comparator, embedded );
-	}
-
 	public CollectionType sortedMap(String role, String propertyRef, Comparator comparator) {
 		return new SortedMapType( typeScope, role, propertyRef, comparator );
-	}
-
-	/**
-	 * @deprecated Use {@link #set(String, String)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType set(String role, String propertyRef, boolean embedded) {
-		return new SetType( typeScope, role, propertyRef, embedded );
 	}
 
 	public CollectionType set(String role, String propertyRef) {
 		return new SetType( typeScope, role, propertyRef );
 	}
 
-	/**
-	 * @deprecated Use {@link #orderedSet(String, String)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType orderedSet(String role, String propertyRef, boolean embedded) {
-		return new OrderedSetType( typeScope, role, propertyRef, embedded );
-	}
-
 	public CollectionType orderedSet(String role, String propertyRef) {
 		return new OrderedSetType( typeScope, role, propertyRef );
-	}
-
-	/**
-	 * @deprecated Use {@link #sortedSet(String, String, java.util.Comparator)} instead.
-	 * See Jira issue: <a href="https://hibernate.onjira.com/browse/HHH-7771">HHH-7771</a>
-	 */
-	@Deprecated
-	public CollectionType sortedSet(String role, String propertyRef, boolean embedded, Comparator comparator) {
-		return new SortedSetType( typeScope, role, propertyRef, comparator, embedded );
 	}
 
 	public CollectionType sortedSet(String role, String propertyRef, Comparator comparator) {
@@ -518,6 +362,6 @@ public final class TypeFactory implements Serializable {
 	// any type builder ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	public Type any(Type metaType, Type identifierType) {
-		return new AnyType( metaType, identifierType );
+		return new AnyType( typeScope, metaType, identifierType );
 	}
 }

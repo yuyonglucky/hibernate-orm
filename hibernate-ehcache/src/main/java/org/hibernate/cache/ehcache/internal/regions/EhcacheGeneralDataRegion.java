@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.ehcache.internal.regions;
 
@@ -29,13 +12,14 @@ import net.sf.ehcache.Ehcache;
 import net.sf.ehcache.Element;
 import net.sf.ehcache.constructs.nonstop.NonStopCacheException;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.ehcache.EhCacheMessageLogger;
 import org.hibernate.cache.ehcache.internal.nonstop.HibernateNonstopCacheExceptionHandler;
 import org.hibernate.cache.ehcache.internal.strategy.EhcacheAccessStrategyFactory;
 import org.hibernate.cache.spi.GeneralDataRegion;
+
+import org.hibernate.engine.spi.SessionImplementor;
+import org.jboss.logging.Logger;
 
 /**
  * An Ehcache specific GeneralDataRegion.
@@ -69,7 +53,7 @@ abstract class EhcacheGeneralDataRegion extends EhcacheDataRegion implements Gen
 	}
 
 	@Override
-	public Object get(Object key) throws CacheException {
+	public Object get(SessionImplementor session, Object key) throws CacheException {
 		try {
 			LOG.debugf( "key: %s", key );
 			if ( key == null ) {
@@ -99,7 +83,7 @@ abstract class EhcacheGeneralDataRegion extends EhcacheDataRegion implements Gen
 	}
 
 	@Override
-	public void put(Object key, Object value) throws CacheException {
+	public void put(SessionImplementor session, Object key, Object value) throws CacheException {
 		LOG.debugf( "key: %s value: %s", key, value );
 		try {
 			final Element element = new Element( key, value );

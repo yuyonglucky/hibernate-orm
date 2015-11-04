@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.collection.list;
 
@@ -94,9 +77,9 @@ public class PersistentListTest extends BaseCoreFunctionalTestCase {
 								.addColumn( "NAME" )
 								.addColumn( "LIST_INDEX" )
 								.addCondition( "NAME", "<>", "?" );
-						PreparedStatement preparedStatement = ((SessionImplementor)session2).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().prepareStatement( select.toStatementString() );
+						PreparedStatement preparedStatement = ((SessionImplementor)session2).getJdbcCoordinator().getStatementPreparer().prepareStatement( select.toStatementString() );
 						preparedStatement.setString( 1, "root" );
-						ResultSet resultSet = ((SessionImplementor)session2).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( preparedStatement );
+						ResultSet resultSet = ((SessionImplementor)session2).getJdbcCoordinator().getResultSetReturn().extract( preparedStatement );
 						Map<String, Integer> valueMap = new HashMap<String, Integer>();
 						while ( resultSet.next() ) {
 							final String name = resultSet.getString( 1 );
@@ -151,8 +134,8 @@ public class PersistentListTest extends BaseCoreFunctionalTestCase {
 								.addColumn( "ORDER_ID" )
 								.addColumn( "INDX" )
 								.addColumn( "PRD_CODE" );
-						PreparedStatement preparedStatement = ((SessionImplementor)session2).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().prepareStatement( select.toStatementString() );
-						ResultSet resultSet = ((SessionImplementor)session2).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( preparedStatement );
+						PreparedStatement preparedStatement = ((SessionImplementor)session2).getJdbcCoordinator().getStatementPreparer().prepareStatement( select.toStatementString() );
+						ResultSet resultSet = ((SessionImplementor)session2).getJdbcCoordinator().getResultSetReturn().extract( preparedStatement );
 						Map<String, Integer> valueMap = new HashMap<String, Integer>();
 						while ( resultSet.next() ) {
 							final int fk = resultSet.getInt( 1 );

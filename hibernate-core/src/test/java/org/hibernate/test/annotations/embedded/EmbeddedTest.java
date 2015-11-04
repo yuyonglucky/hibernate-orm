@@ -1,52 +1,42 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.embedded;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
-import org.junit.Test;
-
+import org.hibernate.Hibernate;
 import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
+import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl;
+
+import org.hibernate.testing.FailureExpected;
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.hibernate.test.annotations.embedded.FloatLeg.RateIndex;
 import org.hibernate.test.annotations.embedded.Leg.Frequency;
 import org.hibernate.test.util.SchemaUtil;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
  * @author Emmanuel Bernard
  */
-public class EmbeddedTest extends BaseCoreFunctionalTestCase {
+public class EmbeddedTest extends BaseNonConfigCoreFunctionalTestCase {
 	@Test
 	public void testSimple() throws Exception {
 		Session s;
@@ -82,6 +72,169 @@ public class EmbeddedTest extends BaseCoreFunctionalTestCase {
 		assertEquals( "DM", p.address.country.getIso2() );
 		assertNotNull( p.bornIn );
 		assertEquals( "US", p.bornIn.getIso2() );
+		tx.commit();
+		s.close();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-8172" )
+	public void testQueryWithEmbeddedIsNull() throws Exception {
+		Session s;
+		Transaction tx;
+		Person p = new Person();
+		Address a = new Address();
+		Country c = new Country();
+		Country bornCountry = new Country();
+		c.setIso2( "DM" );
+		c.setName( "Matt Damon Land" );
+		assertNull( bornCountry.getIso2() );
+		assertNull( bornCountry.getName() );
+
+		a.address1 = "colorado street";
+		a.city = "Springfield";
+		a.country = c;
+		p.address = a;
+		p.bornIn = bornCountry;
+		p.name = "Homer";
+		s = openSession();
+		tx = s.beginTransaction();
+		s.persist( p );
+		tx.commit();
+		s.close();
+
+		s = openSession();
+		tx = s.beginTransaction();
+		p = (Person) s.createQuery( "from Person p where p.bornIn is null" ).uniqueResult();
+		assertNotNull( p );
+		assertNotNull( p.address );
+		assertEquals( "Springfield", p.address.city );
+		assertNotNull( p.address.country );
+		assertEquals( "DM", p.address.country.getIso2() );
+		assertNull( p.bornIn );
+		tx.commit();
+		s.close();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-8172" )
+	@FailureExpected( jiraKey = "HHH-8172")
+	public void testQueryWithEmbeddedParameterAllNull() throws Exception {
+		Session s;
+		Transaction tx;
+		Person p = new Person();
+		Address a = new Address();
+		Country c = new Country();
+		Country bornCountry = new Country();
+		assertNull( bornCountry.getIso2() );
+		assertNull( bornCountry.getName() );
+
+		a.address1 = "colorado street";
+		a.city = "Springfield";
+		a.country = c;
+		p.address = a;
+		p.bornIn = bornCountry;
+		p.name = "Homer";
+		s = openSession();
+		tx = s.beginTransaction();
+		s.persist( p );
+		tx.commit();
+		s.close();
+
+		s = openSession();
+		tx = s.beginTransaction();
+		p = (Person) s.createQuery( "from Person p where p.bornIn = :b" ).setParameter( "b", p.bornIn ).uniqueResult();
+		assertNotNull( p );
+		assertNotNull( p.address );
+		assertEquals( "Springfield", p.address.city );
+		assertNotNull( p.address.country );
+		assertEquals( "DM", p.address.country.getIso2() );
+		assertNull( p.bornIn );
+		tx.commit();
+		s.close();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-8172" )
+	@FailureExpected( jiraKey = "HHH-8172")
+	public void testQueryWithEmbeddedParameterOneNull() throws Exception {
+		Session s;
+		Transaction tx;
+		Person p = new Person();
+		Address a = new Address();
+		Country c = new Country();
+		Country bornCountry = new Country();
+		c.setIso2( "DM" );
+		c.setName( "Matt Damon Land" );
+		bornCountry.setIso2( "US" );
+		assertNull( bornCountry.getName() );
+
+		a.address1 = "colorado street";
+		a.city = "Springfield";
+		a.country = c;
+		p.address = a;
+		p.bornIn = bornCountry;
+		p.name = "Homer";
+		s = openSession();
+		tx = s.beginTransaction();
+		s.persist( p );
+		tx.commit();
+		s.close();
+
+		s = openSession();
+		tx = s.beginTransaction();
+		p = (Person) s.createQuery( "from Person p where p.bornIn = :b" ).setParameter( "b", p.bornIn ).uniqueResult();
+		assertNotNull( p );
+		assertNotNull( p.address );
+		assertEquals( "Springfield", p.address.city );
+		assertNotNull( p.address.country );
+		assertEquals( "DM", p.address.country.getIso2() );
+		assertEquals( "US", p.bornIn.getIso2() );
+		assertNull( p.bornIn.getName() );
+		tx.commit();
+		s.close();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-8172" )
+	public void testQueryWithEmbeddedWithNullUsingSubAttributes() throws Exception {
+		Session s;
+		Transaction tx;
+		Person p = new Person();
+		Address a = new Address();
+		Country c = new Country();
+		Country bornCountry = new Country();
+		c.setIso2( "DM" );
+		c.setName( "Matt Damon Land" );
+		bornCountry.setIso2( "US" );
+		assertNull( bornCountry.getName() );
+
+		a.address1 = "colorado street";
+		a.city = "Springfield";
+		a.country = c;
+		p.address = a;
+		p.bornIn = bornCountry;
+		p.name = "Homer";
+		s = openSession();
+		tx = s.beginTransaction();
+		s.persist( p );
+		tx.commit();
+		s.close();
+
+		s = openSession();
+		tx = s.beginTransaction();
+		p = (Person) s.createQuery( "from Person p " +
+						"where ( p.bornIn.iso2 is null or p.bornIn.iso2 = :i ) and " +
+						"( p.bornIn.name is null or p.bornIn.name = :n )"
+		).setParameter( "i", p.bornIn.getIso2() )
+				.setParameter( "n", p.bornIn.getName() )
+				.uniqueResult();
+		assertNotNull( p );
+		assertNotNull( p.address );
+		assertEquals( "Springfield", p.address.city );
+		assertNotNull( p.address.country );
+		assertEquals( "DM", p.address.country.getIso2() );
+		assertEquals( "US", p.bornIn.getIso2() );
+		assertNull( p.bornIn.getName() );
 		tx.commit();
 		s.close();
 	}
@@ -405,11 +558,69 @@ public class EmbeddedTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@TestForIssue( jiraKey = "HHH-9642")
+	public void testEmbeddedAndOneToManyHql() throws Exception {
+		Session s;
+		s = openSession();
+		Transaction tx = s.beginTransaction();
+		InternetProvider provider = new InternetProvider();
+		provider.setBrandName( "Fido" );
+		LegalStructure structure = new LegalStructure();
+		structure.setCountry( "Canada" );
+		structure.setName( "Rogers" );
+		provider.setOwner( structure );
+		s.persist( provider );
+		Manager manager = new Manager();
+		manager.setName( "Bill" );
+		manager.setEmployer( provider );
+		structure.getTopManagement().add( manager );
+		s.persist( manager );
+		tx.commit();
+		s.close();
+
+		s = openSession();
+		s.getTransaction().begin();
+		InternetProvider internetProviderQueried =
+				(InternetProvider) s.createQuery( "from InternetProvider" ).uniqueResult();
+		assertFalse( Hibernate.isInitialized( internetProviderQueried.getOwner().getTopManagement() ) );
+		s.getTransaction().commit();
+		s.close();
+
+		s = openSession();
+		s.getTransaction().begin();
+		internetProviderQueried =
+				(InternetProvider) s.createQuery( "from InternetProvider i join fetch i.owner.topManagement" )
+						.uniqueResult();
+		assertTrue( Hibernate.isInitialized( internetProviderQueried.getOwner().getTopManagement() ) );
+		s.getTransaction().commit();
+		s.close();
+
+		s = openSession();
+		s.getTransaction().begin();
+		internetProviderQueried =
+				(InternetProvider) s.createQuery( "from InternetProvider i join fetch i.owner o join fetch o.topManagement" )
+						.uniqueResult();
+		assertTrue( Hibernate.isInitialized( internetProviderQueried.getOwner().getTopManagement() ) );
+		s.getTransaction().commit();
+		s.close();
+
+		s = openSession();
+		tx = s.beginTransaction();
+		provider = (InternetProvider) s.get( InternetProvider.class, provider.getId() );
+		manager = provider.getOwner().getTopManagement().iterator().next();
+		s.delete( manager );
+		s.delete( provider );
+		tx.commit();
+		s.close();
+	}
+
+
+	@Test
 	public void testDefaultCollectionTable() throws Exception {
 		//are the tables correct?
-		assertTrue( SchemaUtil.isTablePresent("WealthyPerson_vacationHomes", configuration() ) );
-		assertTrue( SchemaUtil.isTablePresent("WealthyPerson_legacyVacationHomes", configuration() ) );
-		assertTrue( SchemaUtil.isTablePresent("WelPers_VacHomes", configuration() ) );
+		assertTrue( SchemaUtil.isTablePresent("WealthyPerson_vacationHomes", metadata() ) );
+		assertTrue( SchemaUtil.isTablePresent("WealthyPerson_legacyVacationHomes", metadata() ) );
+		assertTrue( SchemaUtil.isTablePresent("WelPers_VacHomes", metadata() ) );
 
 		//just to make sure, use the mapping
 		Session s;
@@ -517,6 +728,19 @@ public class EmbeddedTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
+	@Test
+	@TestForIssue(jiraKey = "HHH-3868")
+	public void testTransientMergeComponentParent() {
+		Session s = openSession();
+		Transaction tx = s.beginTransaction();
+		Book b = new Book();
+		b.setIsbn( UUID.randomUUID().toString() );
+		b.setSummary( new Summary() );
+		b = (Book) s.merge( b );
+		tx.commit();
+		s.close();
+	}
+
 	@Override
 	protected Class[] getAnnotatedClasses() {
 		return new Class[]{
@@ -533,5 +757,11 @@ public class EmbeddedTest extends BaseCoreFunctionalTestCase {
 				Manager.class,
 				FavoriteThings.class
 		};
+	}
+
+	@Override
+	protected void configureMetadataBuilder(MetadataBuilder metadataBuilder) {
+		super.configureMetadataBuilder( metadataBuilder );
+		metadataBuilder.applyImplicitNamingStrategy( ImplicitNamingStrategyJpaCompliantImpl.INSTANCE );
 	}
 }

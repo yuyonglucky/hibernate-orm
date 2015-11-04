@@ -1,33 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.locking;
 
 import java.util.concurrent.TimeoutException;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
 
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
@@ -36,11 +15,14 @@ import org.hibernate.Session;
 import org.hibernate.dialect.SybaseASE15Dialect;
 import org.hibernate.exception.GenericJDBCException;
 import org.hibernate.exception.LockAcquisitionException;
+
 import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.SkipForDialects;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.async.Executable;
 import org.hibernate.testing.async.TimedExecutor;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
@@ -51,8 +33,10 @@ import static org.junit.Assert.fail;
  * @author Steve Ebersole
  */
 @TestForIssue( jiraKey = "HHH-5275")
+@SkipForDialects( {
 @SkipForDialect(value=SybaseASE15Dialect.class, strictMatching=true,
 		comment = "skip this test on Sybase ASE 15.5, but run it on 15.7, see HHH-6820")
+})
 public class LockModeTest extends BaseCoreFunctionalTestCase {
 	private Long id;
 
@@ -79,7 +63,7 @@ public class LockModeTest extends BaseCoreFunctionalTestCase {
 		Session s1 = sessionFactory().openSession();
 		s1.beginTransaction();
 		try {
-			A it = (A) s1.get( A.class, id, LockMode.PESSIMISTIC_WRITE );
+			A it = (A) s1.byId( A.class ).with( LockOptions.UPGRADE ).load( id );
 			// make sure we got it
 			assertNotNull( it );
 

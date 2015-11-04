@@ -1,33 +1,17 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.tree;
+
+import org.hibernate.hql.internal.antlr.HqlSqlTokenTypes;
+import org.hibernate.internal.CoreLogging;
+import org.hibernate.internal.CoreMessageLogger;
+
 import antlr.SemanticException;
 import antlr.collections.AST;
-import org.jboss.logging.Logger;
-
-import org.hibernate.internal.CoreMessageLogger;
 
 /**
  * Represents a reference to a FROM element, for example a class alias in a WHERE clause.
@@ -35,16 +19,17 @@ import org.hibernate.internal.CoreMessageLogger;
  * @author josh
  */
 public abstract class FromReferenceNode extends AbstractSelectExpression
-        implements ResolvableNode, DisplayableNode, InitializeableNode, PathNode {
+		implements ResolvableNode, DisplayableNode, InitializeableNode, PathNode {
 
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, FromReferenceNode.class.getName() );
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( FromReferenceNode.class );
 
 	private FromElement fromElement;
-	private boolean resolved = false;
+	private boolean resolved;
+
 	public static final int ROOT_LEVEL = 0;
 
 	@Override
-    public FromElement getFromElement() {
+	public FromElement getFromElement() {
 		return fromElement;
 	}
 
@@ -60,6 +45,7 @@ public abstract class FromReferenceNode extends AbstractSelectExpression
 	public void resolveFirstChild() throws SemanticException {
 	}
 
+	@Override
 	public String getPath() {
 		return getOriginalText();
 	}
@@ -75,6 +61,7 @@ public abstract class FromReferenceNode extends AbstractSelectExpression
 		}
 	}
 
+	@Override
 	public String getDisplayText() {
 		StringBuilder buf = new StringBuilder();
 		buf.append( "{" ).append( ( fromElement == null ) ? "no fromElement" : fromElement.getDisplayText() );
@@ -86,11 +73,12 @@ public abstract class FromReferenceNode extends AbstractSelectExpression
 		recursiveResolve( level, impliedAtRoot, classAlias, this );
 	}
 
-	public void recursiveResolve(int level, boolean impliedAtRoot, String classAlias, AST parent) throws SemanticException {
+	public void recursiveResolve(int level, boolean impliedAtRoot, String classAlias, AST parent)
+			throws SemanticException {
 		AST lhs = getFirstChild();
 		int nextLevel = level + 1;
 		if ( lhs != null ) {
-			FromReferenceNode n = ( FromReferenceNode ) lhs;
+			FromReferenceNode n = (FromReferenceNode) lhs;
 			n.recursiveResolve( nextLevel, impliedAtRoot, null, this );
 		}
 		resolveFirstChild();
@@ -102,18 +90,21 @@ public abstract class FromReferenceNode extends AbstractSelectExpression
 	}
 
 	@Override
-    public boolean isReturnableEntity() throws SemanticException {
+	public boolean isReturnableEntity() throws SemanticException {
 		return !isScalar() && fromElement.isEntity();
 	}
 
+	@Override
 	public void resolveInFunctionCall(boolean generateJoin, boolean implicitJoin) throws SemanticException {
 		resolve( generateJoin, implicitJoin );
 	}
 
+	@Override
 	public void resolve(boolean generateJoin, boolean implicitJoin) throws SemanticException {
 		resolve( generateJoin, implicitJoin, null );
 	}
 
+	@Override
 	public void resolve(boolean generateJoin, boolean implicitJoin, String classAlias) throws SemanticException {
 		resolve( generateJoin, implicitJoin, classAlias, null );
 	}
@@ -128,6 +119,17 @@ public abstract class FromReferenceNode extends AbstractSelectExpression
 	 */
 	public FromElement getImpliedJoin() {
 		return null;
+	}
+
+	@SuppressWarnings("SimplifiableIfStatement")
+	protected boolean isFromElementUpdateOrDeleteRoot(FromElement element) {
+		if ( element.getFromClause().getParentFromClause() != null ) {
+			// its not even a root...
+			return false;
+		}
+
+		return getWalker().getStatementType() == HqlSqlTokenTypes.DELETE
+				|| getWalker().getStatementType() == HqlSqlTokenTypes.UPDATE;
 	}
 
 }

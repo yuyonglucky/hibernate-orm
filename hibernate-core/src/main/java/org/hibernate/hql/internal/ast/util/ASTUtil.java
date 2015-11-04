@@ -1,28 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.util;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -46,6 +29,7 @@ public final class ASTUtil {
 	 *
 	 * @deprecated (tellclovertoignorethis)
 	 */
+	@Deprecated
 	private ASTUtil() {
 	}
 
@@ -62,6 +46,7 @@ public final class ASTUtil {
 	 *
 	 * @deprecated silly
 	 */
+	@Deprecated
 	public static AST create(ASTFactory astFactory, int type, String text) {
 		return astFactory.create( type, text );
 	}
@@ -112,7 +97,12 @@ public final class ASTUtil {
 	 *
 	 * @return AST - A new sub-tree of the form "(parent child1 child2)"
 	 */
-	public static AST createBinarySubtree(ASTFactory factory, int parentType, String parentText, AST child1, AST child2) {
+	public static AST createBinarySubtree(
+			ASTFactory factory,
+			int parentType,
+			String parentText,
+			AST child1,
+			AST child2) {
 		ASTArray array = createAstArray( factory, 3, parentType, parentText, child1 );
 		array.add( child2 );
 		return factory.make( array );
@@ -153,6 +143,7 @@ public final class ASTUtil {
 	 *
 	 * @param fixture The node against which to testto be checked for children.
 	 * @param test The node to be tested as being a subtree child of the parent.
+	 *
 	 * @return True if child is contained in the parent's collection of children.
 	 */
 	public static boolean isSubtreeChild(AST fixture, AST test) {
@@ -314,7 +305,12 @@ public final class ASTUtil {
 		}
 	}
 
-	private static ASTArray createAstArray(ASTFactory factory, int size, int parentType, String parentText, AST child1) {
+	private static ASTArray createAstArray(
+			ASTFactory factory,
+			int size,
+			int parentType,
+			String parentText,
+			AST child1) {
 		ASTArray array = new ASTArray( size );
 		array.add( factory.create( parentType, parentText ) );
 		array.add( child1 );
@@ -339,6 +335,7 @@ public final class ASTUtil {
 	 * A predicate that uses inclusion, rather than exclusion semantics.
 	 */
 	public abstract static class IncludePredicate implements FilterPredicate {
+		@Override
 		public final boolean exclude(AST node) {
 			return !include( node );
 		}
@@ -358,6 +355,7 @@ public final class ASTUtil {
 			this.predicate = predicate;
 		}
 
+		@Override
 		public void visit(AST node) {
 			if ( predicate == null || !predicate.exclude( node ) ) {
 				collectedNodes.add( node );
@@ -379,17 +377,18 @@ public final class ASTUtil {
 	 * Method to generate a map of token type names, keyed by their token type values.
 	 *
 	 * @param tokenTypeInterface The *TokenTypes interface (or implementor of said interface).
+	 *
 	 * @return The generated map.
 	 */
 	public static Map generateTokenNameCache(Class tokenTypeInterface) {
 		final Field[] fields = tokenTypeInterface.getFields();
-		Map cache = new HashMap( (int)( fields.length * .75 ) + 1 );
+		Map cache = new HashMap( (int) ( fields.length * .75 ) + 1 );
 		for ( final Field field : fields ) {
 			if ( Modifier.isStatic( field.getModifiers() ) ) {
 				try {
 					cache.put( field.get( null ), field.getName() );
 				}
-				catch ( Throwable ignore ) {
+				catch (Throwable ignore) {
 				}
 			}
 		}
@@ -409,6 +408,7 @@ public final class ASTUtil {
 	 *
 	 * @deprecated Use #getTokenTypeName instead
 	 */
+	@Deprecated
 	public static String getConstantName(Class owner, int value) {
 		return getTokenTypeName( owner, value );
 	}
@@ -444,18 +444,18 @@ public final class ASTUtil {
 		try {
 			Object value = field.get( null );
 			if ( value instanceof Integer ) {
-				rtn = ( Integer ) value;
+				rtn = (Integer) value;
 			}
 			else if ( value instanceof Short ) {
-				rtn =  ( ( Short ) value ).intValue();
+				rtn = ( (Short) value ).intValue();
 			}
 			else if ( value instanceof Long ) {
-				if ( ( Long ) value  <= Integer.MAX_VALUE ) {
-					rtn = ( ( Long ) value ).intValue();
+				if ( (Long) value <= Integer.MAX_VALUE ) {
+					rtn = ( (Long) value ).intValue();
 				}
 			}
 		}
-		catch ( IllegalAccessException ignore ) {
+		catch (IllegalAccessException ignore) {
 		}
 		return rtn;
 	}

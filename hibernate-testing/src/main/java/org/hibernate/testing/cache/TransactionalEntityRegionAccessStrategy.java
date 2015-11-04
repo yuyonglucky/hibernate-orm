@@ -1,7 +1,14 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.testing.cache;
 
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.spi.access.SoftLock;
+import org.hibernate.engine.spi.SessionImplementor;
 
 /**
  * @author Strong Liu <stliu@hibernate.org>
@@ -11,35 +18,25 @@ class TransactionalEntityRegionAccessStrategy extends BaseEntityRegionAccessStra
 		super( region );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
-	public boolean afterInsert(Object key, Object value, Object version) {
-		return false;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	public boolean afterUpdate(Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock) {
-		return false;
-	}
-
-
-	/**
-	 * {@inheritDoc}
-	 */
 	@Override
-	public void remove(Object key) throws CacheException {
+	public boolean afterInsert(SessionImplementor session, Object key, Object value, Object version) {
+		return false;
+	}
+
+	@Override
+	public boolean afterUpdate(SessionImplementor session, Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock) {
+		return false;
+	}
+
+	@Override
+	public void remove(SessionImplementor session, Object key) throws CacheException {
 		evict( key );
 	}
 
-
-	/**
-	 * {@inheritDoc}
-	 */
-	public boolean update(Object key, Object value, Object currentVersion,
-						  Object previousVersion) throws CacheException {
-		return insert( key, value, currentVersion );
+	@Override
+	public boolean update(
+			SessionImplementor session, Object key, Object value, Object currentVersion,
+			Object previousVersion) throws CacheException {
+		return insert(session, key, value, currentVersion);
 	}
 }

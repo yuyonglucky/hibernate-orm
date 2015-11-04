@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.infinispan.util;
 
@@ -29,11 +12,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.hibernate.cache.infinispan.impl.BaseRegion;
+
 import org.infinispan.commands.ReplicableCommand;
 import org.infinispan.commands.module.ExtendedModuleCommandFactory;
 import org.infinispan.commands.remote.CacheRpcCommand;
-
-import org.hibernate.cache.infinispan.impl.BaseRegion;
 
 /**
  * Command factory
@@ -75,6 +58,8 @@ public class CacheCommandFactory implements ExtendedModuleCommandFactory {
 	public Map<Byte, Class<? extends ReplicableCommand>> getModuleCommands() {
 		final Map<Byte, Class<? extends ReplicableCommand>> map = new HashMap<Byte, Class<? extends ReplicableCommand>>( 3 );
 		map.put( CacheCommandIds.EVICT_ALL, EvictAllCommand.class );
+		map.put( CacheCommandIds.END_INVALIDATION, EndInvalidationCommand.class );
+		map.put( CacheCommandIds.BEGIN_INVALIDATION, BeginInvalidationCommand.class );
 		return map;
 	}
 
@@ -85,6 +70,9 @@ public class CacheCommandFactory implements ExtendedModuleCommandFactory {
 			case CacheCommandIds.EVICT_ALL:
 				c = new EvictAllCommand( cacheName, allRegions.get( cacheName ) );
 				break;
+			case CacheCommandIds.END_INVALIDATION:
+				c = new EndInvalidationCommand(cacheName);
+				break;
 			default:
 				throw new IllegalArgumentException( "Not registered to handle command id " + commandId );
 		}
@@ -94,9 +82,16 @@ public class CacheCommandFactory implements ExtendedModuleCommandFactory {
 
 	@Override
 	public ReplicableCommand fromStream(byte commandId, Object[] args) {
-		// Should not be called while this factory only
-		// provides cache specific replicable commands.
-		return null;
+		ReplicableCommand c;
+		switch ( commandId ) {
+			case CacheCommandIds.BEGIN_INVALIDATION:
+				c = new BeginInvalidationCommand();
+				break;
+			default:
+				throw new IllegalArgumentException( "Not registered to handle command id " + commandId );
+		}
+		c.setParameters( commandId, args );
+		return c;
 	}
 
 }

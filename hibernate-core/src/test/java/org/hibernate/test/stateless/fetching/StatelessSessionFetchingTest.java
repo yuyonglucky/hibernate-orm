@@ -1,40 +1,27 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.stateless.fetching;
 
 import java.util.Date;
-
-import org.jboss.logging.Logger;
-import org.junit.Test;
+import java.util.Locale;
 
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.StatelessSession;
+import org.hibernate.boot.model.naming.Identifier;
+import org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl;
 import org.hibernate.cfg.Configuration;
-import org.hibernate.cfg.DefaultNamingStrategy;
+import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.internal.util.StringHelper;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
+
+import org.jboss.logging.Logger;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -53,10 +40,10 @@ public class StatelessSessionFetchingTest extends BaseCoreFunctionalTestCase {
 	@Override
 	public void configure(Configuration cfg) {
 		super.configure( cfg );
-		cfg.setNamingStrategy( new TestingNamingStrategy() );
+		cfg.setPhysicalNamingStrategy( new TestingNamingStrategy() );
 	}
 
-	private class TestingNamingStrategy extends DefaultNamingStrategy {
+	private class TestingNamingStrategy extends PhysicalNamingStrategyStandardImpl {
 		private final String prefix = determineUniquePrefix();
 
 		protected String applyPrefix(String baseTableName) {
@@ -66,36 +53,12 @@ public class StatelessSessionFetchingTest extends BaseCoreFunctionalTestCase {
 		}
 
 		@Override
-		public String classToTableName(String className) {
-			return applyPrefix( super.classToTableName( className ) );
-		}
-
-		@Override
-		public String tableName(String tableName) {
-			if ( tableName.startsWith( "`" ) && tableName.endsWith( "`" ) ) {
-				return tableName;
-			}
-			if ( tableName.startsWith( prefix + '_' ) ) {
-				return tableName;
-			}
-			return applyPrefix( tableName );
-		}
-
-		@Override
-		public String collectionTableName(String ownerEntity, String ownerEntityTable, String associatedEntity, String associatedEntityTable, String propertyName) {
-			String tableName = super.collectionTableName( ownerEntity, ownerEntityTable, associatedEntity, associatedEntityTable, propertyName );
-			return applyPrefix( tableName );
-		}
-
-		@Override
-		public String logicalCollectionTableName(String tableName, String ownerEntityTable, String associatedEntityTable, String propertyName) {
-			String resolvedTableName = prefix + '_' + super.logicalCollectionTableName( tableName, ownerEntityTable, associatedEntityTable, propertyName );
-			System.out.println( "Logical collection table name : " + tableName + " -> " + resolvedTableName );
-			return resolvedTableName;
+		public Identifier toPhysicalTableName(Identifier name, JdbcEnvironment jdbcEnvironment) {
+			return jdbcEnvironment.getIdentifierHelper().toIdentifier( applyPrefix( name.getText() ) );
 		}
 
 		private String determineUniquePrefix() {
-			return StringHelper.collapseQualifier( getClass().getName(), false ).toUpperCase();
+			return StringHelper.collapseQualifier( getClass().getName(), false ).toUpperCase(Locale.ROOT);
 		}
 	}
 

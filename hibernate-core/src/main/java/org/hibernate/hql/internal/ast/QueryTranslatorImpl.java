@@ -1,28 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,16 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import antlr.ANTLRException;
-import antlr.RecognitionException;
-import antlr.TokenStreamException;
-import antlr.collections.AST;
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
 import org.hibernate.QueryException;
 import org.hibernate.ScrollableResults;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
+import org.hibernate.engine.query.spi.EntityGraphQueryHint;
 import org.hibernate.engine.spi.QueryParameters;
 import org.hibernate.engine.spi.RowSelection;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -51,6 +31,7 @@ import org.hibernate.hql.internal.antlr.HqlSqlTokenTypes;
 import org.hibernate.hql.internal.antlr.HqlTokenTypes;
 import org.hibernate.hql.internal.antlr.SqlTokenTypes;
 import org.hibernate.hql.internal.ast.exec.BasicExecutor;
+import org.hibernate.hql.internal.ast.exec.DeleteExecutor;
 import org.hibernate.hql.internal.ast.exec.MultiTableDeleteExecutor;
 import org.hibernate.hql.internal.ast.exec.MultiTableUpdateExecutor;
 import org.hibernate.hql.internal.ast.exec.StatementExecutor;
@@ -72,6 +53,13 @@ import org.hibernate.loader.hql.QueryLoader;
 import org.hibernate.param.ParameterSpecification;
 import org.hibernate.persister.entity.Queryable;
 import org.hibernate.type.Type;
+
+import org.jboss.logging.Logger;
+
+import antlr.ANTLRException;
+import antlr.RecognitionException;
+import antlr.TokenStreamException;
+import antlr.collections.AST;
 
 /**
  * A QueryTranslator that uses an Antlr-based parser.
@@ -103,6 +91,8 @@ public class QueryTranslatorImpl implements FilterTranslator {
 
 	private ParameterTranslations paramTranslations;
 	private List<ParameterSpecification> collectedParameterSpecifications;
+	
+	private EntityGraphQueryHint entityGraphQueryHint;
 
 
 	/**
@@ -124,6 +114,16 @@ public class QueryTranslatorImpl implements FilterTranslator {
 		this.shallowQuery = false;
 		this.enabledFilters = enabledFilters;
 		this.factory = factory;
+	}
+	
+	public QueryTranslatorImpl(
+			String queryIdentifier,
+			String query,
+			Map enabledFilters,
+			SessionFactoryImplementor factory,
+			EntityGraphQueryHint entityGraphQueryHint) {
+		this( queryIdentifier, query, enabledFilters, factory );
+		this.entityGraphQueryHint = entityGraphQueryHint;
 	}
 
 	/**
@@ -280,7 +280,7 @@ public class QueryTranslatorImpl implements FilterTranslator {
 
 		final AST hqlAst = parser.getAST();
 
-		final NodeTraverser walker = new NodeTraverser( new JavaConstantConverter() );
+		final NodeTraverser walker = new NodeTraverser( new JavaConstantConverter( factory ) );
 		walker.traverseDepthFirst( hqlAst );
 
 		showHqlAst( hqlAst );
@@ -342,7 +342,7 @@ public class QueryTranslatorImpl implements FilterTranslator {
 		return getWalker().getSelectClause().getColumnNames();
 	}
 	@Override
-	public Set getQuerySpaces() {
+	public Set<Serializable> getQuerySpaces() {
 		return getWalker().getQuerySpaces();
 	}
 
@@ -351,9 +351,10 @@ public class QueryTranslatorImpl implements FilterTranslator {
 			throws HibernateException {
 		// Delegate to the QueryLoader...
 		errorIfDML();
-		QueryNode query = ( QueryNode ) sqlAst;
-		boolean hasLimit = queryParameters.getRowSelection() != null && queryParameters.getRowSelection().definesLimits();
-		boolean needsDistincting = ( query.getSelectClause().isDistinct() || hasLimit ) && containsCollectionFetches();
+
+		final QueryNode query = (QueryNode) sqlAst;
+		final boolean hasLimit = queryParameters.getRowSelection() != null && queryParameters.getRowSelection().definesLimits();
+		final boolean needsDistincting = ( query.getSelectClause().isDistinct() || hasLimit ) && containsCollectionFetches();
 
 		QueryParameters queryParametersToUse;
 		if ( hasLimit && containsCollectionFetches() ) {
@@ -468,7 +469,7 @@ public class QueryTranslatorImpl implements FilterTranslator {
 	@Override
 	public boolean containsCollectionFetches() {
 		errorIfDML();
-		List collectionFetches = ( ( QueryNode ) sqlAst ).getFromClause().getCollectionFetches();
+		List collectionFetches = ( (QueryNode) sqlAst ).getFromClause().getCollectionFetches();
 		return collectionFetches != null && collectionFetches.size() > 0;
 	}
 	@Override
@@ -483,7 +484,7 @@ public class QueryTranslatorImpl implements FilterTranslator {
 
 		errorIfDML();
 
-		QueryNode query = ( QueryNode ) sqlAst;
+		final QueryNode query = (QueryNode) sqlAst;
 
 		// If there are no collection fetches, then no further checks are needed
 		List collectionFetches = query.getFromClause().getCollectionFetches();
@@ -525,8 +526,8 @@ public class QueryTranslatorImpl implements FilterTranslator {
 			// TODO : this is a bit dodgy, come up with a better way to check this (plus see above comment)
 			String [] idColNames = owner.getQueryable().getIdentifierColumnNames();
 			String expectedPrimaryOrderSeq = StringHelper.join(
-			        ", ",
-			        StringHelper.qualify( owner.getTableAlias(), idColNames )
+					", ",
+					StringHelper.qualify( owner.getTableAlias(), idColNames )
 			);
 			if (  !primaryOrdering.getText().startsWith( expectedPrimaryOrderSeq ) ) {
 				throw new HibernateException( "cannot scroll results with collection fetches which are not ordered primarily by the root entity's PK" );
@@ -535,20 +536,20 @@ public class QueryTranslatorImpl implements FilterTranslator {
 	}
 
 	private StatementExecutor buildAppropriateStatementExecutor(HqlSqlWalker walker) {
-		Statement statement = ( Statement ) walker.getAST();
+		final Statement statement = (Statement) walker.getAST();
 		if ( walker.getStatementType() == HqlSqlTokenTypes.DELETE ) {
-			FromElement fromElement = walker.getFinalFromClause().getFromElement();
-			Queryable persister = fromElement.getQueryable();
+			final FromElement fromElement = walker.getFinalFromClause().getFromElement();
+			final Queryable persister = fromElement.getQueryable();
 			if ( persister.isMultiTable() ) {
 				return new MultiTableDeleteExecutor( walker );
 			}
 			else {
-				return new BasicExecutor( walker, persister );
+				return new DeleteExecutor( walker, persister );
 			}
 		}
 		else if ( walker.getStatementType() == HqlSqlTokenTypes.UPDATE ) {
-			FromElement fromElement = walker.getFinalFromClause().getFromElement();
-			Queryable persister = fromElement.getQueryable();
+			final FromElement fromElement = walker.getFinalFromClause().getFromElement();
+			final Queryable persister = fromElement.getQueryable();
 			if ( persister.isMultiTable() ) {
 				// even here, if only properties mapped to the "base table" are referenced
 				// in the set and where clauses, this could be handled by the BasicDelegate.
@@ -560,7 +561,7 @@ public class QueryTranslatorImpl implements FilterTranslator {
 			}
 		}
 		else if ( walker.getStatementType() == HqlSqlTokenTypes.INSERT ) {
-			return new BasicExecutor( walker, ( ( InsertStatement ) statement ).getIntoClause().getQueryable() );
+			return new BasicExecutor( walker, ( (InsertStatement) statement ).getIntoClause().getQueryable() );
 		}
 		else {
 			throw new QueryException( "Unexpected statement type" );
@@ -585,14 +586,23 @@ public class QueryTranslatorImpl implements FilterTranslator {
 	}
 
 	public static class JavaConstantConverter implements NodeTraverser.VisitationStrategy {
+		private final SessionFactoryImplementor factory;
 		private AST dotRoot;
+
+		public JavaConstantConverter(SessionFactoryImplementor factory) {
+
+			this.factory = factory;
+		}
+
 		@Override
 		public void visit(AST node) {
 			if ( dotRoot != null ) {
 				// we are already processing a dot-structure
-                if (ASTUtil.isSubtreeChild(dotRoot, node)) return;
-                // we are now at a new tree level
-                dotRoot = null;
+				if ( ASTUtil.isSubtreeChild( dotRoot, node ) ) {
+					return;
+				}
+				// we are now at a new tree level
+				dotRoot = null;
 			}
 
 			if ( node.getType() == HqlTokenTypes.DOT ) {
@@ -601,13 +611,21 @@ public class QueryTranslatorImpl implements FilterTranslator {
 			}
 		}
 		private void handleDotStructure(AST dotStructureRoot) {
-			String expression = ASTUtil.getPathText( dotStructureRoot );
-			Object constant = ReflectHelper.getConstantValue( expression );
+			final String expression = ASTUtil.getPathText( dotStructureRoot );
+			final Object constant = ReflectHelper.getConstantValue( expression, factory.getServiceRegistry().getService( ClassLoaderService.class ) );
 			if ( constant != null ) {
 				dotStructureRoot.setFirstChild( null );
 				dotStructureRoot.setType( HqlTokenTypes.JAVA_CONSTANT );
 				dotStructureRoot.setText( expression );
 			}
 		}
+	}
+
+	public EntityGraphQueryHint getEntityGraphQueryHint() {
+		return entityGraphQueryHint;
+	}
+
+	public void setEntityGraphQueryHint(EntityGraphQueryHint entityGraphQueryHint) {
+		this.entityGraphQueryHint = entityGraphQueryHint;
 	}
 }

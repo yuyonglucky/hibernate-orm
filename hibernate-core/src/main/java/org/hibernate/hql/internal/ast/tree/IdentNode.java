@@ -1,35 +1,15 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.tree;
 
 import java.util.List;
 
-import antlr.SemanticException;
-import antlr.collections.AST;
-
 import org.hibernate.QueryException;
+import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.function.SQLFunction;
 import org.hibernate.hql.internal.antlr.HqlSqlTokenTypes;
 import org.hibernate.hql.internal.antlr.SqlTokenTypes;
@@ -41,6 +21,9 @@ import org.hibernate.sql.JoinType;
 import org.hibernate.type.CollectionType;
 import org.hibernate.type.Type;
 
+import antlr.SemanticException;
+import antlr.collections.AST;
+
 /**
  * Represents an identifier all by itself, which may be a function name,
  * a class alias, or a form of naked property-ref depending on the
@@ -49,12 +32,13 @@ import org.hibernate.type.Type;
  * @author josh
  */
 public class IdentNode extends FromReferenceNode implements SelectExpression {
+	private static enum DereferenceType {
+		UNKNOWN,
+		PROPERTY_REF,
+		COMPONENT_REF
+	}
 
-	private static final int UNKNOWN = 0;
-	private static final int PROPERTY_REF = 1;
-	private static final int COMPONENT_REF = 2;
-
-	private boolean nakedPropertyRef = false;
+	private boolean nakedPropertyRef;
 
 	public void resolveIndex(AST parent) throws SemanticException {
 		// An ident node can represent an index expression if the ident
@@ -120,12 +104,12 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 				}
 			}
 			else {
-				int result = resolveAsNakedPropertyRef();
-				if (result == PROPERTY_REF) {
+				DereferenceType result = resolveAsNakedPropertyRef();
+				if (result == DereferenceType.PROPERTY_REF) {
 					// we represent a naked (simple) prop-ref
 					setResolved();
 				}
-				else if (result == COMPONENT_REF) {
+				else if (result == DereferenceType.COMPONENT_REF) {
 					// EARLY EXIT!!!  return so the resolve call explicitly coming from DotNode can
 					// resolve this...
 					return;
@@ -149,43 +133,64 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 	}
 
 	private boolean resolveAsAlias() {
+		final String alias = getText();
+
 		// This is not actually a constant, but a reference to FROM element.
-		FromElement element = getWalker().getCurrentFromClause().getFromElement( getText() );
-		if ( element != null ) {
-			setType( SqlTokenTypes.ALIAS_REF );
-			setFromElement( element );
-			String[] columnExpressions = element.getIdentityColumns();
-			final boolean isInNonDistinctCount = getWalker().isInCount() && ! getWalker().isInCountDistinct();
-			final boolean isCompositeValue = columnExpressions.length > 1;
-			if ( isCompositeValue ) {
-				if ( isInNonDistinctCount && ! getWalker().getSessionFactoryHelper().getFactory().getDialect().supportsTupleCounts() ) {
-					setText( columnExpressions[0] );
-				}
-				else {
-					String joinedFragment = StringHelper.join( ", ", columnExpressions );
-					// avoid wrapping in parenthesis (explicit tuple treatment) if possible due to varied support for
-					// tuple syntax across databases..
-					final boolean shouldSkipWrappingInParenthesis =
-							getWalker().isInCount()
-							|| getWalker().getCurrentTopLevelClauseType() == HqlSqlTokenTypes.ORDER
-							|| getWalker().getCurrentTopLevelClauseType() == HqlSqlTokenTypes.GROUP;
-					if ( ! shouldSkipWrappingInParenthesis ) {
-						joinedFragment = "(" + joinedFragment + ")";
-					}
-					setText( joinedFragment );
-				}
-				return true;
-			}
-			else if ( columnExpressions.length > 0 ) {
-				setText( columnExpressions[0] );
-				return true;
+		final FromElement element = getWalker().getCurrentFromClause().getFromElement( alias );
+		if ( element == null ) {
+			return false;
+		}
+
+		element.applyTreatAsDeclarations( getWalker().getTreatAsDeclarationsByPath( alias ) );
+
+		setType( SqlTokenTypes.ALIAS_REF );
+		setFromElement( element );
+
+		String[] columnExpressions = element.getIdentityColumns();
+
+		// determine whether to apply qualification (table alias) to the column(s)...
+		if ( ! isFromElementUpdateOrDeleteRoot( element ) ) {
+			if ( StringHelper.isNotEmpty( element.getTableAlias() ) ) {
+				// apparently we also need to check that they are not already qualified.  Ugh!
+				columnExpressions = StringHelper.qualifyIfNot( element.getTableAlias(), columnExpressions );
 			}
 		}
+
+		final Dialect dialect = getWalker().getSessionFactoryHelper().getFactory().getDialect();
+		final boolean isInCount = getWalker().isInCount();
+		final boolean isInDistinctCount = isInCount && getWalker().isInCountDistinct();
+		final boolean isInNonDistinctCount = isInCount && ! getWalker().isInCountDistinct();
+		final boolean isCompositeValue = columnExpressions.length > 1;
+		if ( isCompositeValue ) {
+			if ( isInNonDistinctCount && ! dialect.supportsTupleCounts() ) {
+				// TODO: #supportsTupleCounts currently false for all Dialects -- could this be cleaned up?
+				setText( columnExpressions[0] );
+			}
+			else {
+				String joinedFragment = StringHelper.join( ", ", columnExpressions );
+				// avoid wrapping in parenthesis (explicit tuple treatment) if possible due to varied support for
+				// tuple syntax across databases..
+				final boolean shouldSkipWrappingInParenthesis =
+						(isInDistinctCount && ! dialect.requiresParensForTupleDistinctCounts())
+						|| isInNonDistinctCount
+						|| getWalker().getCurrentTopLevelClauseType() == HqlSqlTokenTypes.ORDER
+						|| getWalker().getCurrentTopLevelClauseType() == HqlSqlTokenTypes.GROUP;
+				if ( ! shouldSkipWrappingInParenthesis ) {
+					joinedFragment = "(" + joinedFragment + ")";
+				}
+				setText( joinedFragment );
+			}
+			return true;
+		}
+		else if ( columnExpressions.length > 0 ) {
+			setText( columnExpressions[0] );
+			return true;
+		}
+
 		return false;
 	}
 
-	private Type getNakedPropertyType(FromElement fromElement)
-	{
+	private Type getNakedPropertyType(FromElement fromElement) {
 		if (fromElement == null) {
 			return null;
 		}
@@ -194,28 +199,28 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 		try {
 			propertyType = fromElement.getPropertyType(property, property);
 		}
-		catch (Throwable t) {
+		catch (Throwable ignore) {
 		}
 		return propertyType;
 	}
 
-	private int resolveAsNakedPropertyRef() {
+	private DereferenceType resolveAsNakedPropertyRef() {
 		FromElement fromElement = locateSingleFromElement();
 		if (fromElement == null) {
-			return UNKNOWN;
+			return DereferenceType.UNKNOWN;
 		}
 		Queryable persister = fromElement.getQueryable();
 		if (persister == null) {
-			return UNKNOWN;
+			return DereferenceType.UNKNOWN;
 		}
 		Type propertyType = getNakedPropertyType(fromElement);
 		if (propertyType == null) {
 			// assume this ident's text does *not* refer to a property on the given persister
-			return UNKNOWN;
+			return DereferenceType.UNKNOWN;
 		}
 
 		if ((propertyType.isComponentType() || propertyType.isAssociationType() )) {
-			return COMPONENT_REF;
+			return DereferenceType.COMPONENT_REF;
 		}
 
 		setFromElement(fromElement);
@@ -231,7 +236,7 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 		super.setDataType(propertyType);
 		nakedPropertyRef = true;
 
-		return PROPERTY_REF;
+		return DereferenceType.PROPERTY_REF;
 	}
 
 	private boolean resolveAsNakedComponentPropertyRefLHS(DotNode parent) {
@@ -248,7 +253,7 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 			throw new QueryException("Property '" + getOriginalText() + "' is not a component.  Use an alias to reference associations or collections.");
 		}
 
-		Type propertyType = null;  // used to set the type of the parent dot node
+		Type propertyType;
 		String propertyPath = getText() + "." + getNextSibling().getText();
 		try {
 			// check to see if our "propPath" actually
@@ -273,7 +278,7 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 			return false;
 		}
 
-		Type propertyType = null;
+		Type propertyType;
 		String propertyPath = parent.getLhs().getText() + "." + getText();
 		try {
 			// check to see if our "propPath" actually
@@ -308,7 +313,7 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 	}
 
 	@Override
-    public Type getDataType() {
+	public Type getDataType() {
 		Type type = super.getDataType();
 		if ( type != null ) {
 			return type;
@@ -342,7 +347,7 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 	}
 
 	@Override
-    public String getDisplayText() {
+	public String getDisplayText() {
 		StringBuilder buf = new StringBuilder();
 
 		if (getType() == SqlTokenTypes.ALIAS_REF) {
@@ -357,7 +362,7 @@ public class IdentNode extends FromReferenceNode implements SelectExpression {
 			buf.append("}");
 		}
 		else {
-			buf.append("{originalText=" + getOriginalText()).append("}");
+			buf.append( "{originalText=" ).append( getOriginalText() ).append( "}" );
 		}
 		return buf.toString();
 	}

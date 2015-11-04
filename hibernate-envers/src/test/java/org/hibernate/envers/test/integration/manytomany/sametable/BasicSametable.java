@@ -1,31 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.test.integration.manytomany.sametable;
 
-import javax.persistence.EntityManager;
 import java.sql.Types;
 import java.util.Arrays;
+import javax.persistence.EntityManager;
 
 import org.hibernate.Session;
 import org.hibernate.envers.test.BaseEnversJPAFunctionalTestCase;
@@ -68,8 +51,8 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 		session.createSQLQuery( "DROP TABLE children" ).executeUpdate();
 		session.createSQLQuery(
 				"CREATE TABLE children ( parent_id " + getDialect().getTypeName( Types.INTEGER ) +
-						", child1_id " + getDialect().getTypeName( Types.INTEGER ) + " NULL" +
-						", child2_id " + getDialect().getTypeName( Types.INTEGER ) + " NULL )"
+						", child1_id " + getDialect().getTypeName( Types.INTEGER ) + getDialect().getNullColumnString() +
+						", child2_id " + getDialect().getTypeName( Types.INTEGER ) + getDialect().getNullColumnString() + " )"
 		).executeUpdate();
 		session.createSQLQuery( "DROP TABLE children_AUD" ).executeUpdate();
 		session.createSQLQuery(
@@ -77,8 +60,8 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 						", REVEND " + getDialect().getTypeName( Types.INTEGER ) +
 						", REVTYPE " + getDialect().getTypeName( Types.TINYINT ) +
 						", parent_id " + getDialect().getTypeName( Types.INTEGER ) +
-						", child1_id " + getDialect().getTypeName( Types.INTEGER ) + " NULL" +
-						", child2_id " + getDialect().getTypeName( Types.INTEGER ) + " NULL )"
+						", child1_id " + getDialect().getTypeName( Types.INTEGER ) + getDialect().getNullColumnString() +
+						", child2_id " + getDialect().getTypeName( Types.INTEGER ) + getDialect().getNullColumnString() + " )"
 		).executeUpdate();
 		em.getTransaction().commit();
 		em.clear();
@@ -199,17 +182,17 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 		ParentEntity rev4 = getAuditReader().find( ParentEntity.class, p1_id, 4 );
 		ParentEntity rev5 = getAuditReader().find( ParentEntity.class, p1_id, 5 );
 
-		assert TestTools.checkList( rev1.getChildren1() );
-		assert TestTools.checkList( rev2.getChildren1(), c1_1 );
-		assert TestTools.checkList( rev3.getChildren1(), c1_1, c1_2 );
-		assert TestTools.checkList( rev4.getChildren1(), c1_2 );
-		assert TestTools.checkList( rev5.getChildren1() );
+		assert TestTools.checkCollection( rev1.getChildren1() );
+		assert TestTools.checkCollection( rev2.getChildren1(), c1_1 );
+		assert TestTools.checkCollection( rev3.getChildren1(), c1_1, c1_2 );
+		assert TestTools.checkCollection( rev4.getChildren1(), c1_2 );
+		assert TestTools.checkCollection( rev5.getChildren1() );
 
-		assert TestTools.checkList( rev1.getChildren2() );
-		assert TestTools.checkList( rev2.getChildren2() );
-		assert TestTools.checkList( rev3.getChildren2(), c2_2 );
-		assert TestTools.checkList( rev4.getChildren2(), c2_2 );
-		assert TestTools.checkList( rev5.getChildren2(), c2_2 );
+		assert TestTools.checkCollection( rev1.getChildren2() );
+		assert TestTools.checkCollection( rev2.getChildren2() );
+		assert TestTools.checkCollection( rev3.getChildren2(), c2_2 );
+		assert TestTools.checkCollection( rev4.getChildren2(), c2_2 );
+		assert TestTools.checkCollection( rev5.getChildren2(), c2_2 );
 	}
 
 	@Test
@@ -224,17 +207,17 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 		ParentEntity rev4 = getAuditReader().find( ParentEntity.class, p2_id, 4 );
 		ParentEntity rev5 = getAuditReader().find( ParentEntity.class, p2_id, 5 );
 
-		assert TestTools.checkList( rev1.getChildren1() );
-		assert TestTools.checkList( rev2.getChildren1() );
-		assert TestTools.checkList( rev3.getChildren1(), c1_1 );
-		assert TestTools.checkList( rev4.getChildren1(), c1_1 );
-		assert TestTools.checkList( rev5.getChildren1(), c1_1 );
+		assert TestTools.checkCollection( rev1.getChildren1() );
+		assert TestTools.checkCollection( rev2.getChildren1() );
+		assert TestTools.checkCollection( rev3.getChildren1(), c1_1 );
+		assert TestTools.checkCollection( rev4.getChildren1(), c1_1 );
+		assert TestTools.checkCollection( rev5.getChildren1(), c1_1 );
 
-		assert TestTools.checkList( rev1.getChildren2() );
-		assert TestTools.checkList( rev2.getChildren2(), c2_1 );
-		assert TestTools.checkList( rev3.getChildren2(), c2_1 );
-		assert TestTools.checkList( rev4.getChildren2(), c2_1, c2_2 );
-		assert TestTools.checkList( rev5.getChildren2(), c2_1 );
+		assert TestTools.checkCollection( rev1.getChildren2() );
+		assert TestTools.checkCollection( rev2.getChildren2(), c2_1 );
+		assert TestTools.checkCollection( rev3.getChildren2(), c2_1 );
+		assert TestTools.checkCollection( rev4.getChildren2(), c2_1, c2_2 );
+		assert TestTools.checkCollection( rev5.getChildren2(), c2_1 );
 	}
 
 	@Test
@@ -248,11 +231,11 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 		Child1Entity rev4 = getAuditReader().find( Child1Entity.class, c1_1_id, 4 );
 		Child1Entity rev5 = getAuditReader().find( Child1Entity.class, c1_1_id, 5 );
 
-		assert TestTools.checkList( rev1.getParents() );
-		assert TestTools.checkList( rev2.getParents(), p1 );
-		assert TestTools.checkList( rev3.getParents(), p1, p2 );
-		assert TestTools.checkList( rev4.getParents(), p2 );
-		assert TestTools.checkList( rev5.getParents(), p2 );
+		assert TestTools.checkCollection( rev1.getParents() );
+		assert TestTools.checkCollection( rev2.getParents(), p1 );
+		assert TestTools.checkCollection( rev3.getParents(), p1, p2 );
+		assert TestTools.checkCollection( rev4.getParents(), p2 );
+		assert TestTools.checkCollection( rev5.getParents(), p2 );
 	}
 
 	// TODO: was disabled?
@@ -266,11 +249,11 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 		Child1Entity rev4 = getAuditReader().find( Child1Entity.class, c1_2_id, 4 );
 		Child1Entity rev5 = getAuditReader().find( Child1Entity.class, c1_2_id, 5 );
 
-		assert TestTools.checkList( rev1.getParents() );
-		assert TestTools.checkList( rev2.getParents() );
-		assert TestTools.checkList( rev3.getParents(), p1 );
-		assert TestTools.checkList( rev4.getParents(), p1 );
-		assert TestTools.checkList( rev5.getParents() );
+		assert TestTools.checkCollection( rev1.getParents() );
+		assert TestTools.checkCollection( rev2.getParents() );
+		assert TestTools.checkCollection( rev3.getParents(), p1 );
+		assert TestTools.checkCollection( rev4.getParents(), p1 );
+		assert TestTools.checkCollection( rev5.getParents() );
 	}
 
 	@Test
@@ -283,11 +266,11 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 		Child2Entity rev4 = getAuditReader().find( Child2Entity.class, c2_1_id, 4 );
 		Child2Entity rev5 = getAuditReader().find( Child2Entity.class, c2_1_id, 5 );
 
-		assert TestTools.checkList( rev1.getParents() );
-		assert TestTools.checkList( rev2.getParents(), p2 );
-		assert TestTools.checkList( rev3.getParents(), p2 );
-		assert TestTools.checkList( rev4.getParents(), p2 );
-		assert TestTools.checkList( rev5.getParents(), p2 );
+		assert TestTools.checkCollection( rev1.getParents() );
+		assert TestTools.checkCollection( rev2.getParents(), p2 );
+		assert TestTools.checkCollection( rev3.getParents(), p2 );
+		assert TestTools.checkCollection( rev4.getParents(), p2 );
+		assert TestTools.checkCollection( rev5.getParents(), p2 );
 	}
 
 	@Test
@@ -301,10 +284,10 @@ public class BasicSametable extends BaseEnversJPAFunctionalTestCase {
 		Child2Entity rev4 = getAuditReader().find( Child2Entity.class, c2_2_id, 4 );
 		Child2Entity rev5 = getAuditReader().find( Child2Entity.class, c2_2_id, 5 );
 
-		assert TestTools.checkList( rev1.getParents() );
-		assert TestTools.checkList( rev2.getParents() );
-		assert TestTools.checkList( rev3.getParents(), p1 );
-		assert TestTools.checkList( rev4.getParents(), p1, p2 );
-		assert TestTools.checkList( rev5.getParents(), p1 );
+		assert TestTools.checkCollection( rev1.getParents() );
+		assert TestTools.checkCollection( rev2.getParents() );
+		assert TestTools.checkCollection( rev3.getParents(), p1 );
+		assert TestTools.checkCollection( rev4.getParents(), p1, p2 );
+		assert TestTools.checkCollection( rev5.getParents(), p1 );
 	}
 }

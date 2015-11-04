@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.tuple;
 
@@ -31,6 +14,8 @@ import org.hibernate.type.Type;
  * Represents a non-identifier property within the Hibernate runtime-metamodel.
  *
  * @author Steve Ebersole
+ *
+ * @deprecated Use one of the {@link org.hibernate.tuple.Attribute}-based impls instead.
  */
 @Deprecated
 public class StandardProperty extends AbstractNonIdentifierAttribute implements NonIdentifierAttribute {
@@ -44,8 +29,7 @@ public class StandardProperty extends AbstractNonIdentifierAttribute implements 
 	 * @param lazy Should this property be handled lazily?
 	 * @param insertable Is this property an insertable value?
 	 * @param updateable Is this property an updateable value?
-	 * @param insertGenerated Is this property generated in the database on insert?
-	 * @param updateGenerated Is this property generated in the database on update?
+	 * @param valueGenerationStrategy How (if) values for this attribute are generated
 	 * @param nullable Is this property a nullable value?
 	 * @param checkable Is this property a checkable value?
 	 * @param versionable Is this property a versionable value?
@@ -58,8 +42,7 @@ public class StandardProperty extends AbstractNonIdentifierAttribute implements 
 			boolean lazy,
 			boolean insertable,
 			boolean updateable,
-			boolean insertGenerated,
-			boolean updateGenerated,
+			ValueGeneration valueGenerationStrategy,
 			boolean nullable,
 			boolean checkable,
 			boolean versionable,
@@ -75,8 +58,7 @@ public class StandardProperty extends AbstractNonIdentifierAttribute implements 
 						.setLazy( lazy )
 						.setInsertable( insertable )
 						.setUpdateable( updateable )
-						.setInsertGenerated( insertGenerated )
-						.setUpdateGenerated( updateGenerated )
+						.setValueGenerationStrategy( valueGenerationStrategy )
 						.setNullable( nullable )
 						.setDirtyCheckable( checkable )
 						.setVersionable( versionable )

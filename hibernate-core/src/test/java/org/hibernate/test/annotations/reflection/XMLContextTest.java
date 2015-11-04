@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.reflection;
 
@@ -38,22 +21,26 @@ import org.hibernate.cfg.annotations.reflection.XMLContext;
 import org.hibernate.internal.util.xml.ErrorLogger;
 import org.hibernate.internal.util.xml.XMLHelper;
 
+import org.hibernate.testing.boot.ClassLoaderAccessTestingImpl;
+import org.hibernate.testing.boot.ClassLoaderServiceTestingImpl;
+
 /**
  * @author Emmanuel Bernard
  */
 public class XMLContextTest {
 	@Test
 	public void testAll() throws Exception {
-		XMLHelper xmlHelper = new XMLHelper();
-		ClassLoader cl = Thread.currentThread().getContextClassLoader();
-		InputStream is = cl.getResourceAsStream(
+		final XMLHelper xmlHelper = new XMLHelper( ClassLoaderServiceTestingImpl.INSTANCE );
+		final XMLContext context = new XMLContext( ClassLoaderAccessTestingImpl.INSTANCE );
+
+		InputStream is = ClassLoaderServiceTestingImpl.INSTANCE.locateResourceStream(
 				"org/hibernate/test/annotations/reflection/orm.xml"
 		);
 		Assert.assertNotNull( "ORM.xml not found", is );
-		XMLContext context = new XMLContext();
-		ErrorLogger errorLogger = new ErrorLogger();
-		SAXReader saxReader = xmlHelper.createSAXReader( errorLogger, EJB3DTDEntityResolver.INSTANCE );
-		//saxReader.setValidation( false );
+
+		final ErrorLogger errorLogger = new ErrorLogger();
+		final SAXReader saxReader = xmlHelper.createSAXReader( errorLogger, EJB3DTDEntityResolver.INSTANCE );
+
 		try {
 			saxReader.setFeature( "http://apache.org/xml/features/validation/schema", true );
 		}
@@ -62,8 +49,7 @@ public class XMLContextTest {
 		}
 		org.dom4j.Document doc;
 		try {
-			doc = saxReader
-					.read( new InputSource( new BufferedInputStream( is ) ) );
+			doc = saxReader.read( new InputSource( new BufferedInputStream( is ) ) );
 		}
 		finally {
 			try {

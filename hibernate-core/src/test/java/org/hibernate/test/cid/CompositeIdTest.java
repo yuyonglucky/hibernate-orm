@@ -1,27 +1,15 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.cid;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.math.BigDecimal;
 import java.util.Calendar;
@@ -29,18 +17,14 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-import org.junit.Test;
-
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.engine.query.spi.HQLQueryPlan;
+import org.hibernate.exception.SQLGrammarException;
 import org.hibernate.hql.spi.QueryTranslator;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
 /**
  * @author Gavin King
@@ -93,6 +77,45 @@ public class CompositeIdTest extends BaseCoreFunctionalTestCase {
 		final String countExpressionFragment = generatedSql.substring( countExpressionListStart+6, countExpressionListEnd+1 );
 		assertTrue( countExpressionFragment.startsWith( "distinct" ) );
 		assertTrue( countExpressionFragment.contains( "," ) );
+		
+		Session s = openSession();
+		s.beginTransaction();
+		Customer c = new Customer();
+		c.setCustomerId( "1" );
+		c.setAddress("123 somewhere");
+		c.setName("Brett");
+		Order o1 = new Order( c );
+		o1.setOrderDate( Calendar.getInstance() );
+		Order o2 = new Order( c );
+		o2.setOrderDate( Calendar.getInstance() );
+		s.persist( c );
+		s.persist( o1 );
+		s.persist( o2 );
+		s.getTransaction().commit();
+		s.clear();
+
+		s.beginTransaction();
+		try {
+			long count = ( Long ) s.createQuery( "select count(distinct o) FROM Order o" ).uniqueResult();
+			if ( ! getDialect().supportsTupleDistinctCounts() ) {
+				fail( "expected SQLGrammarException" );
+			}
+			assertEquals( 2l, count );
+		}
+		catch ( SQLGrammarException e ) {
+			if ( getDialect().supportsTupleDistinctCounts() ) {
+				throw e;
+			}
+		}
+		s.getTransaction().commit();
+		s.close();
+		
+		s = openSession();
+		s.beginTransaction();
+		s.createQuery("delete from Order").executeUpdate();
+		s.createQuery("delete from Customer").executeUpdate();
+		s.getTransaction().commit();
+		s.close();
 	}
 
 	@Test

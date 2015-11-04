@@ -1,26 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.internal;
 import java.io.Serializable;
@@ -75,6 +57,7 @@ public class CriteriaImpl implements Criteria, Serializable {
 	private boolean cacheable;
 	private String cacheRegion;
 	private String comment;
+	private final List<String> queryHints = new ArrayList<String>();
 
 	private FlushMode flushMode;
 	private CacheMode cacheMode;
@@ -294,7 +277,8 @@ public class CriteriaImpl implements Criteria, Serializable {
 	public Integer getTimeout() {
 		return timeout;
 	}
-   @Override
+
+	@Override
 	public Criteria setTimeout(int timeout) {
 		this.timeout = timeout;
 		return this;
@@ -345,11 +329,23 @@ public class CriteriaImpl implements Criteria, Serializable {
 	public String getComment() {
 		return comment;
 	}
+	
 	@Override
 	public Criteria setComment(String comment) {
 		this.comment = comment;
 		return this;
 	}
+
+	public List<String> getQueryHints() {
+		return queryHints;
+	}
+
+	@Override
+	public Criteria addQueryHint(String queryHint) {
+		queryHints.add( queryHint );
+		return this;
+	}
+	
 	@Override
 	public Criteria setFlushMode(FlushMode flushMode) {
 		this.flushMode = flushMode;
@@ -372,7 +368,7 @@ public class CriteriaImpl implements Criteria, Serializable {
 	}
 	@Override
 	public ScrollableResults scroll() {
-		return scroll( ScrollMode.SCROLL_INSENSITIVE );
+		return scroll( session.getFactory().getDialect().defaultScrollMode() );
 	}
 	@Override
 	public ScrollableResults scroll(ScrollMode scrollMode) {
@@ -665,6 +661,11 @@ public class CriteriaImpl implements Criteria, Serializable {
 		@Override
 		public Criteria setComment(String comment) {
 			CriteriaImpl.this.setComment(comment);
+			return this;
+		}   
+		@Override
+		public Criteria addQueryHint(String queryHint) {
+			CriteriaImpl.this.addQueryHint( queryHint );
 			return this;
 		}
 		@Override

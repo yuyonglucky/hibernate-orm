@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
 
@@ -39,11 +22,11 @@ import org.hibernate.type.CollectionType;
  */
 public class DirtyCollectionSearchVisitor extends AbstractVisitor {
 
-	private boolean dirty = false;
+	private boolean dirty;
 	private boolean[] propertyVersionability;
 
 	DirtyCollectionSearchVisitor(EventSource session, boolean[] propertyVersionability) {
-		super(session);
+		super( session );
 		this.propertyVersionability = propertyVersionability;
 	}
 
@@ -51,16 +34,12 @@ public class DirtyCollectionSearchVisitor extends AbstractVisitor {
 		return dirty;
 	}
 
-	Object processCollection(Object collection, CollectionType type)
-		throws HibernateException {
-
-		if (collection!=null) {
-
-			SessionImplementor session = getSession();
-
+	Object processCollection(Object collection, CollectionType type) throws HibernateException {
+		if ( collection != null ) {
+			final SessionImplementor session = getSession();
 			final PersistentCollection persistentCollection;
 			if ( type.isArrayType() ) {
-				 persistentCollection = session.getPersistenceContext().getCollectionHolder(collection);
+				persistentCollection = session.getPersistenceContext().getCollectionHolder( collection );
 				// if no array holder we found an unwrappered array (this can't occur,
 				// because we now always call wrap() before getting to here)
 				// return (ah==null) ? true : searchForDirtyCollections(ah, type);
@@ -74,7 +53,7 @@ public class DirtyCollectionSearchVisitor extends AbstractVisitor {
 			}
 
 			if ( persistentCollection.isDirty() ) { //we need to check even if it was not initialized, because of delayed adds!
-				dirty=true;
+				dirty = true;
 				return null; //NOTE: EARLY EXIT!
 			}
 		}
@@ -83,6 +62,6 @@ public class DirtyCollectionSearchVisitor extends AbstractVisitor {
 	}
 
 	boolean includeEntityProperty(Object[] values, int i) {
-		return propertyVersionability[i] && super.includeEntityProperty(values, i);
+		return propertyVersionability[i] && super.includeEntityProperty( values, i );
 	}
 }

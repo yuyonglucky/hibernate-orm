@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.testing.junit4;
 
@@ -30,28 +13,29 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.runners.model.FrameworkMethod;
-import org.junit.runners.model.TestClass;
-
 import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
+
 import org.hibernate.testing.FailureExpected;
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.SkipForDialects;
+import org.junit.runners.model.FrameworkMethod;
+import org.junit.runners.model.TestClass;
 
 /**
  * Centralized utility functionality
  *
  * @author Steve Ebersole
  */
-public class Helper {
+public final class Helper {
 	public static final String VALIDATE_FAILURE_EXPECTED = "hibernate.test.validatefailureexpected";
 
+	private Helper() {
+	}
 
 	/**
 	 * Standard string content checking.
 	 *
 	 * @param string The string to check
+	 *
 	 * @return Are its content empty or the reference null?
 	 */
 	public static boolean isNotEmpty(String string) {
@@ -62,6 +46,7 @@ public class Helper {
 	 * Extract a nice test name representation for display
 	 *
 	 * @param frameworkMethod The test method.
+	 *
 	 * @return The display representation
 	 */
 	public static String extractTestName(FrameworkMethod frameworkMethod) {
@@ -72,6 +57,7 @@ public class Helper {
 	 * Extract a nice method name representation for display
 	 *
 	 * @param method The method.
+	 *
 	 * @return The display representation
 	 */
 	public static String extractMethodName(Method method) {
@@ -90,20 +76,22 @@ public class Helper {
 	}
 
 	/**
-	 * @param singularAnnotationClass Singular annotation class (e.g. {@link SkipForDialect}).
-	 * @param pluralAnnotationClass Plural annotation class (e.g. {@link SkipForDialects}). Assuming that the only
-	 * 								declared method is an array of singular annotations.
+	 * @param singularAnnotationClass Singular annotation class (e.g. {@link org.hibernate.testing.SkipForDialect}).
+	 * @param pluralAnnotationClass Plural annotation class (e.g. {@link org.hibernate.testing.SkipForDialects}),
+	 * assuming that the only declared method is an array of singular annotations.
 	 * @param frameworkMethod Test method.
 	 * @param testClass Test class.
 	 * @param <S> Singular annotation type.
 	 * @param <P> Plural annotation type.
+	 *
 	 * @return Collection of all singular annotations or an empty list.
 	 */
 	@SuppressWarnings("unchecked")
-	public static <S extends Annotation, P extends Annotation> List<S> collectAnnotations(Class<S> singularAnnotationClass,
-																						  Class<P> pluralAnnotationClass,
-																						  FrameworkMethod frameworkMethod,
-																						  TestClass testClass) {
+	public static <S extends Annotation, P extends Annotation> List<S> collectAnnotations(
+			Class<S> singularAnnotationClass,
+			Class<P> pluralAnnotationClass,
+			FrameworkMethod frameworkMethod,
+			TestClass testClass) {
 		final List<S> collection = new LinkedList<S>();
 		final S singularAnn = Helper.locateAnnotation( singularAnnotationClass, frameworkMethod, testClass );
 		if ( singularAnn != null ) {
@@ -112,9 +100,9 @@ public class Helper {
 		final P pluralAnn = Helper.locateAnnotation( pluralAnnotationClass, frameworkMethod, testClass );
 		if ( pluralAnn != null ) {
 			try {
-				collection.addAll( Arrays.asList( (S[]) pluralAnnotationClass.getDeclaredMethods()[0].invoke(pluralAnn) ) );
+				collection.addAll( Arrays.asList( (S[]) pluralAnnotationClass.getDeclaredMethods()[0].invoke( pluralAnn ) ) );
 			}
-			catch ( Exception e ) {
+			catch (Exception e) {
 				throw new RuntimeException( e );
 			}
 		}

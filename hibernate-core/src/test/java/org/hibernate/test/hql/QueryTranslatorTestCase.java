@@ -1,28 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2007-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.hql;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -138,7 +122,7 @@ public abstract class QueryTranslatorTestCase extends BaseCoreFunctionalTestCase
 		try {
 			System.out.println("Compiling with classic QueryTranslator...");
 			QueryTranslatorFactory classic = new ClassicQueryTranslatorFactory();
-			oldQueryTranslator = classic.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, factory );
+			oldQueryTranslator = classic.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, factory, null );
 			oldQueryTranslator.compile( replacements, scalar );
 		}
 		catch ( QueryException e ) {
@@ -186,7 +170,7 @@ public abstract class QueryTranslatorTestCase extends BaseCoreFunctionalTestCase
 
 	private QueryTranslatorImpl createNewQueryTranslator(String hql, Map replacements, boolean scalar, SessionFactoryImplementor factory) {
 		QueryTranslatorFactory ast = new ASTQueryTranslatorFactory();
-		QueryTranslatorImpl newQueryTranslator = ( QueryTranslatorImpl ) ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, factory );
+		QueryTranslatorImpl newQueryTranslator = ( QueryTranslatorImpl ) ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, factory, null );
 		newQueryTranslator.compile( replacements, scalar );
 		return newQueryTranslator;
 	}
@@ -227,8 +211,8 @@ public abstract class QueryTranslatorTestCase extends BaseCoreFunctionalTestCase
 
 	private void checkQuerySpaces(QueryTranslator oldQueryTranslator, QueryTranslator newQueryTranslator) {
 		// Check the query spaces for a regression.
-		Set oldQuerySpaces = oldQueryTranslator.getQuerySpaces();
-		Set querySpaces = newQueryTranslator.getQuerySpaces();
+		Set<Serializable> oldQuerySpaces = oldQueryTranslator.getQuerySpaces();
+		Set<Serializable> querySpaces = newQueryTranslator.getQuerySpaces();
 		assertEquals( "Query spaces is not the right size!", oldQuerySpaces.size(), querySpaces.size() );
 		for ( Object o : oldQuerySpaces ) {
 			assertTrue( "New query space does not contain " + o + "!", querySpaces.contains( o ) );
@@ -242,7 +226,7 @@ public abstract class QueryTranslatorTestCase extends BaseCoreFunctionalTestCase
 		SessionFactoryImplementor factory = sessionFactory();
 		try {
 			QueryTranslatorFactory ast = new ASTQueryTranslatorFactory();
-			newQueryTranslator = ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, factory );
+			newQueryTranslator = ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, factory, null );
 			newQueryTranslator.compile( replacements, scalar );
 		}
 		catch ( QueryException e ) {
@@ -280,7 +264,6 @@ public abstract class QueryTranslatorTestCase extends BaseCoreFunctionalTestCase
 	}
 
 	
-	@SuppressWarnings( {"UnnecessaryBoxing", "UnnecessaryUnboxing"})
 	private Map getTokens(String sql) {
 		Map<String,Integer> result = new TreeMap<String,Integer>();
 		if ( sql == null ) {

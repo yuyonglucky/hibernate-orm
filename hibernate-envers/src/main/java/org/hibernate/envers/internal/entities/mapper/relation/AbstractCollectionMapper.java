@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.entities.mapper.relation;
 
@@ -37,7 +20,7 @@ import java.util.Set;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.exception.AuditException;
 import org.hibernate.envers.internal.entities.PropertyData;
 import org.hibernate.envers.internal.entities.mapper.PersistentCollectionChangeData;
@@ -46,7 +29,7 @@ import org.hibernate.envers.internal.entities.mapper.relation.lazy.initializor.I
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
 import org.hibernate.envers.internal.tools.ReflectionTools;
 import org.hibernate.envers.internal.tools.Tools;
-import org.hibernate.property.Setter;
+import org.hibernate.property.access.spi.Setter;
 
 /**
  * @author Adam Warski (adam at warski dot org)
@@ -246,28 +229,37 @@ public abstract class AbstractCollectionMapper<T> implements PropertyMapper {
 	}
 
 	protected abstract Initializor<T> getInitializor(
-			AuditConfiguration verCfg,
-			AuditReaderImplementor versionsReader, Object primaryKey,
-			Number revision, boolean removed);
+			EnversService enversService,
+			AuditReaderImplementor versionsReader,
+			Object primaryKey,
+			Number revision,
+			boolean removed);
 
 	@Override
 	public void mapToEntityFromMap(
-			AuditConfiguration verCfg, Object obj, Map data, Object primaryKey,
-			AuditReaderImplementor versionsReader, Number revision) {
+			EnversService enversService,
+			Object obj,
+			Map data,
+			Object primaryKey,
+			AuditReaderImplementor versionsReader,
+			Number revision) {
 		final Setter setter = ReflectionTools.getSetter(
 				obj.getClass(),
-				commonCollectionMapperData.getCollectionReferencingPropertyData()
+				commonCollectionMapperData.getCollectionReferencingPropertyData(),
+				enversService.getServiceRegistry()
 		);
 		try {
 			setter.set(
 					obj,
 					proxyConstructor.newInstance(
 							getInitializor(
-									verCfg, versionsReader, primaryKey, revision,
+									enversService,
+									versionsReader,
+									primaryKey,
+									revision,
 									RevisionType.DEL.equals(
 											data.get(
-													verCfg.getAuditEntCfg()
-															.getRevisionTypePropName()
+													enversService.getAuditEntitiesConfiguration().getRevisionTypePropName()
 											)
 									)
 							)

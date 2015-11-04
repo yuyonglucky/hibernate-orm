@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.superclass.auditoverride;
 
 import javax.persistence.EntityManager;
@@ -7,10 +13,9 @@ import org.hibernate.envers.test.Priority;
 import org.hibernate.mapping.Column;
 import org.hibernate.mapping.Table;
 
+import org.hibernate.testing.TestForIssue;
 import org.junit.Assert;
 import org.junit.Test;
-
-import org.hibernate.testing.TestForIssue;
 
 /**
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
@@ -55,13 +60,13 @@ public class AuditPropertyOverrideTest extends BaseEnversJPAFunctionalTestCase {
 		em.getTransaction().commit();
 		auditedEntityId = auditedEntity.getId();
 
-		propertyTable = getCfg().getClassMapping(
+		propertyTable = metadata().getEntityBinding(
 				"org.hibernate.envers.test.integration.superclass.auditoverride.PropertyOverrideEntity_AUD"
 		).getTable();
-		transitiveTable = getCfg().getClassMapping(
+		transitiveTable = metadata().getEntityBinding(
 				"org.hibernate.envers.test.integration.superclass.auditoverride.TransitiveOverrideEntity_AUD"
 		).getTable();
-		auditedTable = getCfg().getClassMapping(
+		auditedTable = metadata().getEntityBinding(
 				"org.hibernate.envers.test.integration.superclass.auditoverride.AuditedSpecialEntity_AUD"
 		).getTable();
 	}

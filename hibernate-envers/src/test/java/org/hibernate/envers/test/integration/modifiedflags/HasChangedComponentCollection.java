@@ -1,16 +1,21 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.modifiedflags;
 
-import javax.persistence.EntityManager;
 import java.util.List;
+import javax.persistence.EntityManager;
 
 import org.hibernate.envers.test.Priority;
 import org.hibernate.envers.test.entities.collection.EmbeddableListEntity1;
 import org.hibernate.envers.test.entities.components.Component3;
 import org.hibernate.envers.test.entities.components.Component4;
 
-import org.junit.Test;
-
 import org.hibernate.testing.TestForIssue;
+import org.junit.Test;
 
 import static org.hibernate.envers.test.tools.TestTools.extractRevisionNumbers;
 import static org.hibernate.envers.test.tools.TestTools.makeList;

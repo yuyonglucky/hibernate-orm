@@ -1,32 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.configuration.internal.metadata.reader;
 
-import java.lang.annotation.Annotation;
-import java.util.Iterator;
-
 import org.hibernate.MappingException;
+import org.hibernate.annotations.common.reflection.ClassLoadingException;
 import org.hibernate.annotations.common.reflection.ReflectionManager;
 import org.hibernate.annotations.common.reflection.XClass;
 import org.hibernate.envers.AuditTable;
@@ -37,6 +18,9 @@ import org.hibernate.envers.SecondaryAuditTables;
 import org.hibernate.envers.configuration.internal.GlobalConfiguration;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Property;
+
+import java.lang.annotation.Annotation;
+import java.util.Iterator;
 
 /**
  * A helper class to read versioning meta-data from annotations on a persistent class.
@@ -113,7 +97,7 @@ public final class AnnotationsMetadataReader {
 		}
 
 		try {
-			final XClass xclass = reflectionManager.classForName( pc.getClassName(), this.getClass() );
+			final XClass xclass = reflectionManager.classForName( pc.getClassName() );
 
 			final ModificationStore defaultStore = getDefaultAudited( xclass );
 			if ( defaultStore != null ) {
@@ -132,7 +116,7 @@ public final class AnnotationsMetadataReader {
 			addAuditTable( xclass );
 			addAuditSecondaryTables( xclass );
 		}
-		catch (ClassNotFoundException e) {
+		catch (ClassLoadingException e) {
 			throw new MappingException( e );
 		}
 

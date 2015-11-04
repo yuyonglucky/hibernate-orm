@@ -1,56 +1,39 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.transaction;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceException;
+import javax.persistence.SynchronizationType;
+import javax.persistence.TransactionRequiredException;
 import javax.transaction.Status;
-import javax.transaction.Synchronization;
 
 import org.hibernate.HibernateException;
-import org.hibernate.Session;
-import org.hibernate.Transaction;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.engine.transaction.internal.jta.CMTTransaction;
 import org.hibernate.engine.transaction.internal.jta.JtaStatusHelper;
-import org.hibernate.exception.GenericJDBCException;
 import org.hibernate.internal.SessionImpl;
 import org.hibernate.jpa.AvailableSettings;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
+import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorImpl;
+
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.jta.TestingJtaBootstrap;
 import org.hibernate.testing.jta.TestingJtaPlatformImpl;
+import org.hibernate.testing.junit4.ExtraAssertions;
 import org.junit.Test;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 /**
- * Largely a copy of {@link org.hibernate.test.jpa.txn.TransactionJoiningTest}
+ * Largely a copy of {@link org.hibernate.test.jpa.txn.JtaTransactionJoiningTest}
  *
  * @author Steve Ebersole
  */
@@ -66,8 +49,25 @@ public class TransactionJoiningTest extends BaseEntityManagerFunctionalTestCase 
 	public void testExplicitJoining() throws Exception {
 		assertFalse( JtaStatusHelper.isActive( TestingJtaPlatformImpl.INSTANCE.getTransactionManager() ) );
 
-		EntityManager entityManager = entityManagerFactory().createEntityManager();
+		EntityManager entityManager = entityManagerFactory().createEntityManager( SynchronizationType.UNSYNCHRONIZED );
 		TransactionJoinHandlingChecker.validateExplicitJoiningHandling( entityManager );
+	}
+
+	@Test
+	@SuppressWarnings("EmptyCatchBlock")
+	public void testExplicitJoiningTransactionRequiredException() throws Exception {
+		// explicitly calling EntityManager#joinTransaction outside of an active transaction should cause
+		// a TransactionRequiredException to be thrown
+
+		EntityManager entityManager = entityManagerFactory().createEntityManager();
+		assertFalse("setup problem", JtaStatusHelper.isActive(TestingJtaPlatformImpl.INSTANCE.getTransactionManager()));
+
+		try {
+			entityManager.joinTransaction();
+			fail( "Expected joinTransaction() to fail since there is no active JTA transaction" );
+		}
+		catch (TransactionRequiredException expected) {
+		}
 	}
 
 	@Test
@@ -79,10 +79,13 @@ public class TransactionJoiningTest extends BaseEntityManagerFunctionalTestCase 
 		TestingJtaPlatformImpl.INSTANCE.getTransactionManager().begin();
 		EntityManager entityManager = entityManagerFactory().createEntityManager();
 		SessionImplementor session = entityManager.unwrap( SessionImplementor.class );
-		Transaction hibernateTransaction = ( (Session) session ).getTransaction();
-		assertTrue( CMTTransaction.class.isInstance( hibernateTransaction ) );
-		assertTrue( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertTrue( hibernateTransaction.isParticipating() );
+
+		ExtraAssertions.assertTyping( JtaTransactionCoordinatorImpl.class, session.getTransactionCoordinator() );
+		JtaTransactionCoordinatorImpl transactionCoordinator = (JtaTransactionCoordinatorImpl) session.getTransactionCoordinator();
+
+		assertTrue( transactionCoordinator.isSynchronizationRegistered() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertTrue( transactionCoordinator.isJoined() );
 
 		assertTrue( entityManager.isOpen() );
 		assertTrue( session.isOpen() );
@@ -102,10 +105,13 @@ public class TransactionJoiningTest extends BaseEntityManagerFunctionalTestCase 
 		TestingJtaPlatformImpl.INSTANCE.getTransactionManager().begin();
 		EntityManager entityManager = entityManagerFactory().createEntityManager();
 		SessionImplementor session = entityManager.unwrap( SessionImplementor.class );
-		Transaction hibernateTransaction = ( (Session) session ).getTransaction();
-		assertTrue( CMTTransaction.class.isInstance( hibernateTransaction ) );
-		assertTrue( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertTrue( hibernateTransaction.isParticipating() );
+
+		ExtraAssertions.assertTyping( JtaTransactionCoordinatorImpl.class, session.getTransactionCoordinator() );
+		JtaTransactionCoordinatorImpl transactionCoordinator = (JtaTransactionCoordinatorImpl) session.getTransactionCoordinator();
+
+		assertTrue( transactionCoordinator.isSynchronizationRegistered() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertTrue( transactionCoordinator.isJoined() );
 
 		assertTrue( entityManager.isOpen() );
 		assertTrue( session.isOpen() );
@@ -125,23 +131,16 @@ public class TransactionJoiningTest extends BaseEntityManagerFunctionalTestCase 
 		TestingJtaPlatformImpl.INSTANCE.getTransactionManager().begin();
 		EntityManager entityManager = entityManagerFactory().createEntityManager();
 		SessionImplementor session = entityManager.unwrap( SessionImplementor.class );
-		Transaction hibernateTransaction = ( (Session) session ).getTransaction();
-		assertTrue( CMTTransaction.class.isInstance( hibernateTransaction ) );
-		assertTrue( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertTrue( hibernateTransaction.isParticipating() );
+
+		ExtraAssertions.assertTyping( JtaTransactionCoordinatorImpl.class, session.getTransactionCoordinator() );
+		JtaTransactionCoordinatorImpl transactionCoordinator = (JtaTransactionCoordinatorImpl) session.getTransactionCoordinator();
+
+		assertTrue( transactionCoordinator.isSynchronizationRegistered() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertTrue( transactionCoordinator.isJoined() );
 
 		entityManager.close();
 
-		hibernateTransaction.registerSynchronization(
-				new Synchronization() {
-					public void beforeCompletion() {
-						// nothing to do
-					}
-					public void afterCompletion( int i ) {
-						// nothing to do
-					}
-				}
-		);
 		TestingJtaPlatformImpl.INSTANCE.getTransactionManager().commit();
 	}
 	
@@ -165,7 +164,7 @@ public class TransactionJoiningTest extends BaseEntityManagerFunctionalTestCase 
 
 		Thread thread = new Thread() {
 			public void run() {
-				sImpl.getTransactionCoordinator().getSynchronizationCallbackCoordinator()
+				((JtaTransactionCoordinatorImpl)sImpl.getTransactionCoordinator()).getSynchronizationCallbackCoordinator()
 						.afterCompletion( Status.STATUS_ROLLEDBACK );
 				latch.countDown();
 			}
@@ -189,7 +188,8 @@ public class TransactionJoiningTest extends BaseEntityManagerFunctionalTestCase 
 			em.createQuery( "from Book" ).getResultList();
 		}
 		catch ( PersistenceException e ) {
-			caught = e.getCause().getClass().equals( GenericJDBCException.class );
+			// HHH-9312
+			caught = true;
 		}
 		assertTrue( caught );
 

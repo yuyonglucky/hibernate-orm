@@ -1,27 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.mapping;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,16 +14,18 @@ import java.util.Map;
 
 import org.hibernate.EntityMode;
 import org.hibernate.MappingException;
-import org.hibernate.cfg.Mappings;
+import org.hibernate.boot.model.relational.Database;
+import org.hibernate.boot.model.relational.ExportableProducer;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
+import org.hibernate.boot.registry.classloading.spi.ClassLoadingException;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.id.CompositeNestedGeneratedValueGenerator;
 import org.hibernate.id.IdentifierGenerator;
-import org.hibernate.id.PersistentIdentifierGenerator;
 import org.hibernate.id.factory.IdentifierGeneratorFactory;
-import org.hibernate.internal.util.ReflectHelper;
 import org.hibernate.internal.util.collections.JoinedIterator;
-import org.hibernate.property.Setter;
+import org.hibernate.property.access.spi.Setter;
 import org.hibernate.tuple.component.ComponentMetamodel;
 import org.hibernate.type.Type;
 import org.hibernate.type.TypeFactory;
@@ -52,51 +38,57 @@ import org.hibernate.type.TypeFactory;
  * @author Steve Ebersole
  */
 public class Component extends SimpleValue implements MetaAttributable {
-	private ArrayList properties = new ArrayList();
+	private ArrayList<Property> properties = new ArrayList<Property>();
 	private String componentClassName;
 	private boolean embedded;
 	private String parentProperty;
 	private PersistentClass owner;
 	private boolean dynamic;
 	private Map metaAttributes;
-	private String nodeName;
 	private boolean isKey;
 	private String roleName;
 
-	private java.util.Map tuplizerImpls;
+	private java.util.Map<EntityMode,String> tuplizerImpls;
 
-	public Component(Mappings mappings, PersistentClass owner) throws MappingException {
-		super( mappings, owner.getTable() );
+	public Component(MetadataImplementor metadata, PersistentClass owner) throws MappingException {
+		this( metadata, owner.getTable(), owner );
+	}
+
+	public Component(MetadataImplementor metadata, Component component) throws MappingException {
+		this( metadata, component.getTable(), component.getOwner() );
+	}
+
+	public Component(MetadataImplementor metadata, Join join) throws MappingException {
+		this( metadata, join.getTable(), join.getPersistentClass() );
+	}
+
+	public Component(MetadataImplementor metadata, Collection collection) throws MappingException {
+		this( metadata, collection.getCollectionTable(), collection.getOwner() );
+	}
+
+	public Component(MetadataImplementor metadata, Table table, PersistentClass owner) throws MappingException {
+		super( metadata, table );
 		this.owner = owner;
-	}
-
-	public Component(Mappings mappings, Component component) throws MappingException {
-		super( mappings, component.getTable() );
-		this.owner = component.getOwner();
-	}
-
-	public Component(Mappings mappings, Join join) throws MappingException {
-		super( mappings, join.getTable() );
-		this.owner = join.getPersistentClass();
-	}
-
-	public Component(Mappings mappings, Collection collection) throws MappingException {
-		super( mappings, collection.getCollectionTable() );
-		this.owner = collection.getOwner();
 	}
 
 	public int getPropertySpan() {
 		return properties.size();
 	}
+
 	public Iterator getPropertyIterator() {
 		return properties.iterator();
 	}
+
 	public void addProperty(Property p) {
-		properties.add(p);
+		properties.add( p );
 	}
+
+	@Override
 	public void addColumn(Column column) {
 		throw new UnsupportedOperationException("Cant add a column to a component");
 	}
+
+	@Override
 	public int getColumnSpan() {
 		int n=0;
 		Iterator iter = getPropertyIterator();
@@ -106,6 +98,9 @@ public class Component extends SimpleValue implements MetaAttributable {
 		}
 		return n;
 	}
+
+	@Override
+	@SuppressWarnings("unchecked")
 	public Iterator<Selectable> getColumnIterator() {
 		Iterator[] iters = new Iterator[ getPropertySpan() ];
 		Iterator iter = getPropertyIterator();
@@ -113,10 +108,8 @@ public class Component extends SimpleValue implements MetaAttributable {
 		while ( iter.hasNext() ) {
 			iters[i++] = ( (Property) iter.next() ).getColumnIterator();
 		}
-		return new JoinedIterator(iters);
+		return new JoinedIterator( iters );
 	}
-
-	public void setTypeByReflection(String propertyClass, String propertyName) {}
 
 	public boolean isEmbedded() {
 		return embedded;
@@ -127,11 +120,14 @@ public class Component extends SimpleValue implements MetaAttributable {
 	}
 
 	public Class getComponentClass() throws MappingException {
+		final ClassLoaderService classLoaderService = getMetadata().getMetadataBuildingOptions()
+				.getServiceRegistry()
+				.getService( ClassLoaderService.class );
 		try {
-			return ReflectHelper.classForName(componentClassName);
+			return classLoaderService.classForName( componentClassName );
 		}
-		catch (ClassNotFoundException cnfe) {
-			throw new MappingException("component class not found: " + componentClassName, cnfe);
+		catch (ClassLoadingException e) {
+			throw new MappingException("component class not found: " + componentClassName, e);
 		}
 	}
 
@@ -167,32 +163,40 @@ public class Component extends SimpleValue implements MetaAttributable {
 		this.dynamic = dynamic;
 	}
 
+	@Override
 	public Type getType() throws MappingException {
 		// TODO : temporary initial step towards HHH-1907
-		final ComponentMetamodel metamodel = new ComponentMetamodel( this );
-		final TypeFactory factory = getMappings().getTypeResolver().getTypeFactory();
+		final ComponentMetamodel metamodel = new ComponentMetamodel( this, getMetadata().getMetadataBuildingOptions() );
+		final TypeFactory factory = getMetadata().getTypeResolver().getTypeFactory();
 		return isEmbedded() ? factory.embeddedComponent( metamodel ) : factory.component( metamodel );
 	}
 
+	@Override
 	public void setTypeUsingReflection(String className, String propertyName)
 		throws MappingException {
 	}
-	
+
+	@Override
 	public java.util.Map getMetaAttributes() {
 		return metaAttributes;
 	}
+
+	@Override
 	public MetaAttribute getMetaAttribute(String attributeName) {
 		return metaAttributes==null?null:(MetaAttribute) metaAttributes.get(attributeName);
 	}
 
+	@Override
 	public void setMetaAttributes(java.util.Map metas) {
 		this.metaAttributes = metas;
 	}
-	
+
+	@Override
 	public Object accept(ValueVisitor visitor) {
 		return visitor.accept(this);
 	}
-	
+
+	@Override
 	public boolean[] getColumnInsertability() {
 		boolean[] result = new boolean[ getColumnSpan() ];
 		Iterator iter = getPropertyIterator();
@@ -208,6 +212,7 @@ public class Component extends SimpleValue implements MetaAttributable {
 		return result;
 	}
 
+	@Override
 	public boolean[] getColumnUpdateability() {
 		boolean[] result = new boolean[ getColumnSpan() ];
 		Iterator iter = getPropertyIterator();
@@ -221,14 +226,6 @@ public class Component extends SimpleValue implements MetaAttributable {
 			i+=chunk.length;
 		}
 		return result;
-	}
-	
-	public String getNodeName() {
-		return nodeName;
-	}
-	
-	public void setNodeName(String nodeName) {
-		this.nodeName = nodeName;
 	}
 	
 	public boolean isKey() {
@@ -245,7 +242,7 @@ public class Component extends SimpleValue implements MetaAttributable {
 
 	public void addTuplizer(EntityMode entityMode, String implClassName) {
 		if ( tuplizerImpls == null ) {
-			tuplizerImpls = new HashMap();
+			tuplizerImpls = new HashMap<EntityMode,String>();
 		}
 		tuplizerImpls.put( entityMode, implClassName );
 	}
@@ -255,9 +252,10 @@ public class Component extends SimpleValue implements MetaAttributable {
 		if ( tuplizerImpls == null ) {
 			return null;
 		}
-		return ( String ) tuplizerImpls.get( mode );
+		return tuplizerImpls.get( mode );
 	}
 
+	@SuppressWarnings("UnusedDeclaration")
 	public Map getTuplizerMap() {
 		if ( tuplizerImpls == null ) {
 			return null;
@@ -284,12 +282,14 @@ public class Component extends SimpleValue implements MetaAttributable {
 		this.roleName = roleName;
 	}
 
+	@Override
 	public String toString() {
 		return getClass().getName() + '(' + properties.toString() + ')';
 	}
 
 	private IdentifierGenerator builtIdentifierGenerator;
 
+	@Override
 	public IdentifierGenerator createIdentifierGenerator(
 			IdentifierGeneratorFactory identifierGeneratorFactory,
 			Dialect dialect,
@@ -364,7 +364,6 @@ public class Component extends SimpleValue implements MetaAttributable {
 				);
 				generator.addGeneratedValuePlan(
 						new ValueGenerationPlan(
-								property.getName(),
 								valueGenerator,
 								injector( property, attributeDeclarer )
 						)
@@ -375,8 +374,9 @@ public class Component extends SimpleValue implements MetaAttributable {
 	}
 
 	private Setter injector(Property property, Class attributeDeclarer) {
-		return property.getPropertyAccessor( attributeDeclarer )
-				.getSetter( attributeDeclarer, property.getName() );
+		return property.getPropertyAccessStrategy( attributeDeclarer )
+				.buildPropertyAccess( attributeDeclarer, property.getName() )
+				.getSetter();
 	}
 
 	private Class resolveComponentClass() {
@@ -396,36 +396,33 @@ public class Component extends SimpleValue implements MetaAttributable {
 			this.entityName = entityName;
 		}
 
+		@Override
 		public Serializable locateGenerationContext(SessionImplementor session, Object incomingObject) {
 			return session.getEntityPersister( entityName, incomingObject ).getIdentifier( incomingObject, session );
 		}
 	}
 
 	public static class ValueGenerationPlan implements CompositeNestedGeneratedValueGenerator.GenerationPlan {
-		private final String propertyName;
 		private final IdentifierGenerator subGenerator;
 		private final Setter injector;
 
 		public ValueGenerationPlan(
-				String propertyName,
 				IdentifierGenerator subGenerator,
 				Setter injector) {
-			this.propertyName = propertyName;
 			this.subGenerator = subGenerator;
 			this.injector = injector;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public void execute(SessionImplementor session, Object incomingObject, Object injectionContext) {
 			final Object generatedValue = subGenerator.generate( session, incomingObject );
 			injector.set( injectionContext, generatedValue, session.getFactory() );
 		}
 
-		public void registerPersistentGenerators(Map generatorMap) {
-			if ( PersistentIdentifierGenerator.class.isInstance( subGenerator ) ) {
-				generatorMap.put( ( (PersistentIdentifierGenerator) subGenerator ).generatorKey(), subGenerator );
+		@Override
+		public void registerExportables(Database database) {
+			if ( ExportableProducer.class.isInstance( subGenerator ) ) {
+				( (ExportableProducer) subGenerator ).registerExportables( database );
 			}
 		}
 	}

@@ -1,21 +1,26 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.customtype;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import org.hibernate.Session;
-import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.envers.test.BaseEnversFunctionalTestCase;
 import org.hibernate.envers.test.Priority;
 import org.hibernate.envers.test.entities.customtype.UnspecifiedEnumTypeEntity;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import org.hibernate.testing.RequiresDialect;
 import org.hibernate.testing.TestForIssue;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
@@ -31,9 +36,10 @@ public class UnspecifiedEnumTypeTest extends BaseEnversFunctionalTestCase {
 	}
 
 	@Override
-	protected void configure(Configuration configuration) {
-		super.configure( configuration );
-		configuration.setProperty( Environment.HBM2DDL_AUTO, "" );
+	protected void addSettings(Map settings) {
+		super.addSettings( settings );
+
+		settings.put( Environment.HBM2DDL_AUTO, "" );
 	}
 
 	@Test
@@ -48,7 +54,7 @@ public class UnspecifiedEnumTypeTest extends BaseEnversFunctionalTestCase {
 	@Test
 	@Priority(1)
 	public void dropSchema() {
-		dropSchema( session );
+		dropSchema( getSession() );
 	}
 
 	public void dropSchema(Session session) {
@@ -62,11 +68,11 @@ public class UnspecifiedEnumTypeTest extends BaseEnversFunctionalTestCase {
 	private void createSchema(Session session) {
 		executeUpdateSafety(
 				session,
-				"create table ENUM_ENTITY (ID bigint not null, enum1 varchar(255), enum2 integer, primary key (ID))"
+				"create table ENUM_ENTITY (ID bigint not null, enum1 integer, enum2 integer, primary key (ID))"
 		);
 		executeUpdateSafety(
 				session,
-				"create table ENUM_ENTITY_AUD (ID bigint not null, REV integer not null, REVTYPE tinyint, enum1 varchar(255), enum2 integer, primary key (ID, REV))"
+				"create table ENUM_ENTITY_AUD (ID bigint not null, REV integer not null, REVTYPE tinyint, enum1 integer, enum2 integer, primary key (ID, REV))"
 		);
 		executeUpdateSafety(
 				session,
@@ -153,7 +159,7 @@ public class UnspecifiedEnumTypeTest extends BaseEnversFunctionalTestCase {
 
 		Assert.assertNotNull( values );
 		Assert.assertEquals( 2, values.size() );
-		Assert.assertArrayEquals( new Object[] {"X", 0}, values.get( 0 ) );
-		Assert.assertArrayEquals( new Object[] {"Y", 1}, values.get( 1 ) );
+		Assert.assertArrayEquals( new Object[] {0, 0}, values.get( 0 ) );
+		Assert.assertArrayEquals( new Object[] {1, 1}, values.get( 1 ) );
 	}
 }

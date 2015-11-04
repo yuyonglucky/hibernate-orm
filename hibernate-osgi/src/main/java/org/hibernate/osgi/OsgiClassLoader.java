@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.osgi;
 
@@ -27,12 +10,13 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
+import org.hibernate.service.spi.Stoppable;
 import org.osgi.framework.Bundle;
 
 /**
@@ -42,17 +26,25 @@ import org.osgi.framework.Bundle;
  * @author Brett Meyer
  * @author Tim Ward
  */
-public class OsgiClassLoader extends ClassLoader {
+public class OsgiClassLoader extends ClassLoader implements Stoppable {
 	// Leave these as Sets -- addClassLoader or addBundle may be called more
 	// than once if a SF or EMF is closed and re-created.
-	private Set<ClassLoader> classLoaders = new HashSet<ClassLoader>();
-	private Set<Bundle> bundles = new HashSet<Bundle>();
+	private Set<ClassLoader> classLoaders = new LinkedHashSet<ClassLoader>();
+	private Set<Bundle> bundles = new LinkedHashSet<Bundle>();
 
 	private Map<String, Class<?>> classCache = new HashMap<String, Class<?>>();
 	private Map<String, URL> resourceCache = new HashMap<String, URL>();
+	
+	public OsgiClassLoader() {
+		// DO NOT use ClassLoader#parent, which is typically the SystemClassLoader for most containers.  Instead,
+		// allow the ClassNotFoundException to be thrown.  ClassLoaderServiceImpl will check the SystemClassLoader
+		// later on.  This is especially important for embedded OSGi containers, etc.
+		super( null );
+	}
 
 	/**
-	 * Load the class and break on first found match.
+	 * Load the class and break on first found match.  
+	 * 
 	 * TODO: Should this throw a different exception or warn if multiple
 	 * classes were found? Naming collisions can and do happen in OSGi...
 	 */
@@ -92,6 +84,7 @@ public class OsgiClassLoader extends ClassLoader {
 
 	/**
 	 * Load the class and break on first found match.
+	 * 
 	 * TODO: Should this throw a different exception or warn if multiple
 	 * classes were found? Naming collisions can and do happen in OSGi...
 	 */
@@ -207,10 +200,10 @@ public class OsgiClassLoader extends ClassLoader {
 		bundles.add( bundle );
 	}
 
-	/**
-	 * Clear all resources.
-	 */
-	public void clear() {
+	@Override
+	public void stop() {
+		classLoaders.clear();
+		bundles.clear();
 		classCache.clear();
 		resourceCache.clear();
 	}

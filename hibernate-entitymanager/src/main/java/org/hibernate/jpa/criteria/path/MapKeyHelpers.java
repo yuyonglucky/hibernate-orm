@@ -1,34 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria.path;
 
 import java.io.Serializable;
 import java.lang.reflect.Member;
 import java.util.Map;
-import javax.persistence.criteria.Join;
-import javax.persistence.criteria.MapJoin;
-import javax.persistence.criteria.Path;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.Bindable;
 import javax.persistence.metamodel.ManagedType;
@@ -36,23 +16,25 @@ import javax.persistence.metamodel.MapAttribute;
 import javax.persistence.metamodel.SingularAttribute;
 import javax.persistence.metamodel.Type;
 
+import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.jpa.criteria.CriteriaBuilderImpl;
 import org.hibernate.jpa.criteria.MapJoinImplementor;
 import org.hibernate.jpa.criteria.PathImplementor;
-import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.jpa.criteria.PathSource;
+import org.hibernate.jpa.criteria.compile.RenderingContext;
 import org.hibernate.persister.collection.CollectionPersister;
 
 /**
- * {@link MapJoin#key} poses a number of implementation difficulties in terms of the type signatures
- * amongst the {@link Path}, {@link Join} and {@link Attribute} reference at play.  The implementations found here
- * provide that bridge.
+ * {@link javax.persistence.criteria.MapJoin#key} poses a number of implementation difficulties in terms of the
+ * type signatures amongst the {@link javax.persistence.criteria.Path}, {@link javax.persistence.criteria.Join} and
+ * {@link Attribute}.  The implementations found here provide that bridge.
  *
  * @author Steve Ebersole
  */
 public class MapKeyHelpers {
 
 	/**
-	 * Models a path to a map key.  This is the actual return used from {@link MapJoin#key}
+	 * Models a path to a map key.  This is the actual return used from {@link javax.persistence.criteria.MapJoin#key}
 	 *
 	 * @param <K> The type of the map key.
 	 */
@@ -109,10 +91,24 @@ public class MapKeyHelpers {
 			// todo : if key is an entity, this is probably not enough
 			return (MapKeyPath<T>) this;
 		}
+
+		@Override
+		public String render(RenderingContext renderingContext) {
+			PathSource<?> source = getPathSource();
+			String name;
+			if ( source != null ) {
+				source.prepareAlias( renderingContext );
+				name = source.getPathIdentifier();
+			}
+			else {
+				name = getAttribute().getName();
+			}
+			return "key(" + name + ")";
+		}
 	}
 
 	/**
-	 * Defines a {@link Path} for the map which can then be used to represent the source of the
+	 * Defines a path for the map which can then be used to represent the source of the
 	 * map key "attribute".
 	 *
 	 * @param <K> The map key type
@@ -164,6 +160,12 @@ public class MapKeyHelpers {
 		public <T extends Map<K, V>> PathImplementor<T> treatAs(Class<T> treatAsType) {
 			throw new UnsupportedOperationException();
 		}
+
+		@Override
+		public String getPathIdentifier() {
+			return mapJoin.getPathIdentifier();
+		}
+
 	}
 
 	/**

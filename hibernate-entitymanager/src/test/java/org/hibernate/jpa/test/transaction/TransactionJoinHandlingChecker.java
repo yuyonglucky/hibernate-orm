@@ -1,35 +1,16 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.transaction;
 
 import javax.persistence.EntityManager;
 
-import org.hibernate.Session;
-import org.hibernate.Transaction;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.engine.transaction.internal.jta.CMTTransaction;
 import org.hibernate.engine.transaction.internal.jta.JtaStatusHelper;
+import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorImpl;
 
 import org.hibernate.testing.jta.TestingJtaPlatformImpl;
 import org.hibernate.testing.junit4.ExtraAssertions;
@@ -45,32 +26,36 @@ import static org.junit.Assert.assertTrue;
 public class TransactionJoinHandlingChecker {
 	static void validateExplicitJoiningHandling(EntityManager entityManager) throws Exception {
 		SessionImplementor session = entityManager.unwrap( SessionImplementor.class );
-		assertFalse( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		Transaction hibernateTransaction = ((Session) session).getTransaction();
-		ExtraAssertions.assertTyping( CMTTransaction.class, hibernateTransaction );
-		assertFalse( hibernateTransaction.isParticipating() );
+
+		ExtraAssertions.assertTyping( JtaTransactionCoordinatorImpl.class, session.getTransactionCoordinator() );
+		JtaTransactionCoordinatorImpl transactionCoordinator = (JtaTransactionCoordinatorImpl) session.getTransactionCoordinator();
+
+		assertFalse( transactionCoordinator.isSynchronizationRegistered() );
+		assertFalse( transactionCoordinator.isActive() );
+		assertFalse( transactionCoordinator.isJoined() );
 
 		session.getFlushMode();
-		assertFalse( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertFalse( hibernateTransaction.isParticipating() );
+		assertFalse( transactionCoordinator.isSynchronizationRegistered() );
+		assertFalse( transactionCoordinator.isActive() );
+		assertFalse( transactionCoordinator.isJoined() );
 
 		TestingJtaPlatformImpl.INSTANCE.getTransactionManager().begin();
 		assertTrue( JtaStatusHelper.isActive( TestingJtaPlatformImpl.INSTANCE.getTransactionManager() ) );
-		assertTrue( hibernateTransaction.isActive() );
-		assertFalse( hibernateTransaction.isParticipating() );
-		assertFalse( session.getTransactionCoordinator().isSynchronizationRegistered() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertFalse( transactionCoordinator.isJoined() );
+		assertFalse( transactionCoordinator.isSynchronizationRegistered() );
 
 		session.getFlushMode();
 		assertTrue( JtaStatusHelper.isActive( TestingJtaPlatformImpl.INSTANCE.getTransactionManager() ) );
-		assertTrue( hibernateTransaction.isActive() );
-		assertFalse( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertFalse( hibernateTransaction.isParticipating() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertFalse( transactionCoordinator.isJoined() );
+		assertFalse( transactionCoordinator.isSynchronizationRegistered() );
 
 		entityManager.joinTransaction();
 		assertTrue( JtaStatusHelper.isActive( TestingJtaPlatformImpl.INSTANCE.getTransactionManager() ) );
-		assertTrue( hibernateTransaction.isActive() );
-		assertTrue( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertTrue( hibernateTransaction.isParticipating() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertTrue( transactionCoordinator.isSynchronizationRegistered() );
+		assertTrue( transactionCoordinator.isJoined() );
 
 		assertTrue( entityManager.isOpen() );
 		assertTrue( session.isOpen() );

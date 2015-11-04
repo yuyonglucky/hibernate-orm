@@ -1,40 +1,17 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009, Red Hat, Inc. and/or its affiliates or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat, Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.entity;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import java.math.BigDecimal;
 import java.util.Currency;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Set;
 
 import org.hibernate.AnnotationException;
@@ -45,11 +22,21 @@ import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
 import org.hibernate.cfg.Configuration;
+import org.hibernate.dialect.TeradataDialect;
+
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
 import org.hibernate.testing.ServiceRegistryBuilder;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * @author Emmanuel Bernard
@@ -99,6 +86,7 @@ public class BasicHibernateAnnotationsTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@RequiresDialectFeature( DialectChecks.SupportsExpectedLobUsagePattern.class )
+	@SkipForDialect(value = TeradataDialect.class , comment = "One transaction hangs the other")
 	public void testVersioning() throws Exception {
 		Forest forest = new Forest();
 		forest.setName( "Fontainebleau" );
@@ -275,7 +263,7 @@ public class BasicHibernateAnnotationsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 		sessionFactory().getStatistics().clear();
 		sessionFactory().getStatistics().setStatisticsEnabled( true );
-		sessionFactory().evict( ZipCode.class );
+		sessionFactory().getCache().evictEntityRegion( ZipCode.class );
 		s = openSession();
 		tx = s.beginTransaction();
 		s.get( ZipCode.class, zc.code );
@@ -322,6 +310,11 @@ public class BasicHibernateAnnotationsTest extends BaseCoreFunctionalTestCase {
 		tx.commit();
 		s.close();
 		
+		s = openSession();
+		tx = s.beginTransaction();
+		s.createQuery( "delete from " + Narrative.class.getSimpleName() ).executeUpdate();
+		tx.commit();
+		s.close();
 	} 
 
 	@Test
@@ -520,8 +513,8 @@ public class BasicHibernateAnnotationsTest extends BaseCoreFunctionalTestCase {
 		s = openSession();
 		tx = s.beginTransaction();
 		Forest f2 = (Forest) s.get( Forest.class, f.getId() );
-		assertEquals( f.getSmallText().toLowerCase(), f2.getSmallText() );
-		assertEquals( f.getBigText().toUpperCase(), f2.getBigText() );
+		assertEquals( f.getSmallText().toLowerCase(Locale.ROOT), f2.getSmallText() );
+		assertEquals( f.getBigText().toUpperCase(Locale.ROOT), f2.getBigText() );
 		tx.commit();
 		s.close();
 	}

@@ -1,33 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.tree;
-import java.util.Arrays;
 
-import antlr.SemanticException;
-import antlr.collections.AST;
-import org.jboss.logging.Logger;
+import java.util.Arrays;
 
 import org.hibernate.dialect.function.SQLFunction;
 import org.hibernate.hql.internal.CollectionProperties;
@@ -35,9 +14,17 @@ import org.hibernate.hql.internal.antlr.SqlTokenTypes;
 import org.hibernate.hql.internal.ast.TypeDiscriminatorMetadata;
 import org.hibernate.hql.internal.ast.util.ASTUtil;
 import org.hibernate.hql.internal.ast.util.ColumnHelper;
+import org.hibernate.internal.CoreLogging;
+import org.hibernate.persister.collection.CollectionPropertyMapping;
 import org.hibernate.persister.collection.CollectionPropertyNames;
 import org.hibernate.persister.collection.QueryableCollection;
 import org.hibernate.type.Type;
+
+import org.jboss.logging.Logger;
+
+import antlr.SemanticException;
+import antlr.collections.AST;
+import java.util.Locale;
 
 /**
  * Represents a method call.
@@ -45,7 +32,7 @@ import org.hibernate.type.Type;
  * @author josh
  */
 public class MethodNode extends AbstractSelectExpression implements FunctionNode {
-    private static final Logger LOG = Logger.getLogger( MethodNode.class.getName() );
+	private static final Logger LOG = CoreLogging.logger( MethodNode.class );
 
 	private String methodName;
 	private FromElement fromElement;
@@ -105,8 +92,10 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 	public void initializeMethodNode(AST name, boolean inSelect) {
 		name.setType( SqlTokenTypes.METHOD_NAME );
 		String text = name.getText();
-		methodName = text.toLowerCase();	// Use the lower case function name.
-		this.inSelect = inSelect;			// Remember whether we're in a SELECT clause or not.
+		// Use the lower case function name.
+		methodName = text.toLowerCase(Locale.ROOT);
+		// Remember whether we're in a SELECT clause or not.
+		this.inSelect = inSelect;
 	}
 
 	private void typeDiscriminator(AST path) throws SemanticException {
@@ -128,13 +117,9 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 		if ( function != null ) {
 			AST firstChild = exprList != null ? exprList.getFirstChild() : null;
 			Type functionReturnType = getSessionFactoryHelper()
-					.findFunctionReturnType( methodName, firstChild );
+					.findFunctionReturnType( methodName, function, firstChild );
 			setDataType( functionReturnType );
 		}
-		//TODO:
-		/*else {
-			methodName = (String) getWalker().getTokenReplacements().get( methodName );
-		}*/
 	}
 
 	public boolean isCollectionPropertyMethod() {
@@ -146,7 +131,7 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 			throw new SemanticException( "Collection function " + name.getText() + " has no path!" );
 		}
 
-		SqlNode expr = ( SqlNode ) path;
+		SqlNode expr = (SqlNode) path;
 		Type type = expr.getDataType();
 		LOG.debugf( "collectionProperty() :  name=%s type=%s", name, type );
 
@@ -156,7 +141,7 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 	protected void resolveCollectionProperty(AST expr) throws SemanticException {
 		String propertyName = CollectionProperties.getNormalizedPropertyName( methodName );
 		if ( expr instanceof FromReferenceNode ) {
-			FromReferenceNode collectionNode = ( FromReferenceNode ) expr;
+			FromReferenceNode collectionNode = (FromReferenceNode) expr;
 			// If this is 'elements' then create a new FROM element.
 			if ( CollectionPropertyNames.COLLECTION_ELEMENTS.equals( propertyName ) ) {
 				handleElements( collectionNode, propertyName );
@@ -164,11 +149,16 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 			else {
 				// Not elements(x)
 				fromElement = collectionNode.getFromElement();
-				setDataType( fromElement.getPropertyType( propertyName, propertyName ) );
+
+				final CollectionPropertyReference cpr = fromElement.getCollectionPropertyReference( propertyName );
+				setDataType( cpr.getType() );
+				selectColumns = cpr.toColumns( fromElement.getTableAlias() );
+
+//				setDataType( fromElement.getPropertyType( propertyName, propertyName ) );
 				selectColumns = fromElement.toColumns( fromElement.getTableAlias(), propertyName, inSelect );
 			}
 			if ( collectionNode instanceof DotNode ) {
-				prepareAnyImplicitJoins( ( DotNode ) collectionNode );
+				prepareAnyImplicitJoins( (DotNode) collectionNode );
 			}
 			if ( !inSelect ) {
 				fromElement.setText( "" );
@@ -181,18 +171,18 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 		else {
 			throw new SemanticException(
 					"Unexpected expression " + expr +
-					" found for collection function " + propertyName
-				);
+							" found for collection function " + propertyName
+			);
 		}
 	}
 
 	private void prepareAnyImplicitJoins(DotNode dotNode) throws SemanticException {
 		if ( dotNode.getLhs() instanceof DotNode ) {
-			DotNode lhs = ( DotNode ) dotNode.getLhs();
+			DotNode lhs = (DotNode) dotNode.getLhs();
 			FromElement lhsOrigin = lhs.getFromElement();
 			if ( lhsOrigin != null && "".equals( lhsOrigin.getText() ) ) {
 				String lhsOriginText = lhsOrigin.getQueryable().getTableName() +
-				        " " + lhsOrigin.getTableAlias();
+						" " + lhsOrigin.getTableAlias();
 				lhsOrigin.setText( lhsOriginText );
 			}
 			prepareAnyImplicitJoins( lhs );
@@ -215,11 +205,12 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 		selectColumns = collectionFromElement.toColumns( fromElement.getTableAlias(), propertyName, inSelect );
 	}
 
+	@Override
 	public void setScalarColumnText(int i) throws SemanticException {
-		if ( selectColumns == null ) { 	// Dialect function
+		if ( selectColumns == null ) {    // Dialect function
 			ColumnHelper.generateSingleScalarColumn( this, i );
 		}
-		else {	// Collection 'property function'
+		else {    // Collection 'property function'
 			ColumnHelper.generateScalarColumns( this, selectColumns, i );
 		}
 	}
@@ -228,7 +219,7 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 	}
 
 	@Override
-    public FromElement getFromElement() {
+	public FromElement getFromElement() {
 		return fromElement;
 	}
 
@@ -236,7 +227,7 @@ public class MethodNode extends AbstractSelectExpression implements FunctionNode
 		return "{" +
 				"method=" + methodName +
 				",selectColumns=" + ( selectColumns == null ?
-						null : Arrays.asList( selectColumns ) ) +
+				null : Arrays.asList( selectColumns ) ) +
 				",fromElement=" + fromElement.getTableAlias() +
 				"}";
 	}

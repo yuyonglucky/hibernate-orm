@@ -1,38 +1,22 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.cache.infinispan;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
+import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
-import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.cache.infinispan.InfinispanRegionFactory;
 import org.hibernate.cache.infinispan.collection.CollectionRegionImpl;
 import org.hibernate.cache.infinispan.entity.EntityRegionImpl;
 import org.hibernate.cache.spi.CacheDataDescription;
-import org.hibernate.cfg.Configuration;
+
 import org.hibernate.test.cache.infinispan.util.CacheTestUtil;
 
 /**
@@ -41,24 +25,21 @@ import org.hibernate.test.cache.infinispan.util.CacheTestUtil;
  * @author Steve Ebersole
  */
 public class NodeEnvironment {
+   private final StandardServiceRegistryBuilder ssrb;
+   private final Properties properties;
 
-   private final Configuration configuration;
-
-   private StandardServiceRegistryImpl serviceRegistry;
+   private StandardServiceRegistry serviceRegistry;
    private InfinispanRegionFactory regionFactory;
 
    private Map<String, EntityRegionImpl> entityRegionMap;
    private Map<String, CollectionRegionImpl> collectionRegionMap;
 
-   public NodeEnvironment(Configuration configuration) {
-      this.configuration = configuration;
+   public NodeEnvironment(StandardServiceRegistryBuilder ssrb) {
+      this.ssrb = ssrb;
+      properties = CacheTestUtil.toProperties( ssrb.getSettings() );
    }
 
-   public Configuration getConfiguration() {
-      return configuration;
-   }
-
-   public StandardServiceRegistryImpl getServiceRegistry() {
+   public StandardServiceRegistry getServiceRegistry() {
       return serviceRegistry;
    }
 
@@ -77,7 +58,7 @@ public class NodeEnvironment {
    private EntityRegionImpl buildAndStoreEntityRegion(String name, CacheDataDescription cacheDataDescription) {
       EntityRegionImpl region = (EntityRegionImpl) regionFactory.buildEntityRegion(
             name,
-            configuration.getProperties(),
+            properties,
             cacheDataDescription
       );
       entityRegionMap.put(name, region);
@@ -101,17 +82,15 @@ public class NodeEnvironment {
       CollectionRegionImpl region;
       region = (CollectionRegionImpl) regionFactory.buildCollectionRegion(
             name,
-            configuration.getProperties(),
+            properties,
             cacheDataDescription
       );
       return region;
    }
 
    public void prepare() throws Exception {
-      serviceRegistry = (StandardServiceRegistryImpl) new StandardServiceRegistryBuilder()
-            .applySettings(configuration.getProperties())
-            .build();
-      regionFactory = CacheTestUtil.startRegionFactory(serviceRegistry, configuration);
+      serviceRegistry = ssrb.build();
+      regionFactory = CacheTestUtil.startRegionFactory( serviceRegistry );
    }
 
    public void release() throws Exception {
@@ -136,16 +115,18 @@ public class NodeEnvironment {
             }
             collectionRegionMap.clear();
          }
-      } finally {
+      }
+      finally {
          try {
             if (regionFactory != null) {
                // Currently the RegionFactory is shutdown by its registration
                // with the CacheTestSetup from CacheTestUtil when built
                regionFactory.stop();
             }
-         } finally {
+         }
+         finally {
             if (serviceRegistry != null) {
-               serviceRegistry.destroy();
+               StandardServiceRegistryBuilder.destroy( serviceRegistry );
             }
          }
       }

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.query.spi;
 
@@ -81,6 +64,9 @@ public class QueryPlanCache implements Serializable {
 	 */
 	private final BoundedConcurrentHashMap<String,ParameterMetadata> parameterMetadataCache;
 
+
+	private NativeQueryInterpreter nativeQueryInterpreterService;
+
 	/**
 	 * Constructs the QueryPlanCache to be used by the given SessionFactory
 	 *
@@ -120,6 +106,7 @@ public class QueryPlanCache implements Serializable {
 				BoundedConcurrentHashMap.Eviction.LIRS
 		);
 
+		nativeQueryInterpreterService = factory.getServiceRegistry().getService( NativeQueryInterpreter.class );
 	}
 
 	/**
@@ -135,37 +122,10 @@ public class QueryPlanCache implements Serializable {
 	public ParameterMetadata getSQLParameterMetadata(final String query)  {
 		ParameterMetadata value = parameterMetadataCache.get( query );
 		if ( value == null ) {
-			value = buildParameterMetadata( query );
+			value = nativeQueryInterpreterService.getParameterMetadata( query );
 			parameterMetadataCache.putIfAbsent( query, value );
 		}
 		return value;
-	}
-	
-	private ParameterMetadata buildParameterMetadata(String query){
-		final ParamLocationRecognizer recognizer = ParamLocationRecognizer.parseLocations( query );
-
-		final int size = recognizer.getOrdinalParameterLocationList().size();
-		final OrdinalParameterDescriptor[] ordinalDescriptors = new OrdinalParameterDescriptor[ size ];
-		for ( int i = 0; i < size; i++ ) {
-			final Integer position = recognizer.getOrdinalParameterLocationList().get( i );
-			ordinalDescriptors[i] = new OrdinalParameterDescriptor( i, null, position );
-		}
-
-		final Map<String, NamedParameterDescriptor> namedParamDescriptorMap = new HashMap<String, NamedParameterDescriptor>();
-		final Map<String, ParamLocationRecognizer.NamedParameterDescription> map = recognizer.getNamedParameterDescriptionMap();
-		for ( final String name : map.keySet() ) {
-			final ParamLocationRecognizer.NamedParameterDescription description = map.get( name );
-			namedParamDescriptorMap.put(
-					name,
-					new NamedParameterDescriptor(
-							name,
-							null,
-							description.buildPositionsArray(),
-							description.isJpaStyle()
-					)
-			);
-		}
-		return new ParameterMetadata( ordinalDescriptors, namedParamDescriptorMap );
 	}
 
 	/**
@@ -189,7 +149,8 @@ public class QueryPlanCache implements Serializable {
 			LOG.tracev( "Unable to locate HQL query plan in cache; generating ({0})", queryString );
 			value = new HQLQueryPlan( queryString, shallow, enabledFilters, factory );
 			queryPlanCache.putIfAbsent( key, value );
-		} else {
+		}
+		else {
 			LOG.tracev( "Located HQL query plan in cache ({0})", queryString );
 		}
 		return value;
@@ -246,7 +207,7 @@ public class QueryPlanCache implements Serializable {
 		NativeSQLQueryPlan value = (NativeSQLQueryPlan) queryPlanCache.get( spec );
 		if ( value == null ) {
 			LOG.tracev( "Unable to locate native-sql query plan in cache; generating ({0})", spec.getQueryString() );
-			value = new NativeSQLQueryPlan( spec, factory);
+			value = nativeQueryInterpreterService.createQueryPlan( spec, factory );
 			queryPlanCache.putIfAbsent( spec, value );
 		}
 		else {
@@ -321,7 +282,6 @@ public class QueryPlanCache implements Serializable {
 		private final Map<String,Integer> parameterMetadata;
 		private final int hashCode;
 
-		@SuppressWarnings({ "UnnecessaryBoxing" })
 		private DynamicFilterKey(FilterImpl filter) {
 			this.filterName = filter.getName();
 			if ( filter.getParameters().isEmpty() ) {

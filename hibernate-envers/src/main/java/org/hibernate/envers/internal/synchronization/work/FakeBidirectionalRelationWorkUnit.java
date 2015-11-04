@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.synchronization.work;
 
@@ -31,7 +14,7 @@ import java.util.Set;
 
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.entities.RelationDescription;
 
 /**
@@ -49,13 +32,17 @@ public class FakeBidirectionalRelationWorkUnit extends AbstractAuditWorkUnit imp
 	private final AuditWorkUnit nestedWorkUnit;
 
 	public FakeBidirectionalRelationWorkUnit(
-			SessionImplementor sessionImplementor, String entityName,
-			AuditConfiguration verCfg, Serializable id,
-			String referencingPropertyName, Object owningEntity,
-			RelationDescription rd, RevisionType revisionType,
+			SessionImplementor sessionImplementor,
+			String entityName,
+			EnversService enversService,
+			Serializable id,
+			String referencingPropertyName,
+			Object owningEntity,
+			RelationDescription rd,
+			RevisionType revisionType,
 			Object index,
 			AuditWorkUnit nestedWorkUnit) {
-		super( sessionImplementor, entityName, verCfg, id, revisionType );
+		super( sessionImplementor, entityName, enversService, id, revisionType );
 		this.nestedWorkUnit = nestedWorkUnit;
 
 		// Adding the change for the relation.
@@ -74,14 +61,14 @@ public class FakeBidirectionalRelationWorkUnit extends AbstractAuditWorkUnit imp
 			FakeBidirectionalRelationWorkUnit original,
 			Map<String, FakeRelationChange> fakeRelationChanges,
 			AuditWorkUnit nestedWorkUnit) {
-		super( original.sessionImplementor, original.entityName, original.verCfg, original.id, original.revisionType );
+		super( original.sessionImplementor, original.entityName, original.enversService, original.id, original.revisionType );
 
 		this.fakeRelationChanges = fakeRelationChanges;
 		this.nestedWorkUnit = nestedWorkUnit;
 	}
 
 	public FakeBidirectionalRelationWorkUnit(FakeBidirectionalRelationWorkUnit original, AuditWorkUnit nestedWorkUnit) {
-		super( original.sessionImplementor, original.entityName, original.verCfg, original.id, original.revisionType );
+		super( original.sessionImplementor, original.entityName, original.enversService, original.id, original.revisionType );
 
 		this.nestedWorkUnit = nestedWorkUnit;
 

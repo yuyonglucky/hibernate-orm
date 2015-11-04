@@ -1,7 +1,13 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.cache.ehcache.internal.strategy;
 
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.ehcache.internal.regions.EhcacheTransactionalDataRegion;
-import org.hibernate.cfg.Settings;
 
 
 /**
@@ -13,7 +19,7 @@ public class ItemValueExtractor extends AbstractReadWriteEhcacheAccessStrategy {
 	/**
 	 * Creates a read/write cache access strategy around the given cache region.
 	 */
-	public ItemValueExtractor(EhcacheTransactionalDataRegion region, Settings settings) {
+	public ItemValueExtractor(EhcacheTransactionalDataRegion region, SessionFactoryOptions settings) {
 		super(region, settings);
 	}
 

@@ -1,30 +1,26 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa;
+
 import java.util.HashSet;
 import java.util.Set;
-import static org.hibernate.annotations.QueryHints.*;
+
+import static org.hibernate.annotations.QueryHints.CACHEABLE;
+import static org.hibernate.annotations.QueryHints.CACHE_MODE;
+import static org.hibernate.annotations.QueryHints.CACHE_REGION;
+import static org.hibernate.annotations.QueryHints.COMMENT;
+import static org.hibernate.annotations.QueryHints.FETCHGRAPH;
+import static org.hibernate.annotations.QueryHints.FETCH_SIZE;
+import static org.hibernate.annotations.QueryHints.FLUSH_MODE;
+import static org.hibernate.annotations.QueryHints.LOADGRAPH;
+import static org.hibernate.annotations.QueryHints.NATIVE_LOCKMODE;
+import static org.hibernate.annotations.QueryHints.READ_ONLY;
+import static org.hibernate.annotations.QueryHints.TIMEOUT_HIBERNATE;
+import static org.hibernate.annotations.QueryHints.TIMEOUT_JPA;
 
 /**
  * Defines the supported JPA query hints
@@ -85,6 +81,24 @@ public class QueryHints {
 	 */
 	public static final String HINT_FLUSH_MODE = FLUSH_MODE;
 
+	public static final String HINT_NATIVE_LOCKMODE = NATIVE_LOCKMODE;
+	
+	/**
+	 * Hint providing a "fetchgraph" EntityGraph.  Attributes explicitly specified as AttributeNodes are treated as
+	 * FetchType.EAGER (via join fetch or subsequent select).
+	 * 
+	 * Note: Currently, attributes that are not specified are treated as FetchType.LAZY or FetchType.EAGER depending
+	 * on the attribute's definition in metadata, rather than forcing FetchType.LAZY.
+	 */
+	public static final String HINT_FETCHGRAPH = FETCHGRAPH;
+	
+	/**
+	 * Hint providing a "loadgraph" EntityGraph.  Attributes explicitly specified as AttributeNodes are treated as
+	 * FetchType.EAGER (via join fetch or subsequent select).  Attributes that are not specified are treated as
+	 * FetchType.LAZY or FetchType.EAGER depending on the attribute's definition in metadata
+	 */
+	public static final String HINT_LOADGRAPH = LOADGRAPH;
+
 	private static final Set<String> HINTS = buildHintsSet();
 
 	private static Set<String> buildHintsSet() {
@@ -98,6 +112,9 @@ public class QueryHints {
 		hints.add( HINT_READONLY );
 		hints.add( HINT_CACHE_MODE );
 		hints.add( HINT_FLUSH_MODE );
+		hints.add( HINT_NATIVE_LOCKMODE );
+		hints.add( HINT_FETCHGRAPH );
+		hints.add( HINT_LOADGRAPH );
 		return java.util.Collections.unmodifiableSet( hints );
 	}
 

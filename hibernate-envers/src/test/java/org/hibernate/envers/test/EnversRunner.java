@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test;
 
 import java.lang.reflect.Modifier;
@@ -6,6 +12,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import org.hibernate.testing.junit4.CustomRunner;
 import org.junit.runner.Runner;
 import org.junit.runner.manipulation.NoTestsRemainException;
 import org.junit.runners.Parameterized;
@@ -13,8 +20,6 @@ import org.junit.runners.Suite;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.TestClass;
-
-import org.hibernate.testing.junit4.CustomRunner;
 
 /**
  * Copied & modified from {@link org.junit.runners.Parameterized}.

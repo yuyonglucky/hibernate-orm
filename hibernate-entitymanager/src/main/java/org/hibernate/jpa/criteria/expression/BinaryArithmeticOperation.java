@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria.expression;
 
@@ -43,48 +26,50 @@ public class BinaryArithmeticOperation<N extends Number>
 
 	public static enum Operation {
 		ADD {
+			@Override
 			String apply(String lhs, String rhs) {
 				return applyPrimitive( lhs, '+', rhs );
 			}
 		},
 		SUBTRACT {
+			@Override
 			String apply(String lhs, String rhs) {
 				return applyPrimitive( lhs, '-', rhs );
 			}
 		},
 		MULTIPLY {
+			@Override
 			String apply(String lhs, String rhs) {
 				return applyPrimitive( lhs, '*', rhs );
 			}
 		},
 		DIVIDE {
+			@Override
 			String apply(String lhs, String rhs) {
 				return applyPrimitive( lhs, '/', rhs );
 			}
 		},
 		QUOT {
+			@Override
 			String apply(String lhs, String rhs) {
 				return applyPrimitive( lhs, '/', rhs );
 			}
 		},
 		MOD {
+			@Override
 			String apply(String lhs, String rhs) {
 //				return lhs + " % " + rhs;
 				return "mod(" + lhs + "," + rhs + ")";
 			}
 		};
+
 		abstract String apply(String lhs, String rhs);
 
 		private static final char LEFT_PAREN = '(';
 		private static final char RIGHT_PAREN = ')';
+
 		private static String applyPrimitive(String lhs, char operator, String rhs) {
-			return new StringBuffer( lhs.length() + rhs.length() + 3 )
-					.append( LEFT_PAREN )
-					.append( lhs )
-					.append( operator )
-					.append( rhs )
-					.append( RIGHT_PAREN )
-					.toString();
+			return String.valueOf( LEFT_PAREN ) + lhs + operator + rhs + RIGHT_PAREN;
 		}
 	}
 
@@ -102,8 +87,7 @@ public class BinaryArithmeticOperation<N extends Number>
 	public static Class<? extends Number> determineResultType(
 			Class<? extends Number> argument1Type,
 			Class<? extends Number> argument2Type,
-			boolean isQuotientOperation
-	) {
+			boolean isQuotientOperation) {
 		if ( isQuotientOperation ) {
 			return Number.class;
 		}
@@ -206,28 +190,23 @@ public class BinaryArithmeticOperation<N extends Number>
 		return operator;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Expression<? extends N> getRightHandOperand() {
 		return rhs;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Expression<? extends N> getLeftHandOperand() {
 		return lhs;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public void registerParameters(ParameterRegistry registry) {
 		Helper.possibleParameter( getRightHandOperand(), registry );
 		Helper.possibleParameter( getLeftHandOperand(), registry );
 	}
 
+	@Override
 	public String render(RenderingContext renderingContext) {
 		return getOperator().apply(
 				( (Renderable) getLeftHandOperand() ).render( renderingContext ),
@@ -235,6 +214,7 @@ public class BinaryArithmeticOperation<N extends Number>
 		);
 	}
 
+	@Override
 	public String renderProjection(RenderingContext renderingContext) {
 		return render( renderingContext );
 	}

@@ -1,30 +1,18 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2004-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.mapping;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
+import org.hibernate.boot.registry.StandardServiceRegistry;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.mapping.JoinedSubclass;
 import org.hibernate.mapping.PersistentClassVisitor;
 import org.hibernate.mapping.RootClass;
@@ -32,6 +20,7 @@ import org.hibernate.mapping.SingleTableSubclass;
 import org.hibernate.mapping.Subclass;
 import org.hibernate.mapping.UnionSubclass;
 import org.hibernate.testing.junit4.BaseUnitTestCase;
+import org.hibernate.testing.boot.MetadataBuildingContextTestingImpl;
 
 /**
  * Simple smoke style tests to make sure visitors keep working.
@@ -39,14 +28,29 @@ import org.hibernate.testing.junit4.BaseUnitTestCase;
  * @author max
  */
 public class PersistentClassVisitorTest extends BaseUnitTestCase {
+
+	private StandardServiceRegistry serviceRegistry;
+	private MetadataBuildingContext metadataBuildingContext;
+
+	@Before
+	public void prepare() {
+		serviceRegistry = new StandardServiceRegistryBuilder().build();
+		metadataBuildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
+	}
+
+	@After
+	public void release() {
+		StandardServiceRegistryBuilder.destroy( serviceRegistry );
+	}
+
 	@Test
 	public void testProperCallbacks() {
 		PersistentClassVisitorValidator vv = new PersistentClassVisitorValidator();
-		new RootClass().accept( vv );
-		new Subclass( new RootClass() ).accept( vv );
-		new JoinedSubclass( new RootClass() ).accept( vv );
-		new SingleTableSubclass( new RootClass() ).accept( vv );
-		new UnionSubclass( new RootClass() ).accept( vv );
+		new RootClass( metadataBuildingContext ).accept( vv );
+		new Subclass( new RootClass( metadataBuildingContext ), metadataBuildingContext ).accept( vv );
+		new JoinedSubclass( new RootClass( metadataBuildingContext ), metadataBuildingContext ).accept( vv );
+		new SingleTableSubclass( new RootClass( metadataBuildingContext ), metadataBuildingContext ).accept( vv );
+		new UnionSubclass( new RootClass( metadataBuildingContext ), metadataBuildingContext ).accept( vv );
 	}
 
 	static public class PersistentClassVisitorValidator implements PersistentClassVisitor {

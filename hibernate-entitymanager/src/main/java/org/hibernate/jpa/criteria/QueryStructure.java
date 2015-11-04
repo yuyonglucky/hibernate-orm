@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria;
 
@@ -49,7 +32,7 @@ import org.hibernate.jpa.criteria.path.RootImpl;
 
 /**
  * Models basic query structure.  Used as a delegate in implementing both
- * {@link org.hibernate.criterion.CriteriaQuery} and
+ * {@link javax.persistence.criteria.CriteriaQuery} and
  * {@link javax.persistence.criteria.Subquery}.
  * <p/>
  * Note the <tt>ORDER BY</tt> specs are neglected here.  That's because it is not valid
@@ -172,6 +155,9 @@ public class QueryStructure<T> implements Serializable {
 		if ( correlationRoots != null ) {
 			correlatedJoins = new HashSet<Join<?,?>>();
 			for ( FromImplementor<?,?> correlationRoot : correlationRoots ) {
+				if (correlationRoot instanceof Join<?,?> && correlationRoot.isCorrelated()) {
+					correlatedJoins.add( (Join<?,?>) correlationRoot );
+				}
 				correlatedJoins.addAll( correlationRoot.getJoins() );
 			}
 		}
@@ -294,7 +280,7 @@ public class QueryStructure<T> implements Serializable {
 		}
 
 		if ( implicitSelection == null ) {
-			throw new IllegalStateException( "No explicit selection and an implicit one cold not be determined" );
+			throw new IllegalStateException( "No explicit selection and an implicit one could not be determined" );
 		}
 
 		return implicitSelection;

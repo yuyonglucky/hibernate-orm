@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.event.spi;
 
@@ -27,7 +10,7 @@ import java.io.Serializable;
 import java.util.Set;
 
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.exception.AuditException;
 import org.hibernate.envers.internal.entities.RelationDescription;
 import org.hibernate.envers.internal.entities.RelationType;
@@ -47,15 +30,14 @@ import org.hibernate.proxy.HibernateProxy;
  * @author Michal Skowronek (mskowr at o2 dot pl)
  */
 public abstract class BaseEnversEventListener implements EnversListener {
-	private AuditConfiguration enversConfiguration;
+	private final EnversService enversService;
 
-	protected BaseEnversEventListener(AuditConfiguration enversConfiguration) {
-		this.enversConfiguration = enversConfiguration;
+	protected BaseEnversEventListener(EnversService enversService) {
+		this.enversService = enversService;
 	}
 
-	@Override
-	public AuditConfiguration getAuditConfiguration() {
-		return enversConfiguration;
+	protected EnversService getEnversService() {
+		return enversService;
 	}
 
 	protected final void generateBidirectionalCollectionChangeWorkUnits(
@@ -66,7 +48,7 @@ public abstract class BaseEnversEventListener implements EnversListener {
 			Object[] oldState,
 			SessionImplementor session) {
 		// Checking if this is enabled in configuration ...
-		if ( !enversConfiguration.getGlobalCfg().isGenerateRevisionsForCollections() ) {
+		if ( !enversService.getGlobalConfiguration().isGenerateRevisionsForCollections() ) {
 			return;
 		}
 
@@ -77,7 +59,7 @@ public abstract class BaseEnversEventListener implements EnversListener {
 
 		for ( int i = 0; i < propertyNames.length; i++ ) {
 			final String propertyName = propertyNames[i];
-			final RelationDescription relDesc = enversConfiguration.getEntCfg().getRelationDescription(
+			final RelationDescription relDesc = enversService.getEntitiesConfigurations().getRelationDescription(
 					entityName,
 					propertyName
 			);
@@ -120,11 +102,11 @@ public abstract class BaseEnversEventListener implements EnversListener {
 		else {
 			toEntityName = session.guessEntityName( value );
 
-			final IdMapper idMapper = enversConfiguration.getEntCfg().get( toEntityName ).getIdMapper();
+			final IdMapper idMapper = enversService.getEntitiesConfigurations().get( toEntityName ).getIdMapper();
 			id = (Serializable) idMapper.mapToIdFromEntity( value );
 		}
 
-		final Set<String> toPropertyNames = enversConfiguration.getEntCfg().getToPropertyNames(
+		final Set<String> toPropertyNames = enversService.getEntitiesConfigurations().getToPropertyNames(
 				fromEntityName,
 				relDesc.getFromPropertyName(),
 				toEntityName
@@ -133,8 +115,12 @@ public abstract class BaseEnversEventListener implements EnversListener {
 
 		auditProcess.addWorkUnit(
 				new CollectionChangeWorkUnit(
-						session, toEntityName,
-						toPropertyName, enversConfiguration, id, value
+						session,
+						toEntityName,
+						toPropertyName,
+						enversService,
+						id,
+						value
 				)
 		);
 	}

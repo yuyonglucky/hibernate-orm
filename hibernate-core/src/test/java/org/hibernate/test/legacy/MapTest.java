@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.legacy;
 import java.io.Serializable;
@@ -56,24 +39,24 @@ public class MapTest extends LegacyTestCase {
 		s.beginTransaction();
 		Map map = new HashMap();
 		map.put("$type$", "TestMap");
-		map.put("name", "foo");
-		map.put("address", "bar");
+		map.put( "name", "foo" );
+		map.put( "address", "bar" );
 		Map cmp = new HashMap();
-		cmp.put( "a", new Integer(1) );
-		cmp.put( "b", new Float(1.0) );
-		map.put("cmp", cmp);
-		s.save(map);
+		cmp.put( "a", new Integer( 1 ) );
+		cmp.put( "b", new Float( 1.0 ) );
+		map.put( "cmp", cmp );
+		s.save( map );
 		s.getTransaction().commit();
 		s.close();
 
 		s = openSession();
 		s.beginTransaction();
 		map = (Map) s.get( "TestMap", (Serializable) map.get("id") );
-		assertTrue( map!=null && "foo".equals( map.get("name") ) );
-		assertTrue( map.get("$type$").equals("TestMap") );
+		assertTrue( map != null && "foo".equals( map.get( "name" ) ) );
+		assertTrue( map.get( "$type$" ).equals( "TestMap" ) );
 
 		int size = s.createCriteria("TestMap").add( Example.create(map) ).list().size();
-		assertTrue(size==1);
+		assertTrue( size == 1 );
 		s.getTransaction().commit();
 		s.close();
 
@@ -84,12 +67,12 @@ public class MapTest extends LegacyTestCase {
 		assertTrue( "foo".equals( map.get("name") ) );
 		assertTrue( "bar".equals( map.get("address") ) );
 		cmp = (Map) map.get("cmp");
-		assertTrue( new Integer(1).equals( cmp.get("a") ) && new Float(1.0).equals( cmp.get("b") ) );
-		assertTrue( null==map.get("parent") );
-		map.put("name", "foobar");
-		map.put("parent", map);
+		assertTrue( new Integer( 1 ).equals( cmp.get( "a" ) ) && new Float( 1.0 ).equals( cmp.get( "b" ) ) );
+		assertTrue( null == map.get( "parent" ) );
+		map.put( "name", "foobar" );
+		map.put( "parent", map );
 		List bag = (List) map.get("children");
-		bag.add(map);
+		bag.add( map );
 		s.getTransaction().commit();
 		s.close();
 
@@ -109,8 +92,12 @@ public class MapTest extends LegacyTestCase {
 				.add( Restrictions.eq("name", "foobar") )
 			.list()
 			.size();
-		assertTrue(size==1);
+		assertTrue( size == 1 );
 
+		// for MySQL :(
+		map.put( "parent", null );
+		map.put( "children", null );
+		s.flush();
 		s.delete(map);
 		s.getTransaction().commit();
 		s.close();

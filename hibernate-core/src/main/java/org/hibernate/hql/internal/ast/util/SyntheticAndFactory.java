@@ -1,33 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.util;
 
 import java.util.Map;
-
-import antlr.collections.AST;
-import org.jboss.logging.Logger;
 
 import org.hibernate.hql.internal.antlr.HqlSqlTokenTypes;
 import org.hibernate.hql.internal.ast.HqlSqlWalker;
@@ -36,6 +15,7 @@ import org.hibernate.hql.internal.ast.tree.Node;
 import org.hibernate.hql.internal.ast.tree.QueryNode;
 import org.hibernate.hql.internal.ast.tree.RestrictableStatement;
 import org.hibernate.hql.internal.ast.tree.SqlFragment;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.param.CollectionFilterKeyParameterSpecification;
@@ -43,14 +23,15 @@ import org.hibernate.persister.entity.Queryable;
 import org.hibernate.sql.JoinFragment;
 import org.hibernate.type.Type;
 
+import antlr.collections.AST;
+
 /**
  * Creates synthetic and nodes based on the where fragment part of a JoinSequence.
  *
  * @author josh
  */
 public class SyntheticAndFactory implements HqlSqlTokenTypes {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, SyntheticAndFactory.class.getName());
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( SyntheticAndFactory.class );
 
 	private HqlSqlWalker hqlSqlWalker;
 	private AST thetaJoins;
@@ -61,7 +42,7 @@ public class SyntheticAndFactory implements HqlSqlTokenTypes {
 	}
 
 	private Node create(int tokenType, String text) {
-		return ( Node ) ASTUtil.create( hqlSqlWalker.getASTFactory(), tokenType, text );
+		return (Node) hqlSqlWalker.getASTFactory().create( tokenType, text );
 	}
 
 	public void addWhereFragment(
@@ -91,7 +72,7 @@ public class SyntheticAndFactory implements HqlSqlTokenTypes {
 
 		LOG.debugf( "Using unprocessed WHERE-fragment [%s]", whereFragment );
 
-		SqlFragment fragment = ( SqlFragment ) create( SQL_TOKEN, whereFragment );
+		SqlFragment fragment = (SqlFragment) create( SQL_TOKEN, whereFragment );
 		fragment.setJoinFragment( joinFragment );
 		fragment.setFromElement( fromElement );
 
@@ -147,7 +128,7 @@ public class SyntheticAndFactory implements HqlSqlTokenTypes {
 				// Create a new THETA_JOINS node as a parent of all filters
 				thetaJoins = create( THETA_JOINS, "{theta joins}" );
 				// Put the THETA_JOINS node before the HQL condition, after the filters.
-				if (filters==null) {
+				if ( filters == null ) {
 					ASTUtil.insertChild( where, thetaJoins );
 				}
 				else {
@@ -156,7 +137,7 @@ public class SyntheticAndFactory implements HqlSqlTokenTypes {
 			}
 
 			// add the current fragment to the THETA_JOINS node
-			thetaJoins.addChild(fragment);
+			thetaJoins.addChild( fragment );
 		}
 
 	}
@@ -176,7 +157,11 @@ public class SyntheticAndFactory implements HqlSqlTokenTypes {
 
 		// Need to parse off the column qualifiers; this is assuming (which is true as of now)
 		// that this is only used from update and delete HQL statement parsing
-		whereFragment = StringHelper.replace( whereFragment, persister.generateFilterConditionAlias( alias ) + ".", "" );
+		whereFragment = StringHelper.replace(
+				whereFragment,
+				persister.generateFilterConditionAlias( alias ) + ".",
+				""
+		);
 
 		// Note: this simply constructs a "raw" SQL_TOKEN representing the
 		// where fragment and injects this into the tree.  This "works";
@@ -185,7 +170,7 @@ public class SyntheticAndFactory implements HqlSqlTokenTypes {
 		// At some point we probably want to apply an additional grammar to
 		// properly tokenize this where fragment into constituent parts
 		// focused on the operators embedded within the fragment.
-		SqlFragment discrimNode = ( SqlFragment ) create( SQL_TOKEN, whereFragment );
+		SqlFragment discrimNode = (SqlFragment) create( SQL_TOKEN, whereFragment );
 
 		JoinProcessor.processDynamicFilterParameters(
 				whereFragment,

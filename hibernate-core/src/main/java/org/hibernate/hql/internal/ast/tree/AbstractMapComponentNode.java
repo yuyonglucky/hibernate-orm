@@ -1,34 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.tree;
 
 import java.util.Map;
 
-import antlr.SemanticException;
-import antlr.collections.AST;
-
-import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.hql.internal.antlr.HqlSqlTokenTypes;
 import org.hibernate.hql.internal.ast.util.ColumnHelper;
 import org.hibernate.internal.util.StringHelper;
@@ -36,16 +15,20 @@ import org.hibernate.persister.collection.QueryableCollection;
 import org.hibernate.type.CollectionType;
 import org.hibernate.type.Type;
 
+import antlr.SemanticException;
+import antlr.collections.AST;
+
 /**
  * Basic support for KEY, VALUE and ENTRY based "qualified identification variables".
  *
  * @author Steve Ebersole
  */
 public abstract class AbstractMapComponentNode extends FromReferenceNode implements HqlSqlTokenTypes {
+	private FromElement mapFromElement;
 	private String[] columns;
 
 	public FromReferenceNode getMapReference() {
-		return ( FromReferenceNode ) getFirstChild();
+		return (FromReferenceNode) getFirstChild();
 	}
 
 	public String[] getColumns() {
@@ -67,19 +50,19 @@ public abstract class AbstractMapComponentNode extends FromReferenceNode impleme
 			throw attemptedDereference();
 		}
 
-		FromReferenceNode mapReference = getMapReference();
+		final FromReferenceNode mapReference = getMapReference();
 		mapReference.resolve( true, true );
 
 		FromElement sourceFromElement = null;
 		if ( isAliasRef( mapReference ) ) {
-			QueryableCollection collectionPersister = mapReference.getFromElement().getQueryableCollection();
+			final QueryableCollection collectionPersister = mapReference.getFromElement().getQueryableCollection();
 			if ( Map.class.isAssignableFrom( collectionPersister.getCollectionType().getReturnedClass() ) ) {
 				sourceFromElement = mapReference.getFromElement();
 			}
 		}
 		else {
 			if ( mapReference.getDataType().isCollectionType() ) {
-				CollectionType collectionType = (CollectionType) mapReference.getDataType();
+				final CollectionType collectionType = (CollectionType) mapReference.getDataType();
 				if ( Map.class.isAssignableFrom( collectionType.getReturnedClass() ) ) {
 					sourceFromElement = mapReference.getFromElement();
 				}
@@ -90,11 +73,17 @@ public abstract class AbstractMapComponentNode extends FromReferenceNode impleme
 			throw nonMap();
 		}
 
+		mapFromElement = sourceFromElement;
+
 		setFromElement( sourceFromElement );
 		setDataType( resolveType( sourceFromElement.getQueryableCollection() ) );
 		this.columns = resolveColumns( sourceFromElement.getQueryableCollection() );
 		initText( this.columns );
 		setFirstChild( null );
+	}
+
+	public FromElement getMapFromElement() {
+		return mapFromElement;
 	}
 
 	private boolean isAliasRef(FromReferenceNode mapReference) {
@@ -124,5 +113,20 @@ public abstract class AbstractMapComponentNode extends FromReferenceNode impleme
 	@Override
 	public void resolveIndex(AST parent) throws SemanticException {
 		throw new UnsupportedOperationException( expressionDescription() + " expression cannot be the source for an index operation" );
+	}
+
+	protected MapKeyEntityFromElement findOrAddMapKeyEntityFromElement(QueryableCollection collectionPersister) {
+		if ( !collectionPersister.getIndexType().isEntityType() ) {
+			return null;
+		}
+
+
+		for ( FromElement destination : getFromElement().getDestinations() ) {
+			if ( destination instanceof MapKeyEntityFromElement ) {
+				return (MapKeyEntityFromElement) destination;
+			}
+		}
+
+		return MapKeyEntityFromElement.buildKeyJoin( getFromElement() );
 	}
 }

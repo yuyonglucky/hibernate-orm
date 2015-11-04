@@ -1,8 +1,14 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.readwriteexpression;
 
-import javax.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.util.List;
+import javax.persistence.EntityManager;
 
 import org.hibernate.dialect.Oracle8iDialect;
 import org.hibernate.envers.test.BaseEnversJPAFunctionalTestCase;
@@ -37,6 +43,7 @@ public class ReadWriteExpressionChange extends BaseEnversJPAFunctionalTestCase {
 	@Test
 	public void shouldRespectWriteExpression() {
 		EntityManager em = getEntityManager();
+		em.getTransaction().begin();
 		List resultList = em.createNativeQuery( "select size_in_cm from t_staff_AUD where id =" + id ).getResultList();
 		Assert.assertEquals( 1, resultList.size() );
 		Double sizeInCm = null;
@@ -46,6 +53,7 @@ public class ReadWriteExpressionChange extends BaseEnversJPAFunctionalTestCase {
 		else {
 			sizeInCm = (Double) resultList.get( 0 );
 		}
+		em.getTransaction().commit();
 		Assert.assertEquals( HEIGHT_CENTIMETERS, sizeInCm.doubleValue(), 0.00000001 );
 	}
 

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type.descriptor.java;
 import org.hibernate.type.descriptor.WrapperOptions;
@@ -35,16 +18,17 @@ public class ShortTypeDescriptor extends AbstractTypeDescriptor<Short> {
 	public ShortTypeDescriptor() {
 		super( Short.class );
 	}
-
+	@Override
 	public String toString(Short value) {
 		return value == null ? null : value.toString();
 	}
-
+	@Override
 	public Short fromString(String string) {
 		return Short.valueOf( string );
 	}
 
 	@SuppressWarnings({ "unchecked" })
+	@Override
 	public <X> X unwrap(Short value, Class<X> type, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -72,8 +56,7 @@ public class ShortTypeDescriptor extends AbstractTypeDescriptor<Short> {
 		}
 		throw unknownUnwrap( type );
 	}
-
-	@SuppressWarnings({ "UnnecessaryBoxing" })
+	@Override
 	public <X> Short wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -82,7 +65,7 @@ public class ShortTypeDescriptor extends AbstractTypeDescriptor<Short> {
 			return (Short) value;
 		}
 		if ( Number.class.isInstance( value ) ) {
-			return Short.valueOf( ( (Number) value ).shortValue() );
+			return ( (Number) value ).shortValue();
 		}
 		if ( String.class.isInstance( value ) ) {
 			return Short.valueOf( ( (String) value ) );

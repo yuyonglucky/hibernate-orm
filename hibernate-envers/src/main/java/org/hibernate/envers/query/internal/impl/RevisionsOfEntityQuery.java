@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.query.internal.impl;
 
@@ -28,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.hibernate.envers.RevisionType;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.configuration.internal.AuditEntitiesConfiguration;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
 import org.hibernate.envers.exception.AuditException;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
 import org.hibernate.envers.query.criteria.AuditCriterion;
@@ -44,28 +27,31 @@ public class RevisionsOfEntityQuery extends AbstractAuditQuery {
 	private final boolean selectDeletedEntities;
 
 	public RevisionsOfEntityQuery(
-			AuditConfiguration verCfg,
+			EnversService enversService,
 			AuditReaderImplementor versionsReader,
-			Class<?> cls, boolean selectEntitiesOnly,
+			Class<?> cls,
+			boolean selectEntitiesOnly,
 			boolean selectDeletedEntities) {
-		super( verCfg, versionsReader, cls );
+		super( enversService, versionsReader, cls );
 
 		this.selectEntitiesOnly = selectEntitiesOnly;
 		this.selectDeletedEntities = selectDeletedEntities;
 	}
 
 	public RevisionsOfEntityQuery(
-			AuditConfiguration verCfg,
-			AuditReaderImplementor versionsReader, Class<?> cls, String entityName,
-			boolean selectEntitiesOnly, boolean selectDeletedEntities) {
-		super( verCfg, versionsReader, cls, entityName );
+			EnversService enversService,
+			AuditReaderImplementor versionsReader,
+			Class<?> cls, String entityName,
+			boolean selectEntitiesOnly,
+			boolean selectDeletedEntities) {
+		super( enversService, versionsReader, cls, entityName );
 
 		this.selectEntitiesOnly = selectEntitiesOnly;
 		this.selectDeletedEntities = selectDeletedEntities;
 	}
 
 	private Number getRevisionNumber(Map versionsEntity) {
-		AuditEntitiesConfiguration verEntCfg = verCfg.getAuditEntCfg();
+		AuditEntitiesConfiguration verEntCfg = enversService.getAuditEntitiesConfiguration();
 
 		String originalId = verEntCfg.getOriginalIdPropName();
 		String revisionPropertyName = verEntCfg.getRevisionFieldName();
@@ -77,13 +63,13 @@ public class RevisionsOfEntityQuery extends AbstractAuditQuery {
 		}
 		else {
 			// Not a proxy - must be read from cache or with a join
-			return verCfg.getRevisionInfoNumberReader().getRevisionNumber( revisionInfoObject );
+			return enversService.getRevisionInfoNumberReader().getRevisionNumber( revisionInfoObject );
 		}
 	}
 
 	@SuppressWarnings({"unchecked"})
 	public List list() throws AuditException {
-		AuditEntitiesConfiguration verEntCfg = verCfg.getAuditEntCfg();
+		AuditEntitiesConfiguration verEntCfg = enversService.getAuditEntitiesConfiguration();
 
         /*
 		The query that should be executed in the versions table:
@@ -100,7 +86,7 @@ public class RevisionsOfEntityQuery extends AbstractAuditQuery {
 
 		// all specified conditions, transformed
 		for ( AuditCriterion criterion : criterions ) {
-			criterion.addToQuery( verCfg, versionsReader, entityName, qb, qb.getRootParameters() );
+			criterion.addToQuery( enversService, versionsReader, entityName, qb, qb.getRootParameters() );
 		}
 
 		if ( !hasProjection && !hasOrder ) {
@@ -109,9 +95,9 @@ public class RevisionsOfEntityQuery extends AbstractAuditQuery {
 		}
 
 		if ( !selectEntitiesOnly ) {
-			qb.addFrom( verCfg.getAuditEntCfg().getRevisionInfoEntityName(), "r" );
+			qb.addFrom( enversService.getAuditEntitiesConfiguration().getRevisionInfoEntityName(), "r" );
 			qb.getRootParameters().addWhere(
-					verCfg.getAuditEntCfg().getRevisionNumberPath(),
+					enversService.getAuditEntitiesConfiguration().getRevisionNumberPath(),
 					true,
 					"=",
 					"r.id",

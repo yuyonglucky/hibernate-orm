@@ -1,37 +1,21 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.jdbc.batch.internal;
+
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Map;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.HibernateException;
 import org.hibernate.engine.jdbc.batch.spi.BatchKey;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.internal.CoreMessageLogger;
+
+import org.jboss.logging.Logger;
 
 /**
  * A {@link org.hibernate.engine.jdbc.batch.spi.Batch} implementation which does bathing based on a given size.  Once
@@ -49,6 +33,7 @@ public class BatchingBatch extends AbstractBatchImpl {
 
 	private final int batchSize;
 	private int batchPosition;
+	private boolean batchExecuted;
 	private int statementPosition;
 
 	/**
@@ -95,6 +80,7 @@ public class BatchingBatch extends AbstractBatchImpl {
 				notifyObserversImplicitExecution();
 				performExecution();
 				batchPosition = 0;
+				batchExecuted = true;
 			}
 			statementPosition = 0;
 		}
@@ -102,25 +88,35 @@ public class BatchingBatch extends AbstractBatchImpl {
 
 	@Override
 	protected void doExecuteBatch() {
-		if ( batchPosition == 0 ) {
-			LOG.debug( "No batched statements to execute" );
+		if (batchPosition == 0 ) {
+			if(! batchExecuted) {
+				LOG.debug( "No batched statements to execute" );
+			}
 		}
 		else {
-			LOG.debugf( "Executing batch size: %s", batchPosition );
 			performExecution();
 		}
 	}
 
 	private void performExecution() {
+		LOG.debugf( "Executing batch size: %s", batchPosition );
 		try {
 			for ( Map.Entry<String,PreparedStatement> entry : getStatements().entrySet() ) {
 				try {
 					final PreparedStatement statement = entry.getValue();
-					checkRowCounts( statement.executeBatch(), statement );
+					final int[] rowCounts;
+					try {
+						getJdbcCoordinator().getJdbcSessionOwner().getJdbcSessionContext().getObserver().jdbcExecuteBatchStart();
+						rowCounts = statement.executeBatch();
+					}
+					finally {
+						getJdbcCoordinator().getJdbcSessionOwner().getJdbcSessionContext().getObserver().jdbcExecuteBatchEnd();
+					}
+					checkRowCounts( rowCounts, statement );
 				}
 				catch ( SQLException e ) {
-					LOG.debug( "SQLException escaped proxy", e );
-					throw sqlExceptionHelper().convert( e, "could not perform addBatch", entry.getKey() );
+					abortBatch();
+					throw sqlExceptionHelper().convert( e, "could not execute batch", entry.getKey() );
 				}
 			}
 		}

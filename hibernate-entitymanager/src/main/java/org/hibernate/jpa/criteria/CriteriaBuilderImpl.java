@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009, 2012 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria;
 
@@ -28,6 +11,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,7 +35,8 @@ import javax.persistence.criteria.Selection;
 import javax.persistence.criteria.SetJoin;
 import javax.persistence.criteria.Subquery;
 
-import org.hibernate.jpa.internal.EntityManagerFactoryImpl;
+import org.hibernate.internal.util.StringHelper;
+import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.jpa.criteria.expression.BinaryArithmeticOperation;
 import org.hibernate.jpa.criteria.expression.CoalesceExpression;
 import org.hibernate.jpa.criteria.expression.CompoundSelectionImpl;
@@ -94,6 +79,7 @@ import org.hibernate.jpa.criteria.predicate.IsEmptyPredicate;
 import org.hibernate.jpa.criteria.predicate.LikePredicate;
 import org.hibernate.jpa.criteria.predicate.MemberOfPredicate;
 import org.hibernate.jpa.criteria.predicate.NullnessPredicate;
+import org.hibernate.jpa.internal.EntityManagerFactoryImpl;
 
 /**
  * Hibernate implementation of the JPA {@link CriteriaBuilder} contract.
@@ -148,31 +134,36 @@ public class CriteriaBuilderImpl implements CriteriaBuilder, Serializable {
 	// selections ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	/**
-	 * Package-protected method to centralize checking of criteria query
-	 * multiselects as defined by the
+	 * Package-protected method to centralize checking of criteria query multi-selects as defined by the
 	 * {@link CriteriaQuery#multiselect(List)}  method.
 	 *
 	 * @param selections The selection varargs to check
 	 *
-	 * @throws IllegalArgumentException If, as per
-	 * {@link CriteriaQuery#multiselect(List)} documentation,
+	 * @throws IllegalArgumentException If the selection items are not valid per {@link CriteriaQuery#multiselect}
+	 * documentation.
 	 * <i>&quot;An argument to the multiselect method must not be a tuple-
      * or array-valued compound selection item.&quot;</i>
 	 */
 	void checkMultiselect(List<Selection<?>> selections) {
+		final HashSet<String> aliases = new HashSet<String>( CollectionHelper.determineProperSizing( selections.size() ) );
+
 		for ( Selection<?> selection : selections ) {
 			if ( selection.isCompoundSelection() ) {
 				if ( selection.getJavaType().isArray() ) {
 					throw new IllegalArgumentException(
-							"multiselect selections cannot contain " +
-									"compound array-valued elements"
+							"Selection items in a multi-select cannot contain compound array-valued elements"
 					);
 				}
 				if ( Tuple.class.isAssignableFrom( selection.getJavaType() ) ) {
 					throw new IllegalArgumentException(
-							"multiselect selections cannot contain " +
-									"compound tuple-valued elements"
+							"Selection items in a multi-select cannot contain compound tuple-valued elements"
 					);
+				}
+			}
+			if ( StringHelper.isNotEmpty( selection.getAlias() ) ) {
+				boolean added = aliases.add( selection.getAlias() );
+				if ( ! added ) {
+					throw new IllegalArgumentException( "Multi-select expressions defined duplicate alias : " + selection.getAlias() );
 				}
 			}
 		}

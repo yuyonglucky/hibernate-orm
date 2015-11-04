@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.jpa;
 
@@ -27,6 +10,7 @@ import java.io.Serializable;
 import java.util.IdentityHashMap;
 import javax.persistence.EntityNotFoundException;
 
+import org.hibernate.boot.Metadata;
 import org.hibernate.boot.registry.BootstrapServiceRegistryBuilder;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
@@ -44,9 +28,9 @@ import org.hibernate.event.spi.FlushEntityEventListener;
 import org.hibernate.event.spi.FlushEventListener;
 import org.hibernate.event.spi.PersistEventListener;
 import org.hibernate.integrator.spi.Integrator;
-import org.hibernate.metamodel.source.MetadataImplementor;
 import org.hibernate.proxy.EntityNotFoundDelegate;
 import org.hibernate.service.spi.SessionFactoryServiceRegistry;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 
 /**
@@ -70,20 +54,12 @@ public abstract class AbstractJPATest extends BaseCoreFunctionalTestCase {
 
 	@Override
 	protected void prepareBootstrapRegistryBuilder(BootstrapServiceRegistryBuilder builder) {
-		builder.with(
+		builder.applyIntegrator(
 				new Integrator() {
 
 					@Override
 					public void integrate(
-							Configuration configuration,
-							SessionFactoryImplementor sessionFactory,
-							SessionFactoryServiceRegistry serviceRegistry) {
-						integrate( serviceRegistry );
-					}
-
-					@Override
-					public void integrate(
-							MetadataImplementor metadata,
+							Metadata metadata,
 							SessionFactoryImplementor sessionFactory,
 							SessionFactoryServiceRegistry serviceRegistry) {
 						integrate( serviceRegistry );
@@ -107,13 +83,6 @@ public abstract class AbstractJPATest extends BaseCoreFunctionalTestCase {
 				}
 		);
 	}
-
-	@Override
-	public String getCacheConcurrencyStrategy() {
-		// no second level caching
-		return null;
-	}
-
 
 	// mimic specific exception aspects of the JPA environment ~~~~~~~~~~~~~~~~
 

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.dataTypes;
 
@@ -29,6 +12,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Date;
+import java.util.Locale;
 
 import org.junit.Test;
 
@@ -129,10 +113,10 @@ public class BasicOperationsTest extends BaseCoreFunctionalTestCase {
 			String columnNamePattern = generateFinalNamePattern( meta, columnName );
 
 			ResultSet columnInfo = meta.getColumns( null, null, tableNamePattern, columnNamePattern );
-			s.getTransactionCoordinator().getJdbcCoordinator().register(columnInfo, columnInfo.getStatement());
+			s.getJdbcCoordinator().getResourceRegistry().register(columnInfo, columnInfo.getStatement());
 			assertTrue( columnInfo.next() );
 			int dataType = columnInfo.getInt( "DATA_TYPE" );
-			s.getTransactionCoordinator().getJdbcCoordinator().release( columnInfo, columnInfo.getStatement() );
+			s.getJdbcCoordinator().getResourceRegistry().release( columnInfo, columnInfo.getStatement() );
 			assertEquals(
 					columnName,
 					JdbcTypeNameMapper.getTypeName( expectedJdbcTypeCode ),
@@ -142,7 +126,7 @@ public class BasicOperationsTest extends BaseCoreFunctionalTestCase {
 
 		private String generateFinalNamePattern(DatabaseMetaData meta, String name) throws SQLException {
 			if ( meta.storesLowerCaseIdentifiers() ) {
-				return name.toLowerCase();
+				return name.toLowerCase(Locale.ROOT);
 			}
 			else {
 				return name;
@@ -164,9 +148,9 @@ public class BasicOperationsTest extends BaseCoreFunctionalTestCase {
 		}
 
 		public void execute(Connection connection) throws SQLException {
-			Statement st = s.getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().createStatement();
-			s.getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( st, "SELECT COUNT(*) FROM " + table );
-			ResultSet result = s.getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( st, "SELECT COUNT(*) FROM " + table );
+			Statement st = s.getJdbcCoordinator().getStatementPreparer().createStatement();
+			s.getJdbcCoordinator().getResultSetReturn().extract( st, "SELECT COUNT(*) FROM " + table );
+			ResultSet result = s.getJdbcCoordinator().getResultSetReturn().extract( st, "SELECT COUNT(*) FROM " + table );
 			result.next();
 			int rowCount = result.getInt( 1 );
 			assertEquals( "Unexpected row count", expectedRowCount, rowCount );

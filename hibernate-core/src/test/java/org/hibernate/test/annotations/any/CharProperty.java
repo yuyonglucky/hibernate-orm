@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.annotations.any;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
@@ -12,7 +18,6 @@ public class CharProperty implements Property {
 
 	private String name;
 
-    @Column(name = "`value`")
 	private Character value;
 
 	public CharProperty() {
@@ -43,6 +48,7 @@ public class CharProperty implements Property {
 		this.id = id;
 	}
 
+	@Column(name = "`value`")
 	public Character getValue() {
 		return value;
 	}

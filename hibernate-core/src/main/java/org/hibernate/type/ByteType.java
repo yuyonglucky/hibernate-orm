@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type;
 
@@ -37,19 +20,18 @@ import org.hibernate.type.descriptor.sql.TinyIntTypeDescriptor;
  * @author Gavin King
  * @author Steve Ebersole
  */
-@SuppressWarnings({ "UnnecessaryBoxing" })
 public class ByteType
 		extends AbstractSingleColumnStandardBasicType<Byte>
 		implements PrimitiveType<Byte>, DiscriminatorType<Byte>, VersionType<Byte> {
 
 	public static final ByteType INSTANCE = new ByteType();
 
-	private static final Byte ZERO = Byte.valueOf( (byte)0 );
+	private static final Byte ZERO = (byte) 0;
 
 	public ByteType() {
 		super( TinyIntTypeDescriptor.INSTANCE, ByteTypeDescriptor.INSTANCE );
 	}
-
+	@Override
 	public String getName() {
 		return "byte";
 	}
@@ -58,36 +40,35 @@ public class ByteType
 	public String[] getRegistrationKeys() {
 		return new String[] { getName(), byte.class.getName(), Byte.class.getName() };
 	}
-
+	@Override
 	public Serializable getDefaultValue() {
 		return ZERO;
 	}
-
+	@Override
 	public Class getPrimitiveClass() {
 		return byte.class;
 	}
-
+	@Override
 	public String objectToSQLString(Byte value, Dialect dialect) {
 		return toString( value );
 	}
-
+	@Override
 	public Byte stringToObject(String xml) {
 		return fromString( xml );
 	}
-
+	@Override
 	public Byte fromStringValue(String xml) {
 		return fromString( xml );
 	}
-
-	@SuppressWarnings({ "UnnecessaryUnboxing" })
+	@Override
 	public Byte next(Byte current, SessionImplementor session) {
-		return Byte.valueOf( (byte) ( current.byteValue() + 1 ) );
+		return (byte) ( current + 1 );
 	}
-
+	@Override
 	public Byte seed(SessionImplementor session) {
 		return ZERO;
 	}
-
+	@Override
 	public Comparator<Byte> getComparator() {
 		return getJavaTypeDescriptor().getComparator();
 	}

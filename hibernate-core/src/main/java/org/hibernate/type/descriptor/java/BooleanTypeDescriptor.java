@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type.descriptor.java;
 
@@ -58,16 +41,17 @@ public class BooleanTypeDescriptor extends AbstractTypeDescriptor<Boolean> {
 		stringValueTrue = String.valueOf( characterValueTrue );
 		stringValueFalse = String.valueOf( characterValueFalse );
 	}
-
+	@Override
 	public String toString(Boolean value) {
 		return value == null ? null : value.toString();
 	}
-
+	@Override
 	public Boolean fromString(String string) {
 		return Boolean.valueOf( string );
 	}
 
 	@SuppressWarnings({ "unchecked" })
+	@Override
 	public <X> X unwrap(Boolean value, Class<X> type, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -95,8 +79,7 @@ public class BooleanTypeDescriptor extends AbstractTypeDescriptor<Boolean> {
 		}
 		throw unknownUnwrap( type );
 	}
-
-	@SuppressWarnings({ "UnnecessaryUnboxing" })
+	@Override
 	public <X> Boolean wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -109,7 +92,7 @@ public class BooleanTypeDescriptor extends AbstractTypeDescriptor<Boolean> {
 			return intValue == 0 ? FALSE : TRUE;
 		}
 		if ( Character.class.isInstance( value ) ) {
-			return isTrue( ( (Character) value ).charValue() ) ? TRUE : FALSE;
+			return isTrue( (Character) value ) ? TRUE : FALSE;
 		}
 		if ( String.class.isInstance( value ) ) {
 			return isTrue( ( (String) value ).charAt( 0 ) ) ? TRUE : FALSE;
@@ -125,23 +108,19 @@ public class BooleanTypeDescriptor extends AbstractTypeDescriptor<Boolean> {
 		return value ? 1 : 0;
 	}
 
-	@SuppressWarnings({ "UnnecessaryBoxing" })
 	public Byte toByte(Boolean value) {
-		return Byte.valueOf( (byte) toInt( value ) );
+		return (byte) toInt( value );
 	}
 
-	@SuppressWarnings({ "UnnecessaryBoxing" })
 	public Short toShort(Boolean value) {
-		return Short.valueOf( (short ) toInt( value ) );
+		return (short) toInt( value );
 	}
 
-	@SuppressWarnings({ "UnnecessaryBoxing" })
 	public Integer toInteger(Boolean value) {
-		return Integer.valueOf( toInt( value ) );
+		return toInt( value );
 	}
 
-	@SuppressWarnings({ "UnnecessaryBoxing" })
 	public Long toLong(Boolean value) {
-		return Long.valueOf( toInt( value ) );
+		return (long) toInt( value );
 	}
 }

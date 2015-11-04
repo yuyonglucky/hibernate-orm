@@ -1,11 +1,19 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
+
 //$Id$
 package org.hibernate.test.annotations.polymorphism;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.Inheritance;
 import javax.persistence.InheritanceType;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
 
 import org.hibernate.annotations.PolymorphismType;
 
@@ -15,9 +23,26 @@ import org.hibernate.annotations.PolymorphismType;
 @Entity
 @Inheritance(strategy= InheritanceType.TABLE_PER_CLASS)
 @org.hibernate.annotations.Entity(polymorphism = PolymorphismType.EXPLICIT)
-public class Car extends MovingThing {
-	private Integer id;
+public class Car extends Automobile {
+	
+	@Id
+	@GeneratedValue
+	private long id;
+
 	private String model;
+	
+	@ManyToOne
+	// purposefully refer to a non-PK column (HHH-7915)
+	@JoinColumn( referencedColumnName = "REGION_CODE")
+	private MarketRegion marketRegion;
+
+	public long getId() {
+		return id;
+	}
+
+	public void setId(long id) {
+		this.id = id;
+	}
 
 	public String getModel() {
 		return model;
@@ -27,12 +52,11 @@ public class Car extends MovingThing {
 		this.model = model;
 	}
 
-	@Id @GeneratedValue(strategy = GenerationType.TABLE )
-	public Integer getId() {
-		return id;
+	public MarketRegion getMarketRegion() {
+		return marketRegion;
 	}
 
-	public void setId(Integer id) {
-		this.id = id;
+	public void setMarketRegion(MarketRegion marketRegion) {
+		this.marketRegion = marketRegion;
 	}
 }

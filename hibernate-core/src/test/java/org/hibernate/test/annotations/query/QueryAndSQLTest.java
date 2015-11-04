@@ -1,52 +1,39 @@
-//$Id$
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009, Red Hat, Inc. and/or its affiliates or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat, Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
+
+//$Id$
+
 package org.hibernate.test.annotations.query;
 
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
-
-import org.junit.Test;
+import java.util.Locale;
 
 import org.hibernate.MappingException;
 import org.hibernate.Query;
 import org.hibernate.SQLQuery;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
+import org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.dialect.PostgreSQL81Dialect;
 import org.hibernate.dialect.PostgreSQLDialect;
 import org.hibernate.dialect.function.SQLFunction;
 import org.hibernate.stat.Statistics;
-import org.hibernate.test.annotations.A320;
-import org.hibernate.test.annotations.A320b;
-import org.hibernate.test.annotations.Plane;
+
 import org.hibernate.testing.FailureExpected;
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.hibernate.test.annotations.A320;
+import org.hibernate.test.annotations.A320b;
+import org.hibernate.test.annotations.Plane;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -242,6 +229,7 @@ public class QueryAndSQLTest extends BaseCoreFunctionalTestCase {
 		tx = s.beginTransaction();
 		Statistics stats = sessionFactory().getStatistics();
 		stats.setStatisticsEnabled( true );
+		stats.clear();
 		Query q = s.getNamedQuery( "night&areaCached" );
 		q.setCacheable( true );
 		List result = q.list();
@@ -396,7 +384,7 @@ public class QueryAndSQLTest extends BaseCoreFunctionalTestCase {
 		chaos.setId( 1l );
 
 		String lowerName = "hello";
-		String upperName = lowerName.toUpperCase();
+		String upperName = lowerName.toUpperCase(Locale.ROOT);
 		assertFalse( lowerName.equals( upperName ) );
 
 		chaos.setName( "hello" );
@@ -404,9 +392,9 @@ public class QueryAndSQLTest extends BaseCoreFunctionalTestCase {
 		s.persist( chaos );
 		s.flush();
 		s.clear();
-		s.getSessionFactory().evict( Chaos.class );
+		s.getSessionFactory().getCache().evictEntityRegion( Chaos.class );
 
-		Chaos resultChaos = (Chaos) s.load( Chaos.class, chaos.getId() );
+		Chaos resultChaos = s.load( Chaos.class, chaos.getId() );
 		assertEquals( upperName, resultChaos.getName() );
 		assertEquals( "nickname", resultChaos.getNickname() );
 
@@ -436,16 +424,16 @@ public class QueryAndSQLTest extends BaseCoreFunctionalTestCase {
 		chaos.getParticles().add( p );
 		s.flush();
 		s.clear();
-		s.getSessionFactory().evict( Chaos.class );
+		s.getSessionFactory().getCache().evictEntityRegion( Chaos.class );
 
-		Chaos resultChaos = (Chaos) s.load( Chaos.class, chaos.getId() );
+		Chaos resultChaos = s.load( Chaos.class, chaos.getId() );
 		assertEquals( 2, resultChaos.getParticles().size() );
 		resultChaos.getParticles().remove( resultChaos.getParticles().iterator().next() );
 		resultChaos.getParticles().remove( resultChaos.getParticles().iterator().next() );
 		s.flush();
 
 		s.clear();
-		resultChaos = (Chaos) s.load( Chaos.class, chaos.getId() );
+		resultChaos = s.load( Chaos.class, chaos.getId() );
 		assertEquals( 0, resultChaos.getParticles().size() );
 
 		tx.rollback();
@@ -468,7 +456,11 @@ public class QueryAndSQLTest extends BaseCoreFunctionalTestCase {
 				Captain.class,
 				Chaos.class,
 				CasimirParticle.class,
-				AllTables.class
+				AllTables.class,
+				Attrset.class,
+				Attrvalue.class,
+				Employee.class,
+				Employeegroup.class
 		};
 	}
 
@@ -489,5 +481,6 @@ public class QueryAndSQLTest extends BaseCoreFunctionalTestCase {
 	@Override
 	protected void configure(Configuration cfg) {
 		cfg.setProperty( "hibernate.cache.use_query_cache", "true" );
+		cfg.setImplicitNamingStrategy( ImplicitNamingStrategyLegacyJpaImpl.INSTANCE );
 	}
 }

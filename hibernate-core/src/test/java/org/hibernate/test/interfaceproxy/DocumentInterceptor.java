@@ -1,3 +1,10 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
+
 //$Id: DocumentInterceptor.java 7860 2005-08-11 21:58:23Z oneovthafew $
 package org.hibernate.test.interfaceproxy;
 import java.io.Serializable;
@@ -14,7 +21,6 @@ import org.hibernate.type.Type;
  * @author Gavin King
  */
 public class DocumentInterceptor implements Interceptor {
-
 
 	public boolean onLoad(Object entity, Serializable id, Object[] state,
 			String[] propertyNames, Type[] types) throws CallbackException {
@@ -91,4 +97,5 @@ public class DocumentInterceptor implements Interceptor {
 	public void onCollectionRecreate(Object collection, Serializable key) throws CallbackException {}
 	public void onCollectionRemove(Object collection, Serializable key) throws CallbackException {}
 	public void onCollectionUpdate(Object collection, Serializable key) throws CallbackException {}
+
 }

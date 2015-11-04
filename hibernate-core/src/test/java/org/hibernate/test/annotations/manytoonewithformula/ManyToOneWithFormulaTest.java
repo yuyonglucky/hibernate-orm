@@ -1,29 +1,9 @@
 /*
-  * Hibernate, Relational Persistence for Idiomatic Java
-  *
-  * Copyright (c) 2009, Red Hat, Inc. and/or its affiliates or third-
-  * party contributors as indicated by the @author tags or express
-  * copyright attribution statements applied by the authors.
-  * All third-party contributions are distributed under license by
-  * Red Hat, Inc.
-  *
-  * This copyrighted material is made available to anyone wishing to
-  * use, modify, copy, or redistribute it subject to the terms and
-  * conditions of the GNU Lesser General Public License, as published
-  * by the Free Software Foundation.
-  *
-  * This program is distributed in the hope that it will be useful,
-  * but WITHOUT ANY WARRANTY; without even the implied warranty of
-  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  * Lesser General Public License for more details.
-  *
-  * You should have received a copy of the GNU Lesser General Public
-  * License along with this distribution; if not, write to:
-  *
-  * Free Software Foundation, Inc.
-  * 51 Franklin Street, Fifth Floor
-  * Boston, MA  02110-1301  USA
-  */
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.annotations.manytoonewithformula;
 
 import static org.junit.Assert.assertEquals;
@@ -35,6 +15,7 @@ import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.HSQLDialect;
 import org.hibernate.dialect.Oracle8iDialect;
 import org.hibernate.dialect.SQLServer2005Dialect;
+import org.hibernate.dialect.TeradataDialect;
 import org.hibernate.testing.RequiresDialect;
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.SkipForDialects;
@@ -159,7 +140,9 @@ public class ManyToOneWithFormulaTest extends BaseCoreFunctionalTestCase {
 			@SkipForDialect( value = { HSQLDialect.class }, comment = "The used join conditions does not work in HSQLDB. See HHH-4497." ), 
 			@SkipForDialect( value = { SQLServer2005Dialect.class } ),
 			@SkipForDialect( value = { Oracle8iDialect.class }, comment = "Oracle/DB2 do not support 'substring' function" ),
-			@SkipForDialect( value = { DB2Dialect.class }, comment = "Oracle/DB2 do not support 'substring' function" ) } )
+			@SkipForDialect( value = { DB2Dialect.class }, comment = "Oracle/DB2 do not support 'substring' function" ),
+			@SkipForDialect( value = {TeradataDialect.class }, comment = "Teradata doesn't support substring(?,?,?). \"substr\" would work." ),
+	} )
 	public void testManyToOneFromNonPkToNonPk() throws Exception {
 		// also tests usage of the stand-alone @JoinFormula annotation (i.e. not wrapped within @JoinColumnsOrFormulas)
 		Session s = openSession();

@@ -1,29 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.util;
-import java.util.Stack;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 import antlr.collections.AST;
 
@@ -35,7 +19,6 @@ import antlr.collections.AST;
  * @author Strong Liu
  * 
  */
-
 public class NodeTraverser {
 	public static interface VisitationStrategy {
 		public void visit( AST node );
@@ -65,24 +48,24 @@ public class NodeTraverser {
 		}
 		visitDepthFirst( ast.getFirstChild() );
 	}
-	
-	private void visitDepthFirst(AST ast){
-		if(ast==null){
+
+	private void visitDepthFirst(AST ast) {
+		if ( ast == null ) {
 			return;
 		}
-		Stack stack = new Stack();
-		if ( ast != null ) {
-			stack.push( ast );
-			while (!stack.empty()) {
-				ast = (AST) stack.pop();
-				strategy.visit( ast );
-				if ( ast.getNextSibling() != null ) 
-					stack.push( ast.getNextSibling() );
-				if ( ast.getFirstChild() != null ) 
-					stack.push( ast.getFirstChild() );
+		Deque<AST> stack = new ArrayDeque<AST>();
+		stack.addLast( ast );
+		while ( !stack.isEmpty() ) {
+			ast = stack.removeLast();
+			strategy.visit( ast );
+			if ( ast.getNextSibling() != null ) {
+				stack.addLast( ast.getNextSibling() );
+			}
+			if ( ast.getFirstChild() != null ) {
+				stack.addLast( ast.getFirstChild() );
 			}
 		}
 	}
 
-	
+
 }

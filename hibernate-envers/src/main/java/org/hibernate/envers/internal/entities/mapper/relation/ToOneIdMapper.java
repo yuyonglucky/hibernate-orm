@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.entities.mapper.relation;
 
@@ -28,7 +11,7 @@ import java.util.Map;
 
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.entities.PropertyData;
 import org.hibernate.envers.internal.entities.mapper.id.IdMapper;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
@@ -45,17 +28,23 @@ public class ToOneIdMapper extends AbstractToOneMapper {
 	private final String referencedEntityName;
 	private final boolean nonInsertableFake;
 
-	public ToOneIdMapper(IdMapper delegate, PropertyData propertyData, String referencedEntityName,
-						 boolean nonInsertableFake) {
-		super( propertyData );
+	public ToOneIdMapper(
+			IdMapper delegate,
+			PropertyData propertyData,
+			String referencedEntityName,
+			boolean nonInsertableFake) {
+		super( delegate.getServiceRegistry(), propertyData );
 		this.delegate = delegate;
 		this.referencedEntityName = referencedEntityName;
 		this.nonInsertableFake = nonInsertableFake;
 	}
 
 	@Override
-	public boolean mapToMapFromEntity(SessionImplementor session, Map<String, Object> data, Object newObj,
-									  Object oldObj) {
+	public boolean mapToMapFromEntity(
+			SessionImplementor session,
+			Map<String, Object> data,
+			Object newObj,
+			Object oldObj) {
 		final HashMap<String, Object> newData = new HashMap<String, Object>();
 
 		// If this property is originally non-insertable, but made insertable because it is in a many-to-one "fake"
@@ -71,8 +60,11 @@ public class ToOneIdMapper extends AbstractToOneMapper {
 	}
 
 	@Override
-	public void mapModifiedFlagsToMapFromEntity(SessionImplementor session, Map<String, Object> data, Object newObj,
-												Object oldObj) {
+	public void mapModifiedFlagsToMapFromEntity(
+			SessionImplementor session,
+			Map<String, Object> data,
+			Object newObj,
+			Object oldObj) {
 		if ( getPropertyData().isUsingModifiedFlag() ) {
 			data.put( getPropertyData().getModifiedFlagPropertyName(), checkModified( session, newObj, oldObj ) );
 		}
@@ -94,8 +86,13 @@ public class ToOneIdMapper extends AbstractToOneMapper {
 	}
 
 	@Override
-	public void nullSafeMapToEntityFromMap(AuditConfiguration verCfg, Object obj, Map data, Object primaryKey,
-										   AuditReaderImplementor versionsReader, Number revision) {
+	public void nullSafeMapToEntityFromMap(
+			EnversService enversService,
+			Object obj,
+			Map data,
+			Object primaryKey,
+			AuditReaderImplementor versionsReader,
+			Number revision) {
 		final Object entityId = delegate.mapToIdFromMap( data );
 		Object value = null;
 		if ( entityId != null ) {
@@ -103,26 +100,34 @@ public class ToOneIdMapper extends AbstractToOneMapper {
 				value = versionsReader.getFirstLevelCache().get( referencedEntityName, revision, entityId );
 			}
 			else {
-				final EntityInfo referencedEntity = getEntityInfo( verCfg, referencedEntityName );
+				final EntityInfo referencedEntity = getEntityInfo( enversService, referencedEntityName );
 				boolean ignoreNotFound = false;
 				if ( !referencedEntity.isAudited() ) {
-					final String referencingEntityName = verCfg.getEntCfg().getEntityNameForVersionsEntityName( (String) data.get( "$type$" ) );
-					ignoreNotFound = verCfg.getEntCfg().get( referencingEntityName ).getRelationDescription( getPropertyData().getName() ).isIgnoreNotFound();
+					final String referencingEntityName = enversService.getEntitiesConfigurations().getEntityNameForVersionsEntityName( (String) data.get( "$type$" ) );
+					ignoreNotFound = enversService.getEntitiesConfigurations().getRelationDescription( referencingEntityName, getPropertyData().getName() ).isIgnoreNotFound();
 				}
 				if ( ignoreNotFound ) {
 					// Eagerly loading referenced entity to silence potential (in case of proxy)
 					// EntityNotFoundException or ObjectNotFoundException. Assigning null reference.
 					value = ToOneEntityLoader.loadImmediate(
-							versionsReader, referencedEntity.getEntityClass(), referencedEntityName,
-							entityId, revision, RevisionType.DEL.equals( data.get( verCfg.getAuditEntCfg().getRevisionTypePropName() ) ),
-							verCfg
+							versionsReader,
+							referencedEntity.getEntityClass(),
+							referencedEntityName,
+							entityId,
+							revision,
+							RevisionType.DEL.equals( data.get( enversService.getAuditEntitiesConfiguration().getRevisionTypePropName() ) ),
+							enversService
 					);
 				}
 				else {
 					value = ToOneEntityLoader.createProxyOrLoadImmediate(
-							versionsReader, referencedEntity.getEntityClass(), referencedEntityName,
-							entityId, revision, RevisionType.DEL.equals( data.get( verCfg.getAuditEntCfg().getRevisionTypePropName() ) ),
-							verCfg
+							versionsReader,
+							referencedEntity.getEntityClass(),
+							referencedEntityName,
+							entityId,
+							revision,
+							RevisionType.DEL.equals( data.get( enversService.getAuditEntitiesConfiguration().getRevisionTypePropName() ) ),
+							enversService
 					);
 				}
 			}
@@ -131,8 +136,12 @@ public class ToOneIdMapper extends AbstractToOneMapper {
 		setPropertyValue( obj, value );
 	}
 
-	public void addMiddleEqualToQuery(Parameters parameters, String idPrefix1, String prefix1,
-									  String idPrefix2, String prefix2) {
+	public void addMiddleEqualToQuery(
+			Parameters parameters,
+			String idPrefix1,
+			String prefix1,
+			String idPrefix2,
+			String prefix2) {
 		delegate.addIdsEqualToQuery( parameters, prefix1, delegate, prefix2 );
 	}
 }

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.query.spi;
 
@@ -33,16 +16,14 @@ import java.util.Map;
 import org.hibernate.HibernateException;
 import org.hibernate.QueryException;
 import org.hibernate.action.internal.BulkOperationCleanupAction;
-import org.hibernate.engine.query.spi.sql.NativeSQLQuerySpecification;
 import org.hibernate.engine.spi.QueryParameters;
-import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.TypedValue;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.collections.ArrayHelper;
-import org.hibernate.loader.custom.sql.SQLCustomQuery;
+import org.hibernate.loader.custom.CustomQuery;
 import org.hibernate.type.Type;
 
 /**
@@ -54,31 +35,24 @@ public class NativeSQLQueryPlan implements Serializable {
 	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( NativeSQLQueryPlan.class );
 
 	private final String sourceQuery;
-	private final SQLCustomQuery customQuery;
+	private final CustomQuery customQuery;
 
 	/**
-	 * Constructs a NativeSQLQueryPlan
-	 *
-	 * @param specification The query spec
-	 * @param factory The SessionFactory
-	 */
-	public NativeSQLQueryPlan(
-			NativeSQLQuerySpecification specification,
-			SessionFactoryImplementor factory) {
-		this.sourceQuery = specification.getQueryString();
-		this.customQuery = new SQLCustomQuery(
-				specification.getQueryString(),
-				specification.getQueryReturns(),
-				specification.getQuerySpaces(),
-				factory
-		);
+	  * Constructs a NativeSQLQueryPlan.
+	  *
+	  * @param sourceQuery The original native query to create a plan for
+	  * @param customQuery The query executed via this plan
+	  */
+	public NativeSQLQueryPlan(String sourceQuery, CustomQuery customQuery) {
+		this.sourceQuery = sourceQuery;
+		this.customQuery = customQuery;
 	}
 
 	public String getSourceQuery() {
 		return sourceQuery;
 	}
 
-	public SQLCustomQuery getCustomQuery() {
+	public CustomQuery getCustomQuery() {
 		return customQuery;
 	}
 
@@ -211,17 +185,18 @@ public class NativeSQLQueryPlan implements Serializable {
 			queryParameters.processFilters( this.customQuery.getSQL(), session );
 			final String sql = queryParameters.getFilteredSQL();
 
-			ps = session.getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().prepareStatement( sql, false );
+			ps = session.getJdbcCoordinator().getStatementPreparer().prepareStatement( sql, false );
 
 			try {
 				int col = 1;
 				col += bindPositionalParameters( ps, queryParameters, col, session );
 				col += bindNamedParameters( ps, queryParameters.getNamedParameters(), col, session );
-				result = session.getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().executeUpdate( ps );
+				result = session.getJdbcCoordinator().getResultSetReturn().executeUpdate( ps );
 			}
 			finally {
 				if ( ps != null ) {
-					session.getTransactionCoordinator().getJdbcCoordinator().release( ps );
+					session.getJdbcCoordinator().getResourceRegistry().release( ps );
+					session.getJdbcCoordinator().afterStatementExecution();
 				}
 			}
 		}

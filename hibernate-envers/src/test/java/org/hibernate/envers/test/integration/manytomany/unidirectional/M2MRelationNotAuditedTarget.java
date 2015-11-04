@@ -1,32 +1,15 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.test.integration.manytomany.unidirectional;
 
-import javax.persistence.EntityManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import javax.persistence.EntityManager;
 
 import org.hibernate.envers.test.BaseEnversJPAFunctionalTestCase;
 import org.hibernate.envers.test.Priority;
@@ -35,7 +18,7 @@ import org.hibernate.envers.test.entities.manytomany.unidirectional.M2MTargetNot
 
 import org.junit.Test;
 
-import static org.hibernate.envers.test.tools.TestTools.checkList;
+import static org.hibernate.envers.test.tools.TestTools.checkCollection;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -153,10 +136,10 @@ public class M2MRelationNotAuditedTarget extends BaseEnversJPAFunctionalTestCase
 		M2MTargetNotAuditedEntity rev3 = getAuditReader().find( M2MTargetNotAuditedEntity.class, tnae1_id, 3 );
 		M2MTargetNotAuditedEntity rev4 = getAuditReader().find( M2MTargetNotAuditedEntity.class, tnae1_id, 4 );
 
-		assertTrue( checkList( rev1.getReferences() ) );
-		assertTrue( checkList( rev2.getReferences(), uste1 ) );
-		assertTrue( checkList( rev3.getReferences(), uste1 ) );
-		assertTrue( checkList( rev4.getReferences(), uste1, uste2 ) );
+		assertTrue( checkCollection( rev1.getReferences() ) );
+		assertTrue( checkCollection( rev2.getReferences(), uste1 ) );
+		assertTrue( checkCollection( rev3.getReferences(), uste1 ) );
+		assertTrue( checkCollection( rev4.getReferences(), uste1, uste2 ) );
 	}
 
 	@Test
@@ -169,9 +152,9 @@ public class M2MRelationNotAuditedTarget extends BaseEnversJPAFunctionalTestCase
 		M2MTargetNotAuditedEntity rev3 = getAuditReader().find( M2MTargetNotAuditedEntity.class, tnae2_id, 3 );
 		M2MTargetNotAuditedEntity rev4 = getAuditReader().find( M2MTargetNotAuditedEntity.class, tnae2_id, 4 );
 
-		assertTrue( checkList( rev1.getReferences(), uste1, uste2 ) );
-		assertTrue( checkList( rev2.getReferences(), uste2 ) );
-		assertTrue( checkList( rev3.getReferences() ) );
-		assertTrue( checkList( rev4.getReferences(), uste1 ) );
+		assertTrue( checkCollection( rev1.getReferences(), uste1, uste2 ) );
+		assertTrue( checkCollection( rev2.getReferences(), uste2 ) );
+		assertTrue( checkCollection( rev3.getReferences() ) );
+		assertTrue( checkCollection( rev4.getReferences(), uste1 ) );
 	}
 }

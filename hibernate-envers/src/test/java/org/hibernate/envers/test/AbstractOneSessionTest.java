@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test;
 
 import java.io.File;
@@ -14,11 +20,10 @@ import org.hibernate.envers.AuditReaderFactory;
 import org.hibernate.envers.configuration.EnversSettings;
 import org.hibernate.service.ServiceRegistry;
 
-import org.junit.Before;
-
 import org.hibernate.testing.AfterClassOnce;
 import org.hibernate.testing.BeforeClassOnce;
 import org.hibernate.testing.ServiceRegistryBuilder;
+import org.junit.Before;
 
 /**
  * Base class for testing envers with Session when the same session and

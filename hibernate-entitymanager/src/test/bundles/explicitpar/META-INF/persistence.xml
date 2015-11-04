@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Hibernate, Relational Persistence for Idiomatic Java
+  ~
+  ~ License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+  ~ See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+  -->
 <persistence xmlns="http://java.sun.com/xml/ns/persistence"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_2_0.xsd"
@@ -27,7 +33,7 @@
             <property name="hibernate.hbm2ddl.auto" value="create-drop"/>
             <property name="hibernate.generate_statistics" value="true"/>
 			<property name="hibernate.cache.region.factory_class" value="org.hibernate.testing.cache.CachingRegionFactory" />
-            <property name="hibernate.ejb.naming_strategy" value="org.hibernate.jpa.test.MyNamingStrategy"/>
+            <property name="hibernate.physical_naming_strategy" value="org.hibernate.jpa.test.MyNamingStrategy"/>
             <!-- test naming strategy and fall back to element content -->
             <!-- property name="hibernate.ejb.naming_strategy">MyNamingStrategy</property -->
 

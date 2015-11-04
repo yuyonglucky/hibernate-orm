@@ -1,38 +1,20 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.hql;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
-
-import junit.framework.AssertionFailedError;
+import java.util.TreeSet;
 
 import org.hibernate.QueryException;
 import org.hibernate.Session;
@@ -43,14 +25,23 @@ import org.hibernate.dialect.MySQLDialect;
 import org.hibernate.exception.ConstraintViolationException;
 import org.hibernate.id.BulkInsertionCapableIdentifierGenerator;
 import org.hibernate.id.IdentifierGenerator;
+import org.hibernate.jdbc.Work;
 import org.hibernate.persister.entity.EntityPersister;
+
 import org.hibernate.testing.DialectChecks;
+import org.hibernate.testing.FailureExpected;
 import org.hibernate.testing.RequiresDialectFeature;
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.SkipLog;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
+import junit.framework.AssertionFailedError;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Tests execution of bulk UPDATE/DELETE statements through the new AST parser.
@@ -71,6 +62,10 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 				"hql/BooleanLiteralEntity.hbm.xml",
 				"hql/CompositeIdEntity.hbm.xml"
 		};
+	}
+
+	protected Class<?>[] getAnnotatedClasses() {
+		return new Class<?>[] { Farm.class, Crop.class };
 	}
 
 	@Test
@@ -208,6 +203,126 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 
 		data.cleanup();
 	}
+
+	@Test
+    public void testSelectWithNamedParamProjection() {
+        Session s = openSession();
+        try {
+            s.createQuery("select :someParameter, id from Car");
+            fail("Should throw an unsupported exception");
+        } catch(QueryException q) {
+            // allright
+        } finally {
+            s.close();
+        }
+    }
+
+	@Test
+    public void testSimpleInsertWithNamedParam() {
+		TestData data = new TestData();
+		data.prepare();
+
+		Session s = openSession();
+		Transaction t = s.beginTransaction();
+
+		org.hibernate.Query q = s.createQuery( "insert into Pickup (id, owner, vin) select id, :owner, vin from Car" );
+		q.setParameter("owner", "owner");
+
+		q.executeUpdate();
+
+		t.commit();
+		t = s.beginTransaction();
+
+		s.createQuery( "delete Vehicle" ).executeUpdate();
+
+		t.commit();
+		s.close();
+
+		data.cleanup();
+	}
+
+	@Test
+    public void testInsertWithMultipleNamedParams() {
+		TestData data = new TestData();
+		data.prepare();
+
+		Session s = openSession();
+		Transaction t = s.beginTransaction();
+
+		org.hibernate.Query q = s.createQuery( "insert into Pickup (id, owner, vin) select :id, owner, :vin from Car" );
+		q.setParameter("id", 5l);
+        q.setParameter("vin", "some");
+
+		q.executeUpdate();
+
+		t.commit();
+		t = s.beginTransaction();
+
+		s.createQuery( "delete Vehicle" ).executeUpdate();
+
+		t.commit();
+		s.close();
+
+		data.cleanup();
+	}
+	
+	@Test
+    public void testInsertWithSubqueriesAndNamedParams() {
+		TestData data = new TestData();
+		data.prepare();
+
+		Session s = openSession();
+		Transaction t = s.beginTransaction();
+
+		org.hibernate.Query q = s.createQuery( "insert into Pickup (id, owner, vin) select :id, (select a.description from Animal a where a.description = :description), :vin from Car" );
+		q.setParameter("id", 5l);
+        q.setParameter("description", "Frog");
+        q.setParameter("vin", "some");
+
+		q.executeUpdate();
+
+		t.commit();
+		t = s.beginTransaction();
+
+        try {
+            org.hibernate.Query q1 = s.createQuery( "insert into Pickup (id, owner, vin) select :id, (select :description from Animal a where a.description = :description), :vin from Car" );
+            fail("Unsupported exception should have been thrown");
+        } catch(QueryException e) {
+            assertTrue(e.getMessage().indexOf("Use of parameters in subqueries of INSERT INTO DML statements is not supported.") > -1);
+        }
+
+        t.commit();
+        t = s.beginTransaction();
+
+		s.createQuery( "delete Vehicle" ).executeUpdate();
+
+		t.commit();
+		s.close();
+
+		data.cleanup();
+	}
+
+	@Test
+    public void testSimpleInsertTypeMismatchException() {
+
+        Session s = openSession();
+        try {
+            org.hibernate.Query q = s.createQuery( "insert into Pickup (id, owner, vin) select id, :owner, id from Car" );
+            fail("Parameter type mismatch but no exception thrown");
+        } catch (Throwable throwable) {
+            assertTrue(throwable instanceof QueryException);
+            String m = throwable.getMessage();
+            // insertion type [org.hibernate.type.StringType@21e3cc77] and selection type [org.hibernate.type.LongType@7284aa02] at position 2 are not compatible [insert into Pickup (id, owner, vin) select id, :owner, id from org.hibernate.test.hql.Car]
+            int st = m.indexOf("org.hibernate.type.StringType");
+            int lt = m.indexOf("org.hibernate.type.LongType");
+            assertTrue("type causing error not reported", st > -1);
+            assertTrue("type causing error not reported", lt > -1);
+            assertTrue(lt > st);
+            assertTrue("wrong position of type error reported", m.indexOf("position 2") > -1);
+        } finally {
+            s.close();
+        }
+    }
 
 	@Test
 	public void testSimpleNativeSQLInsert() {
@@ -416,7 +531,6 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryUnboxing"})
 	@Test
 	public void testInsertWithGeneratedVersionAndId() {
 		// Make sure the env supports bulk inserts with generated ids...
@@ -466,7 +580,6 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryUnboxing"})
 	@RequiresDialectFeature(
 			value = DialectChecks.SupportsParametersInInsertSelectCheck.class,
 			comment = "dialect does not support parameter in INSERT ... SELECT"
@@ -701,7 +814,6 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryUnboxing"})
 	public void testUpdateOnComponent() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -792,7 +904,6 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryUnboxing"})
 	public void testUpdateOnDiscriminatorSubclass() {
 		TestData data = new TestData();
 		data.prepare();
@@ -1017,7 +1128,6 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryUnboxing"})
 	@RequiresDialectFeature(
 			value = DialectChecks.HasSelfReferentialForeignKeyBugCheck.class,
 			comment = "self referential FK bug"
@@ -1226,8 +1336,45 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 	}
 	
 	@Test
-	@TestForIssue( jiraKey = "HHH-1917" )
+	@TestForIssue( jiraKey = "HHH-8476" )
 	public void testManyToManyBulkDelete() {
+		Session s = openSession();
+		Transaction t = s.beginTransaction();
+
+		Farm farm1 = new Farm();
+		farm1.setName( "farm1" );
+		Crop crop = new Crop();
+		crop.setName( "crop1" );
+		farm1.setCrops( new ArrayList() );
+		farm1.getCrops().add( crop );
+		s.save( farm1 );
+
+		Farm farm2 = new Farm();
+		farm2.setName( "farm2" );
+		farm2.setCrops( new ArrayList() );
+		farm2.getCrops().add( crop );
+		s.save( farm2 );
+		
+		s.flush();
+		
+		try {
+			s.createQuery( "delete from Farm f where f.name='farm1'" ).executeUpdate();
+			assertEquals( s.createQuery( "from Farm" ).list().size(), 1 );
+			s.createQuery( "delete from Farm" ).executeUpdate();
+			assertEquals( s.createQuery( "from Farm" ).list().size(), 0 );
+		}
+		catch (ConstraintViolationException cve) {
+			fail("The join table was not cleared prior to the bulk delete.");
+		}
+		finally {
+			t.rollback();
+			s.close();
+		}
+	}
+	
+	@Test
+	@TestForIssue( jiraKey = "HHH-1917" )
+	public void testManyToManyBulkDeleteMultiTable() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
 
@@ -1244,7 +1391,9 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 		s.flush();
 		
 		try {
+			// multitable (joined subclass)
 			s.createQuery( "delete from Human" ).executeUpdate();
+			assertEquals( s.createQuery( "from Human" ).list().size(), 0 );
 		}
 		catch (ConstraintViolationException cve) {
 			fail("The join table was not cleared prior to the bulk delete.");
@@ -1254,6 +1403,144 @@ public class BulkManipulationTest extends BaseCoreFunctionalTestCase {
 			s.close();
 		}
 	}
+
+	@Test
+	@FailureExpected( jiraKey = "HHH-9282", message = "failed because HHH-9222 was reverted by HHH-9282")
+	public void testBulkDeleteOfEntityWithElementCollection() {
+		// set up test data
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			Farm farm = new Farm();
+			farm.setName( "Old McDonald Farm 'o the Earth" );
+			farm.setAccreditations( new HashSet<Farm.Accreditation>() );
+			farm.getAccreditations().add( Farm.Accreditation.ORGANIC );
+			farm.getAccreditations().add( Farm.Accreditation.SUSTAINABLE );
+			s.save( farm );
+			s.getTransaction().commit();
+			s.close();
+		}
+
+		// assertion that accreditations collection table got populated
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			s.doWork(
+					new Work() {
+						@Override
+						public void execute(Connection connection) throws SQLException {
+							final Statement statement = connection.createStatement();
+							final ResultSet resultSet = statement.executeQuery( "select count(*) from farm_accreditations" );
+							assertTrue( resultSet.next() );
+							final int count = resultSet.getInt( 1 );
+							assertEquals( 2, count );
+						}
+					}
+			);
+			s.getTransaction().commit();
+			s.close();
+		}
+
+		// do delete
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			s.createQuery( "delete Farm" ).executeUpdate();
+			s.getTransaction().commit();
+			s.close();
+		}
+
+		// assertion that accreditations collection table got cleaned up
+		//		if they didn't, the delete should have caused a constraint error, but just to be sure...
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			s.doWork(
+					new Work() {
+						@Override
+						public void execute(Connection connection) throws SQLException {
+							final Statement statement = connection.createStatement();
+							final ResultSet resultSet = statement.executeQuery( "select count(*) from farm_accreditations" );
+							assertTrue( resultSet.next() );
+							final int count = resultSet.getInt( 1 );
+							assertEquals( 0, count );
+						}
+					}
+			);
+			s.getTransaction().commit();
+			s.close();
+		}
+
+	}
+
+	@Test
+	@FailureExpected( jiraKey = "HHH-9282", message = "failed because HHH-9222 was reverted by HHH-9282")
+	public void testBulkDeleteOfMultiTableEntityWithElementCollection() {
+		// set up test data
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			Human human = new Human();
+			human.setNickNames( new TreeSet() );
+			human.getNickNames().add( "Johnny" );
+			s.save( human );
+			s.getTransaction().commit();
+			s.close();
+		}
+
+		// assertion that nickname collection table got populated
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			s.doWork(
+					new Work() {
+						@Override
+						public void execute(Connection connection) throws SQLException {
+							final Statement statement = connection.createStatement();
+							final ResultSet resultSet = statement.executeQuery( "select count(*) from human_nick_names" );
+							assertTrue( resultSet.next() );
+							final int count = resultSet.getInt( 1 );
+							assertEquals( 1, count );
+						}
+					}
+			);
+			s.getTransaction().commit();
+			s.close();
+		}
+
+		// do delete
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			s.createQuery( "delete Human" ).executeUpdate();
+			s.getTransaction().commit();
+			s.close();
+		}
+
+		// assertion that nickname collection table got cleaned up
+		//		if they didn't, the delete should have caused a constraint error, but just to be sure...
+		{
+			Session s = openSession();
+			s.beginTransaction();
+			s.doWork(
+					new Work() {
+						@Override
+						public void execute(Connection connection) throws SQLException {
+							final Statement statement = connection.createStatement();
+							final ResultSet resultSet = statement.executeQuery( "select count(*) from human_nick_names" );
+							assertTrue( resultSet.next() );
+							final int count = resultSet.getInt( 1 );
+							assertEquals( 0, count );
+						}
+					}
+			);
+			s.getTransaction().commit();
+			s.close();
+		}
+	}
+
+
+
 
 	private class TestData {
 

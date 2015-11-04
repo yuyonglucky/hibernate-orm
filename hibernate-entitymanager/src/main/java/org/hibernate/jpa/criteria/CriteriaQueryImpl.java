@@ -1,31 +1,15 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria;
 
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,17 +25,17 @@ import javax.persistence.criteria.Selection;
 import javax.persistence.criteria.Subquery;
 import javax.persistence.metamodel.EntityType;
 
-import org.jboss.logging.Logger;
-
-import org.hibernate.jpa.internal.QueryImpl;
 import org.hibernate.jpa.criteria.compile.CompilableCriteria;
 import org.hibernate.jpa.criteria.compile.CriteriaInterpretation;
 import org.hibernate.jpa.criteria.compile.CriteriaQueryTypeQueryAdapter;
 import org.hibernate.jpa.criteria.compile.ImplicitParameterBinding;
 import org.hibernate.jpa.criteria.compile.InterpretedParameterMetadata;
 import org.hibernate.jpa.criteria.compile.RenderingContext;
+import org.hibernate.jpa.internal.QueryImpl;
 import org.hibernate.jpa.spi.HibernateEntityManagerImplementor;
 import org.hibernate.type.Type;
+
+import org.jboss.logging.Logger;
 
 /**
  * The Hibernate implementation of the JPA {@link CriteriaQuery} contract.  Mostly a set of delegation to its
@@ -76,9 +60,7 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 		this.queryStructure = new QueryStructure<T>( this, criteriaBuilder );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Class<T> getResultType() {
 		return returnType;
 	}
@@ -86,24 +68,18 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 
 	// SELECTION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> distinct(boolean applyDistinction) {
 		queryStructure.setDistinct( applyDistinction );
 		return this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public boolean isDistinct() {
 		return queryStructure.isDistinct();
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public Selection<T> getSelection() {
 		return ( Selection<T> ) queryStructure.getSelection();
@@ -113,25 +89,19 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 		queryStructure.setSelection( selection );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> select(Selection<? extends T> selection) {
 		applySelection( selection );
 		return this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public CriteriaQuery<T> multiselect(Selection<?>... selections) {
 		return multiselect( Arrays.asList( selections ) );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public CriteriaQuery<T> multiselect(List<Selection<?>> selections) {
 		final Selection<? extends T> selection;
@@ -171,23 +141,17 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 
 	// ROOTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Set<Root<?>> getRoots() {
 		return queryStructure.getRoots();
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public <X> Root<X> from(EntityType<X> entityType) {
 		return queryStructure.from( entityType );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public <X> Root<X> from(Class<X> entityClass) {
 		return queryStructure.from( entityClass );
 	}
@@ -195,24 +159,18 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 
 	// RESTRICTION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Predicate getRestriction() {
 		return queryStructure.getRestriction();
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> where(Expression<Boolean> expression) {
 		queryStructure.setRestriction( criteriaBuilder().wrap( expression ) );
 		return this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> where(Predicate... predicates) {
 		// TODO : assuming this should be a conjuntion, but the spec does not say specifically...
 		queryStructure.setRestriction( criteriaBuilder().and( predicates ) );
@@ -222,44 +180,35 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 
 	// GROUPING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public List<Expression<?>> getGroupList() {
 		return queryStructure.getGroupings();
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> groupBy(Expression<?>... groupings) {
 		queryStructure.setGroupings( groupings );
 		return this;
 	}
 
+	@Override
 	public CriteriaQuery<T> groupBy(List<Expression<?>> groupings) {
 		queryStructure.setGroupings( groupings );
 		return this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Predicate getGroupRestriction() {
 		return queryStructure.getHaving();
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> having(Expression<Boolean> expression) {
 		queryStructure.setHaving( criteriaBuilder().wrap( expression ) );
 		return this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> having(Predicate... predicates) {
 		queryStructure.setHaving( criteriaBuilder().and( predicates ) );
 		return this;
@@ -268,16 +217,12 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 
 	// ORDERING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public List<Order> getOrderList() {
 		return orderSpecs;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> orderBy(Order... orders) {
 		if ( orders != null && orders.length > 0 ) {
 			orderSpecs = Arrays.asList( orders );
@@ -288,28 +233,23 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 		return this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public CriteriaQuery<T> orderBy(List<Order> orders) {
 		orderSpecs = orders;
 		return this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Set<ParameterExpression<?>> getParameters() {
 		return queryStructure.getParameters();
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public <U> Subquery<U> subquery(Class<U> subqueryType) {
 		return queryStructure.subquery( subqueryType );
 	}
 
+	@Override
 	public void validate() {
 		// getRoots() is explicitly supposed to return empty if none defined, no need to check for null
 		if ( getRoots().isEmpty() ) {
@@ -319,7 +259,7 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 		// if there is not an explicit selection, there is an *implicit* selection of the root entity provided only
 		// a single query root was defined.
 		if ( getSelection() == null && !hasImplicitSelection() ) {
-			throw new IllegalStateException( "No explicit selection and an implicit one cold not be determined" );
+			throw new IllegalStateException( "No explicit selection and an implicit one could not be determined" );
 		}
 	}
 
@@ -336,8 +276,8 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 		}
 
 		Root root = getRoots().iterator().next();
-        Class<?> javaType = root.getModel().getJavaType();
-        if ( javaType != null && javaType != returnType ) {
+		Class<?> javaType = root.getModel().getJavaType();
+		if ( javaType != null && javaType != returnType ) {
 			return false;
 		}
 
@@ -374,11 +314,13 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 			@SuppressWarnings("unchecked")
 			public Query buildCompiledQuery(HibernateEntityManagerImplementor entityManager, final InterpretedParameterMetadata parameterMetadata) {
 
+				final Map<String,Class> implicitParameterTypes = extractTypeMap( parameterMetadata.implicitParameterBindings() );
+
 				QueryImpl jpaqlQuery = entityManager.createQuery(
 						jpaqlString,
 						getResultType(),
 						getSelection(),
-						new HibernateEntityManagerImplementor.Options() {
+						new HibernateEntityManagerImplementor.QueryOptions() {
 							@Override
 							public List<ValueHandlerFactory.ValueHandler> getValueHandlers() {
 								SelectionImplementor selection = (SelectionImplementor) queryStructure.getSelection();
@@ -389,12 +331,12 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 
 							@Override
 							public Map<String, Class> getNamedParameterExplicitTypes() {
-								return parameterMetadata.implicitParameterTypes();
+								return implicitParameterTypes;
 							}
 
 							@Override
 							public ResultMetadataValidator getResultMetadataValidator() {
-								return new HibernateEntityManagerImplementor.Options.ResultMetadataValidator() {
+								return new HibernateEntityManagerImplementor.QueryOptions.ResultMetadataValidator() {
 									@Override
 									public void validate(Type[] returnTypes) {
 										SelectionImplementor selection = (SelectionImplementor) queryStructure.getSelection();
@@ -418,7 +360,8 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 											}
 										}
 									}
-								};							}
+								};
+							}
 						}
 				);
 
@@ -429,9 +372,16 @@ public class CriteriaQueryImpl<T> extends AbstractNode implements CriteriaQuery<
 				return new CriteriaQueryTypeQueryAdapter(
 						entityManager,
 						jpaqlQuery,
-						parameterMetadata.explicitParameterMapping(),
-						parameterMetadata.explicitParameterNameMapping()
+						parameterMetadata.explicitParameterInfoMap()
 				);
+			}
+
+			private Map<String, Class> extractTypeMap(List<ImplicitParameterBinding> implicitParameterBindings) {
+				final HashMap<String,Class> map = new HashMap<String, Class>();
+				for ( ImplicitParameterBinding implicitParameter : implicitParameterBindings ) {
+					map.put( implicitParameter.getParameterName(), implicitParameter.getJavaType() );
+				}
+				return map;
 			}
 		};
 	}

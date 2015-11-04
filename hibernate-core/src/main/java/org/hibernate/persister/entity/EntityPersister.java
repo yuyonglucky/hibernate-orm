@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.persister.entity;
 
@@ -38,6 +21,7 @@ import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
 import org.hibernate.cache.spi.entry.CacheEntry;
 import org.hibernate.cache.spi.entry.CacheEntryStructure;
 import org.hibernate.engine.spi.CascadeStyle;
+import org.hibernate.engine.spi.EntityEntryFactory;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.ValueInclusion;
@@ -45,7 +29,6 @@ import org.hibernate.id.IdentifierGenerator;
 import org.hibernate.internal.FilterAliasGenerator;
 import org.hibernate.metadata.ClassMetadata;
 import org.hibernate.persister.walking.spi.EntityDefinition;
-import org.hibernate.sql.ordering.antlr.ColumnMapper;
 import org.hibernate.tuple.entity.EntityMetamodel;
 import org.hibernate.tuple.entity.EntityTuplizer;
 import org.hibernate.type.Type;
@@ -56,6 +39,25 @@ import org.hibernate.type.VersionType;
  * persister instance corresponds to a given mapped entity class.
  * <p/>
  * Implementations must be thread-safe (preferably immutable).
+ * <p/>
+ * Unless a custom {@link org.hibernate.persister.spi.PersisterFactory} is used, it is expected
+ * that implementations of EntityPersister define a constructor accepting the following arguments:<ol>
+ *     <li>
+ *         {@link org.hibernate.mapping.PersistentClass} - describes the metadata about the entity
+ *         to be handled by the persister
+ *     </li>
+ *     <li>
+ *         {@link EntityRegionAccessStrategy} - the second level caching strategy for this entity
+ *     </li>
+ *     <li>
+ *         {@link NaturalIdRegionAccessStrategy} - the second level caching strategy for the natural-id
+ *         defined for this entity, if one
+ *     </li>
+ *     <li>
+ *         {@link org.hibernate.persister.spi.PersisterCreationContext} - access to additional
+ *         information useful while constructing the persister.
+ *     </li>
+ * </ol>
  *
  * @author Gavin King
  * @author Steve Ebersole
@@ -71,7 +73,14 @@ public interface EntityPersister extends OptimisticCacheSource, EntityDefinition
 	public static final String ENTITY_ID = "id";
 
 	/**
-	 * Finish the initialization of this object.
+	 * Generate the entity definition for this object. This must be done for all
+	 * entity persisters before calling {@link #postInstantiate()}.
+	 */
+	public void generateEntityDefinition();
+
+	/**
+	 * Finish the initialization of this object. {@link #generateEntityDefinition()}
+	 * must be called for all entity persisters before calling this method.
 	 * <p/>
 	 * Called only once per {@link org.hibernate.SessionFactory} lifecycle,
 	 * after all entity persisters have been instantiated.
@@ -91,6 +100,13 @@ public interface EntityPersister extends OptimisticCacheSource, EntityDefinition
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // stuff that is persister-centric and/or EntityInfo-centric ~~~~~~~~~~~~~~
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	/**
+	 * Get the EntityEntryFactory indicated for the entity mapped by this persister.
+	 *
+	 * @return The proper EntityEntryFactory.
+	 */
+	public EntityEntryFactory getEntityEntryFactory();
 
 	/**
 	 * Returns an object that identifies the space in which identifiers of
@@ -411,12 +427,18 @@ public interface EntityPersister extends OptimisticCacheSource, EntityDefinition
 
 	/**
 	 * Which of the properties of this class are database generated values on insert?
+	 *
+	 * @deprecated Replaced internally with InMemoryValueGenerationStrategy / InDatabaseValueGenerationStrategy
 	 */
+	@Deprecated
 	public ValueInclusion[] getPropertyInsertGenerationInclusions();
 
 	/**
 	 * Which of the properties of this class are database generated values on update?
+	 *
+	 * @deprecated Replaced internally with InMemoryValueGenerationStrategy / InDatabaseValueGenerationStrategy
 	 */
+	@Deprecated
 	public ValueInclusion[] getPropertyUpdateGenerationInclusions();
 
 	/**
@@ -674,6 +696,7 @@ public interface EntityPersister extends OptimisticCacheSource, EntityDefinition
 	 *
 	 * @deprecated Use {@link #getIdentifier(Object,SessionImplementor)} instead
 	 */
+	@Deprecated
 	@SuppressWarnings( {"JavaDoc"})
 	public Serializable getIdentifier(Object object) throws HibernateException;
 
@@ -759,4 +782,15 @@ public interface EntityPersister extends OptimisticCacheSource, EntityDefinition
 	public EntityInstrumentationMetadata getInstrumentationMetadata();
 	
 	public FilterAliasGenerator getFilterAliasGenerator(final String rootAlias);
+
+	/**
+	 * Converts an array of attribute names to a set of indexes, according to the entity metamodel
+	 *
+	 * @param attributeNames Array of names to be resolved
+	 *
+	 * @return A set of unique indexes of the attribute names found in the metamodel
+	 */
+	public int[] resolveAttributeIndexes(String[] attributeNames);
+
+	public boolean canUseReferenceCacheEntries();
 }

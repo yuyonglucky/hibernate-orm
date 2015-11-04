@@ -1,32 +1,17 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.tools;
 
 import java.util.Iterator;
+import java.util.Locale;
 
 /**
  * @author Adam Warski (adam at warski dot org)
+ * @author Lukasz Zuchowski (author at zuchos dot com)
  */
 public abstract class StringTools {
 	public static boolean isEmpty(String s) {
@@ -41,7 +26,7 @@ public abstract class StringTools {
 	 * @param s String, from which to get the last component.
 	 *
 	 * @return The last component of the dot-separated string <code>s</code>. For example, for a string
-	 *         "a.b.c", the result is "c".
+	 * "a.b.c", the result is "c".
 	 */
 	public static String getLastComponent(String s) {
 		if ( s == null ) {
@@ -73,5 +58,16 @@ public abstract class StringTools {
 			sb.append( contents.next() );
 			isFirst = false;
 		}
+	}
+
+	/**
+	 * Capitalizes first letter of the string
+	 *
+	 * @param fieldName
+	 *
+	 * @return capitalized string
+	 */
+	public static String capitalizeFirst(String fieldName) {
+		return fieldName.substring( 0, 1 ).toUpperCase( Locale.ROOT ) + fieldName.substring( 1 );
 	}
 }

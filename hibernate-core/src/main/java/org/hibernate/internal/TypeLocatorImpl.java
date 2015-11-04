@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.internal;
 import java.io.Serializable;
@@ -45,16 +28,12 @@ public class TypeLocatorImpl implements TypeHelper, Serializable {
 		this.typeResolver = typeResolver;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public BasicType basic(String name) {
 		return typeResolver.basic( name );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public BasicType basic(Class javaType) {
 		BasicType type = typeResolver.basic( javaType.getName() );
 		if ( type == null ) {
@@ -134,38 +113,28 @@ public class TypeLocatorImpl implements TypeHelper, Serializable {
 		return null;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Type heuristicType(String name) {
 		return typeResolver.heuristicType( name );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Type entity(Class entityClass) {
 		return entity( entityClass.getName() );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Type entity(String entityName) {
 		return typeResolver.getTypeFactory().manyToOne( entityName );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public Type custom(Class userTypeClass) {
 		return custom( userTypeClass, null );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public Type custom(Class userTypeClass, Properties parameters) {
 		if ( CompositeUserType.class.isAssignableFrom( userTypeClass ) ) {
@@ -176,9 +145,7 @@ public class TypeLocatorImpl implements TypeHelper, Serializable {
 		}
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Type any(Type metaType, Type identifierType) {
 		return typeResolver.getTypeFactory().any( metaType, identifierType );
 	}

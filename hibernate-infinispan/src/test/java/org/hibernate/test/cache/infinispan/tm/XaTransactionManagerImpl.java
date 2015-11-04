@@ -1,23 +1,8 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2009, Red Hat, Inc. and/or it's affiliates, and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
+ * Hibernate, Relational Persistence for Idiomatic Java
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.cache.infinispan.tm;
 import javax.transaction.HeuristicMixedException;
@@ -38,41 +23,44 @@ import javax.transaction.TransactionManager;
  */
 public class XaTransactionManagerImpl implements TransactionManager {
    private static final XaTransactionManagerImpl INSTANCE = new XaTransactionManagerImpl();
-   private XaTransactionImpl currentTransaction;
+   private final ThreadLocal<XaTransactionImpl> currentTransaction = new ThreadLocal<>();
 
    public static XaTransactionManagerImpl getInstance() {
       return INSTANCE;
    }
 
    public int getStatus() throws SystemException {
+      XaTransactionImpl currentTransaction = this.currentTransaction.get();
       return currentTransaction == null ? Status.STATUS_NO_TRANSACTION : currentTransaction.getStatus();
    }
 
    public Transaction getTransaction() throws SystemException {
-      return currentTransaction;
+      return currentTransaction.get();
    }
 
    public XaTransactionImpl getCurrentTransaction() {
-      return currentTransaction;
+      return currentTransaction.get();
    }
 
    public void begin() throws NotSupportedException, SystemException {
-      currentTransaction = new XaTransactionImpl(this);
+      if (currentTransaction.get() != null) throw new IllegalStateException("Transaction already started.");
+      currentTransaction.set(new XaTransactionImpl(this));
    }
 
    public Transaction suspend() throws SystemException {
-      Transaction suspended = currentTransaction;
-      currentTransaction = null;
+      Transaction suspended = currentTransaction.get();
+      currentTransaction.remove();
       return suspended;
    }
 
    public void resume(Transaction transaction) throws InvalidTransactionException, IllegalStateException,
             SystemException {
-      currentTransaction = (XaTransactionImpl) transaction;
+      currentTransaction.set((XaTransactionImpl) transaction);
    }
 
    public void commit() throws RollbackException, HeuristicMixedException, HeuristicRollbackException,
             SecurityException, IllegalStateException, SystemException {
+      XaTransactionImpl currentTransaction = this.currentTransaction.get();
       if (currentTransaction == null) {
          throw new IllegalStateException("no current transaction to commit");
       }
@@ -80,6 +68,7 @@ public class XaTransactionManagerImpl implements TransactionManager {
    }
 
    public void rollback() throws IllegalStateException, SecurityException, SystemException {
+      XaTransactionImpl currentTransaction = this.currentTransaction.get();
       if (currentTransaction == null) {
          throw new IllegalStateException("no current transaction");
       }
@@ -87,6 +76,7 @@ public class XaTransactionManagerImpl implements TransactionManager {
    }
 
    public void setRollbackOnly() throws IllegalStateException, SystemException {
+      XaTransactionImpl currentTransaction = this.currentTransaction.get();
       if (currentTransaction == null) {
          throw new IllegalStateException("no current transaction");
       }
@@ -97,8 +87,6 @@ public class XaTransactionManagerImpl implements TransactionManager {
    }
 
    void endCurrent(Transaction transaction) {
-      if (transaction == currentTransaction) {
-         currentTransaction = null;
-      }
+      currentTransaction.remove();
    }
 }

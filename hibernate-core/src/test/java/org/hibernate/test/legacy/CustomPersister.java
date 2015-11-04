@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.legacy;
 
 import java.io.Serializable;
@@ -18,9 +24,10 @@ import org.hibernate.cache.spi.entry.CacheEntryStructure;
 import org.hibernate.cache.spi.entry.StandardCacheEntryImpl;
 import org.hibernate.cache.spi.entry.UnstructuredCacheEntry;
 import org.hibernate.cfg.NotYetImplementedException;
+import org.hibernate.engine.internal.MutableEntityEntryFactory;
 import org.hibernate.engine.internal.TwoPhaseLoad;
 import org.hibernate.engine.spi.CascadeStyle;
-import org.hibernate.engine.spi.Mapping;
+import org.hibernate.engine.spi.EntityEntryFactory;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.ValueInclusion;
@@ -35,6 +42,7 @@ import org.hibernate.internal.util.compare.EqualsHelper;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.metadata.ClassMetadata;
 import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.persister.spi.PersisterCreationContext;
 import org.hibernate.persister.walking.spi.AttributeDefinition;
 import org.hibernate.persister.walking.spi.EntityIdentifierDefinition;
 import org.hibernate.tuple.entity.EntityMetamodel;
@@ -51,13 +59,13 @@ public class CustomPersister implements EntityPersister {
 
 	private SessionFactoryImplementor factory;
 
+	@SuppressWarnings("UnusedParameters")
 	public CustomPersister(
 			PersistentClass model,
 			EntityRegionAccessStrategy cacheAccessStrategy,
 			NaturalIdRegionAccessStrategy naturalIdRegionAccessStrategy,
-			SessionFactoryImplementor factory,
-			Mapping mapping) {
-		this.factory = factory;
+			PersisterCreationContext creationContext) {
+		this.factory = creationContext.getSessionFactory();
 	}
 
 	public boolean hasLazyProperties() {
@@ -73,8 +81,17 @@ public class CustomPersister implements EntityPersister {
 	}
 
 	@Override
+	public EntityEntryFactory getEntityEntryFactory() {
+		return MutableEntityEntryFactory.INSTANCE;
+	}
+
+	@Override
 	public Class getMappedClass() {
 		return Custom.class;
+	}
+
+	@Override
+	public void generateEntityDefinition() {
 	}
 
 	public void postInstantiate() throws MappingException {}
@@ -688,5 +705,15 @@ public class CustomPersister implements EntityPersister {
 	@Override
 	public Iterable<AttributeDefinition> getAttributes() {
 		throw new NotYetImplementedException();
+	}
+
+    @Override
+    public int[] resolveAttributeIndexes(String[] attributeNames) {
+        return null;
+    }
+
+	@Override
+	public boolean canUseReferenceCacheEntries() {
+		return false;  //To change body of implemented methods use File | Settings | File Templates.
 	}
 }

@@ -1,29 +1,10 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.sql.autodiscovery;
-
-import static org.junit.Assert.assertEquals;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -33,12 +14,17 @@ import java.sql.SQLException;
 import java.util.List;
 
 import org.hibernate.Session;
+import org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl;
+import org.hibernate.cfg.Configuration;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.jdbc.Work;
 import org.hibernate.loader.custom.NonUniqueDiscoveredSqlAliasException;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Assert;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * @author Steve Ebersole
@@ -49,6 +35,12 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 					"from t_membership m " +
 					"        inner join t_user u on m.member_id = u.id " +
 					"        inner join t_group g on m.group_id = g.id";
+
+	@Override
+	protected void configure(Configuration configuration) {
+		super.configure( configuration );
+		configuration.setImplicitNamingStrategy( ImplicitNamingStrategyJpaCompliantImpl.INSTANCE );
+	}
 
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
@@ -127,8 +119,8 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 				new Work() {
 					@Override
 					public void execute(Connection connection) throws SQLException {
-						PreparedStatement ps = sessionImplementor.getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().prepareStatement( QUERY_STRING );
-						ResultSet rs = sessionImplementor.getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( ps );
+						PreparedStatement ps = sessionImplementor.getJdbcCoordinator().getStatementPreparer().prepareStatement( QUERY_STRING );
+						ResultSet rs = sessionImplementor.getJdbcCoordinator().getResultSetReturn().extract( ps );
 						try {
 							ResultSetMetaData metadata = rs.getMetaData();
 							String column1Alias = getDialect().getColumnAliasExtractor().extractColumnAlias( metadata, 1 );
@@ -136,8 +128,8 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 							Assert.assertFalse( "bad dialect.getColumnAliasExtractor impl", column1Alias.equals( column2Alias ) );
 						}
 						finally {
-							sessionImplementor.getTransactionCoordinator().getJdbcCoordinator().release( rs, ps );
-							sessionImplementor.getTransactionCoordinator().getJdbcCoordinator().release( ps );
+							sessionImplementor.getJdbcCoordinator().getResourceRegistry().release( rs, ps );
+							sessionImplementor.getJdbcCoordinator().getResourceRegistry().release( ps );
 						}
 					}
 				}

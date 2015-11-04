@@ -1,34 +1,17 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.unidir;
-
-import org.junit.Test;
 
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -49,17 +32,12 @@ public class BackrefTest extends BaseCoreFunctionalTestCase {
 		return new Class<?>[] { Parent1.class, Child1.class, Child2.class };
 	}
 
-	@Override
-	protected String getCacheConcurrencyStrategy() {
-		return null;
-	}
-
 	@Test
 	public void testBackRef() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
-		Parent p = new Parent("Marc");
-		Parent p2 = new Parent("Nathalie");
+		Parent p = new Parent("Marc", 123456789);
+		Parent p2 = new Parent("Nathalie", 987654321 );
 		Child c = new Child("Elvira");
 		Child c2 = new Child("Blase");
 		p.getChildren().add(c);
@@ -97,7 +75,7 @@ public class BackrefTest extends BaseCoreFunctionalTestCase {
 		s.close();
 		s = openSession();
 		t = s.beginTransaction();
-		Parent p3 = new Parent("Marion");
+		Parent p3 = new Parent("Marion", 543216789);
 		p3.getChildren().add( new Child("Gavin") );
 		s.merge(p3);
 		t.commit();
@@ -115,7 +93,7 @@ public class BackrefTest extends BaseCoreFunctionalTestCase {
 	public void testBackRefToProxiedEntityOnMerge() {
 		Session s = openSession();
 		s.beginTransaction();
-		Parent me = new Parent( "Steve" );
+		Parent me = new Parent( "Steve", 192837465 );
 		me.getChildren().add( new Child( "Joe" ) );
   		s.persist( me );
 		s.getTransaction().commit();

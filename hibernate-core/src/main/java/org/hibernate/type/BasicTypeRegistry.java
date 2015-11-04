@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type;
 
@@ -27,9 +10,8 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.usertype.CompositeUserType;
 import org.hibernate.usertype.UserType;
@@ -40,12 +22,11 @@ import org.hibernate.usertype.UserType;
  * @author Steve Ebersole
  */
 public class BasicTypeRegistry implements Serializable {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, BasicTypeRegistry.class.getName());
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( BasicTypeRegistry.class );
 
 	// TODO : analyze these sizing params; unfortunately this seems to be the only way to give a "concurrencyLevel"
-	private Map<String,BasicType> registry = new ConcurrentHashMap<String, BasicType>( 100, .75f, 1 );
-	private boolean locked = false;
+	private Map<String, BasicType> registry = new ConcurrentHashMap<String, BasicType>( 100, .75f, 1 );
+	private boolean locked;
 
 	public BasicTypeRegistry() {
 		register( BooleanType.INSTANCE );
@@ -81,7 +62,6 @@ public class BasicTypeRegistry implements Serializable {
 		register( ClassType.INSTANCE );
 		register( UUIDBinaryType.INSTANCE );
 		register( UUIDCharType.INSTANCE );
-		register( PostgresUUIDType.INSTANCE );
 
 		register( BinaryType.INSTANCE );
 		register( WrapperBinaryType.INSTANCE );
@@ -123,13 +103,17 @@ public class BasicTypeRegistry implements Serializable {
 	 *
 	 * @param registeredTypes The type map to copy over
 	 */
-	@SuppressWarnings({ "UnusedDeclaration" })
+	@SuppressWarnings({"UnusedDeclaration"})
 	private BasicTypeRegistry(Map<String, BasicType> registeredTypes) {
 		registry.putAll( registeredTypes );
 		locked = true;
 	}
 
 	public void register(BasicType type) {
+		register( type, type.getRegistrationKeys() );
+	}
+
+	public void register(BasicType type, String[] keys) {
 		if ( locked ) {
 			throw new HibernateException( "Can not alter TypeRegistry at this time" );
 		}
@@ -138,16 +122,21 @@ public class BasicTypeRegistry implements Serializable {
 			throw new HibernateException( "Type to register cannot be null" );
 		}
 
-		if ( type.getRegistrationKeys() == null || type.getRegistrationKeys().length == 0 ) {
+		if ( keys == null || keys.length == 0 ) {
 			LOG.typeDefinedNoRegistrationKeys( type );
+			return;
 		}
 
-		for ( String key : type.getRegistrationKeys() ) {
+		for ( String key : keys ) {
 			// be safe...
-            if (key == null) continue;
-            LOG.debugf("Adding type registration %s -> %s", key, type);
+			if ( key == null ) {
+				continue;
+			}
+			LOG.debugf( "Adding type registration %s -> %s", key, type );
 			final Type old = registry.put( key, type );
-            if (old != null && old != type) LOG.typeRegistrationOverridesPrevious(key, old);
+			if ( old != null && old != type ) {
+				LOG.typeRegistrationOverridesPrevious( key, old );
+			}
 		}
 	}
 

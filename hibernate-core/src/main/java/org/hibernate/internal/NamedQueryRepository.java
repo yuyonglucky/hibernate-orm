@@ -1,34 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.internal;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
@@ -39,6 +19,8 @@ import org.hibernate.engine.spi.NamedQueryDefinition;
 import org.hibernate.engine.spi.NamedSQLQueryDefinition;
 import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.procedure.ProcedureCallMemento;
+
+import org.jboss.logging.Logger;
 
 /**
  * @author Steve Ebersole
@@ -76,6 +58,17 @@ public class NamedQueryRepository {
 		}
 		this.namedSqlResultSetMappingMap = Collections.unmodifiableMap( namedSqlResultSetMappingMap );
 		this.procedureCallMementoMap = Collections.unmodifiableMap( namedProcedureCalls );
+	}
+
+	public NamedQueryRepository(
+			Map<String,NamedQueryDefinition> namedQueryDefinitionMap,
+			Map<String,NamedSQLQueryDefinition> namedSqlQueryDefinitionMap,
+			Map<String,ResultSetMappingDefinition> namedSqlResultSetMappingMap,
+			Map<String, ProcedureCallMemento> namedProcedureCallMap) {
+		this.namedQueryDefinitionMap = Collections.unmodifiableMap( namedQueryDefinitionMap );
+		this.namedSqlQueryDefinitionMap = Collections.unmodifiableMap( namedSqlQueryDefinitionMap );
+		this.namedSqlResultSetMappingMap = Collections.unmodifiableMap( namedSqlResultSetMappingMap );
+		this.procedureCallMementoMap = Collections.unmodifiableMap( namedProcedureCallMap );
 	}
 
 

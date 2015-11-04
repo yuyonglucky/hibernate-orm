@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.access.xml;
 
@@ -29,15 +12,15 @@ import java.util.Collections;
 import java.util.List;
 import javax.persistence.AccessType;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import org.hibernate.cfg.Configuration;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.property.BasicPropertyAccessor;
-import org.hibernate.property.DirectPropertyAccessor;
-import org.hibernate.testing.junit4.BaseUnitTestCase;
+import org.hibernate.property.access.spi.GetterFieldImpl;
+import org.hibernate.property.access.spi.GetterMethodImpl;
 import org.hibernate.tuple.entity.EntityTuplizer;
+
+import org.hibernate.testing.junit4.BaseUnitTestCase;
+import org.junit.Assert;
+import org.junit.Test;
 
 
 /**
@@ -196,13 +179,13 @@ public class XmlAccessTest extends BaseUnitTestCase {
 		if ( AccessType.FIELD.equals( accessType ) ) {
 			Assert.assertTrue(
 					"Field access was expected.",
-					tuplizer.getGetter( 0 ) instanceof DirectPropertyAccessor.DirectGetter
+					tuplizer.getGetter( 0 ) instanceof GetterFieldImpl
 			);
 		}
 		else {
 			Assert.assertTrue(
 					"Property access was expected.",
-					tuplizer.getGetter( 0 ) instanceof BasicPropertyAccessor.BasicGetter
+					tuplizer.getGetter( 0 ) instanceof GetterMethodImpl
 			);
 		}
 	}

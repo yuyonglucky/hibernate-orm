@@ -1,41 +1,21 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.configuration.internal;
 
-import javax.persistence.Column;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.Set;
-
-import org.dom4j.Document;
-import org.dom4j.Element;
+import javax.persistence.Column;
 
 import org.hibernate.MappingException;
+import org.hibernate.annotations.common.reflection.ClassLoadingException;
 import org.hibernate.annotations.common.reflection.ReflectionManager;
 import org.hibernate.annotations.common.reflection.XClass;
 import org.hibernate.annotations.common.reflection.XProperty;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.envers.Audited;
 import org.hibernate.envers.DefaultRevisionEntity;
 import org.hibernate.envers.DefaultTrackingModifiedEntitiesRevisionEntity;
@@ -56,10 +36,12 @@ import org.hibernate.envers.internal.revisioninfo.RevisionInfoGenerator;
 import org.hibernate.envers.internal.revisioninfo.RevisionInfoNumberReader;
 import org.hibernate.envers.internal.revisioninfo.RevisionInfoQueryCreator;
 import org.hibernate.envers.internal.tools.MutableBoolean;
-import org.hibernate.internal.util.xml.XMLHelper;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.type.LongType;
 import org.hibernate.type.Type;
+
+import org.dom4j.Document;
+import org.dom4j.Element;
 
 /**
  * @author Adam Warski (adam at warski dot org)
@@ -93,7 +75,7 @@ public class RevisionInfoConfiguration {
 	}
 
 	private Document generateDefaultRevisionInfoXmlMapping() {
-		final Document document = XMLHelper.getDocumentFactory().createDocument();
+		final Document document = globalCfg.getEnversService().getXmlHelper().getDocumentFactory().createDocument();
 
 		final Element classMapping = MetadataTools.createEntity(
 				document,
@@ -176,7 +158,7 @@ public class RevisionInfoConfiguration {
 	}
 
 	private Element generateRevisionInfoRelationMapping() {
-		final Document document = XMLHelper.getDocumentFactory().createDocument();
+		final Document document = globalCfg.getEnversService().getXmlHelper().getDocumentFactory().createDocument();
 		final Element revRelMapping = document.addElement( "key-many-to-one" );
 		revRelMapping.addAttribute( "type", revisionPropType );
 		revRelMapping.addAttribute( "class", revisionInfoEntityName );
@@ -311,85 +293,94 @@ public class RevisionInfoConfiguration {
 		);
 	}
 
-	public RevisionInfoConfigurationResult configure(Configuration cfg, ReflectionManager reflectionManager) {
+	public RevisionInfoConfigurationResult configure(MetadataImplementor metadata, ReflectionManager reflectionManager) {
 		boolean revisionEntityFound = false;
 		RevisionInfoGenerator revisionInfoGenerator = null;
 		Class<?> revisionInfoClass = null;
 
-		final Iterator<PersistentClass> classes = cfg.getClassMappings();
-		while ( classes.hasNext() ) {
-			PersistentClass pc = classes.next();
-			XClass clazz;
-			try {
-				clazz = reflectionManager.classForName( pc.getClassName(), this.getClass() );
-			}
-			catch (ClassNotFoundException e) {
-				throw new MappingException( e );
-			}
-
-			final RevisionEntity revisionEntity = clazz.getAnnotation( RevisionEntity.class );
-			if ( revisionEntity != null ) {
-				if ( revisionEntityFound ) {
-					throw new MappingException( "Only one entity may be annotated with @RevisionEntity!" );
+		for ( PersistentClass persistentClass : metadata.getEntityBindings() ) {
+			// Ensure we're in POJO, not dynamic model, mapping.
+			if (persistentClass.getClassName() != null) {
+				XClass clazz;
+				try {
+					clazz = reflectionManager.classForName( persistentClass.getClassName() );
+				}
+				catch (ClassLoadingException e) {
+					throw new MappingException( e );
 				}
 
-				// Checking if custom revision entity isn't audited
-				if ( clazz.getAnnotation( Audited.class ) != null ) {
-					throw new MappingException( "An entity annotated with @RevisionEntity cannot be audited!" );
-				}
+				final RevisionEntity revisionEntity = clazz.getAnnotation( RevisionEntity.class );
+				if ( revisionEntity != null ) {
+					if (revisionEntityFound) {
+						throw new MappingException("Only one entity may be annotated with @RevisionEntity!");
+					}
 
-				revisionEntityFound = true;
+					// Checking if custom revision entity isn't audited
+					if (clazz.getAnnotation(Audited.class) != null) {
+						throw new MappingException("An entity annotated with @RevisionEntity cannot be audited!");
+					}
 
-				final MutableBoolean revisionNumberFound = new MutableBoolean();
-				final MutableBoolean revisionTimestampFound = new MutableBoolean();
-				final MutableBoolean modifiedEntityNamesFound = new MutableBoolean();
+					revisionEntityFound = true;
 
-				searchForRevisionInfoCfg(
-						clazz,
-						reflectionManager,
-						revisionNumberFound,
-						revisionTimestampFound,
-						modifiedEntityNamesFound
-				);
+					final MutableBoolean revisionNumberFound = new MutableBoolean();
+					final MutableBoolean revisionTimestampFound = new MutableBoolean();
+					final MutableBoolean modifiedEntityNamesFound = new MutableBoolean();
 
-				if ( !revisionNumberFound.isSet() ) {
-					throw new MappingException(
-							"An entity annotated with @RevisionEntity must have a field annotated " +
-									"with @RevisionNumber!"
+					searchForRevisionInfoCfg(
+							clazz,
+							reflectionManager,
+							revisionNumberFound,
+							revisionTimestampFound,
+							modifiedEntityNamesFound
 					);
-				}
 
-				if ( !revisionTimestampFound.isSet() ) {
-					throw new MappingException(
-							"An entity annotated with @RevisionEntity must have a field annotated " +
-									"with @RevisionTimestamp!"
-					);
-				}
+					if (!revisionNumberFound.isSet()) {
+						throw new MappingException(
+								"An entity annotated with @RevisionEntity must have a field annotated " +
+										"with @RevisionNumber!"
+						);
+					}
 
-				revisionInfoEntityName = pc.getEntityName();
-				revisionInfoClass = pc.getMappedClass();
-				final Class<? extends RevisionListener> revisionListenerClass = getRevisionListenerClass( revisionEntity.value() );
-				revisionInfoTimestampType = pc.getProperty( revisionInfoTimestampData.getName() ).getType();
-				if ( globalCfg.isTrackEntitiesChangedInRevision()
-						|| (globalCfg.isUseRevisionEntityWithNativeId() && DefaultTrackingModifiedEntitiesRevisionEntity.class
-						.isAssignableFrom( revisionInfoClass ))
-						|| (!globalCfg.isUseRevisionEntityWithNativeId() && SequenceIdTrackingModifiedEntitiesRevisionEntity.class
-						.isAssignableFrom( revisionInfoClass ))
-						|| modifiedEntityNamesFound.isSet() ) {
-					// If tracking modified entities parameter is enabled, custom revision info entity is a subtype
-					// of DefaultTrackingModifiedEntitiesRevisionEntity class, or @ModifiedEntityNames annotation is used.
-					revisionInfoGenerator = new DefaultTrackingModifiedEntitiesRevisionInfoGenerator(
-							revisionInfoEntityName,
-							revisionInfoClass, revisionListenerClass, revisionInfoTimestampData, isTimestampAsDate(),
-							modifiedEntityNamesData
-					);
-					globalCfg.setTrackEntitiesChangedInRevision( true );
-				}
-				else {
-					revisionInfoGenerator = new DefaultRevisionInfoGenerator(
-							revisionInfoEntityName, revisionInfoClass,
-							revisionListenerClass, revisionInfoTimestampData, isTimestampAsDate()
-					);
+					if (!revisionTimestampFound.isSet()) {
+						throw new MappingException(
+								"An entity annotated with @RevisionEntity must have a field annotated " +
+										"with @RevisionTimestamp!"
+						);
+					}
+
+					revisionInfoEntityName = persistentClass.getEntityName();
+					revisionInfoClass = persistentClass.getMappedClass();
+					final Class<? extends RevisionListener> revisionListenerClass = getRevisionListenerClass(revisionEntity.value());
+					revisionInfoTimestampType = persistentClass.getProperty(revisionInfoTimestampData.getName()).getType();
+					if (globalCfg.isTrackEntitiesChangedInRevision()
+							|| (globalCfg.isUseRevisionEntityWithNativeId() && DefaultTrackingModifiedEntitiesRevisionEntity.class
+							.isAssignableFrom(revisionInfoClass))
+							|| (!globalCfg.isUseRevisionEntityWithNativeId() && SequenceIdTrackingModifiedEntitiesRevisionEntity.class
+							.isAssignableFrom(revisionInfoClass))
+							|| modifiedEntityNamesFound.isSet()) {
+						// If tracking modified entities parameter is enabled, custom revision info entity is a subtype
+						// of DefaultTrackingModifiedEntitiesRevisionEntity class, or @ModifiedEntityNames annotation is used.
+						revisionInfoGenerator = new DefaultTrackingModifiedEntitiesRevisionInfoGenerator(
+								revisionInfoEntityName,
+								revisionInfoClass,
+								revisionListenerClass,
+								revisionInfoTimestampData,
+								isTimestampAsDate(),
+								modifiedEntityNamesData,
+								metadata.getMetadataBuildingOptions().getServiceRegistry()
+						);
+						globalCfg.setTrackEntitiesChangedInRevision(true);
+					}
+					else {
+						revisionInfoGenerator = new DefaultRevisionInfoGenerator(
+								revisionInfoEntityName,
+								revisionInfoClass,
+								revisionListenerClass,
+								revisionInfoTimestampData,
+								isTimestampAsDate(),
+								metadata.getMetadataBuildingOptions().getServiceRegistry()
+						);
+					}
 				}
 			}
 		}
@@ -401,22 +392,31 @@ public class RevisionInfoConfiguration {
 
 		if ( revisionInfoGenerator == null ) {
 			if ( globalCfg.isTrackEntitiesChangedInRevision() ) {
-				revisionInfoClass = globalCfg.isUseRevisionEntityWithNativeId() ?
-						DefaultTrackingModifiedEntitiesRevisionEntity.class
-						:
-						SequenceIdTrackingModifiedEntitiesRevisionEntity.class;
+				revisionInfoClass = globalCfg.isUseRevisionEntityWithNativeId()
+						? DefaultTrackingModifiedEntitiesRevisionEntity.class
+						: SequenceIdTrackingModifiedEntitiesRevisionEntity.class;
 				revisionInfoEntityName = revisionInfoClass.getName();
 				revisionInfoGenerator = new DefaultTrackingModifiedEntitiesRevisionInfoGenerator(
-						revisionInfoEntityName, revisionInfoClass,
-						revisionListenerClass, revisionInfoTimestampData, isTimestampAsDate(), modifiedEntityNamesData
+						revisionInfoEntityName,
+						revisionInfoClass,
+						revisionListenerClass,
+						revisionInfoTimestampData,
+						isTimestampAsDate(),
+						modifiedEntityNamesData,
+						metadata.getMetadataBuildingOptions().getServiceRegistry()
 				);
 			}
 			else {
-				revisionInfoClass = globalCfg.isUseRevisionEntityWithNativeId() ? DefaultRevisionEntity.class
+				revisionInfoClass = globalCfg.isUseRevisionEntityWithNativeId()
+						? DefaultRevisionEntity.class
 						: SequenceIdRevisionEntity.class;
 				revisionInfoGenerator = new DefaultRevisionInfoGenerator(
-						revisionInfoEntityName, revisionInfoClass,
-						revisionListenerClass, revisionInfoTimestampData, isTimestampAsDate()
+						revisionInfoEntityName,
+						revisionInfoClass,
+						revisionListenerClass,
+						revisionInfoTimestampData,
+						isTimestampAsDate(),
+						metadata.getMetadataBuildingOptions().getServiceRegistry()
 				);
 			}
 			revisionInfoXmlMapping = generateDefaultRevisionInfoXmlMapping();
@@ -429,11 +429,9 @@ public class RevisionInfoConfiguration {
 						revisionInfoTimestampData.getName(), isTimestampAsDate()
 				),
 				generateRevisionInfoRelationMapping(),
-				new RevisionInfoNumberReader( revisionInfoClass, revisionInfoIdData ),
-				globalCfg.isTrackEntitiesChangedInRevision() ? new ModifiedEntityNamesReader(
-						revisionInfoClass,
-						modifiedEntityNamesData
-				)
+				new RevisionInfoNumberReader( revisionInfoClass, revisionInfoIdData, metadata.getMetadataBuildingOptions().getServiceRegistry() ),
+				globalCfg.isTrackEntitiesChangedInRevision()
+						? new ModifiedEntityNamesReader( revisionInfoClass, modifiedEntityNamesData, metadata.getMetadataBuildingOptions().getServiceRegistry() )
 						: null,
 				revisionInfoEntityName, revisionInfoClass, revisionInfoTimestampData
 		);

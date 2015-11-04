@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.loader.collection;
 
@@ -44,7 +27,8 @@ public abstract class BatchingCollectionInitializerBuilder {
 				return DynamicBatchingCollectionInitializerBuilder.INSTANCE;
 			}
 			default: {
-				return LegacyBatchingCollectionInitializerBuilder.INSTANCE;
+				return org.hibernate.loader.collection.plan.LegacyBatchingCollectionInitializerBuilder.INSTANCE;
+				//return LegacyBatchingCollectionInitializerBuilder.INSTANCE;
 			}
 		}
 	}
@@ -67,7 +51,7 @@ public abstract class BatchingCollectionInitializerBuilder {
 			LoadQueryInfluencers influencers) {
 		if ( maxBatchSize <= 1 ) {
 			// no batching
-			return new BasicCollectionLoader( persister, factory, influencers );
+			return buildNonBatchingLoader( persister, factory, influencers );
 		}
 
 		return createRealBatchingCollectionInitializer( persister, maxBatchSize, factory, influencers );
@@ -98,7 +82,7 @@ public abstract class BatchingCollectionInitializerBuilder {
 			LoadQueryInfluencers influencers) {
 		if ( maxBatchSize <= 1 ) {
 			// no batching
-			return new OneToManyLoader( persister, factory, influencers );
+			return buildNonBatchingLoader( persister, factory, influencers );
 		}
 
 		return createRealBatchingOneToManyInitializer( persister, maxBatchSize, factory, influencers );
@@ -109,4 +93,13 @@ public abstract class BatchingCollectionInitializerBuilder {
 			int maxBatchSize,
 			SessionFactoryImplementor factory,
 			LoadQueryInfluencers influencers);
+
+	protected CollectionInitializer buildNonBatchingLoader(
+			QueryableCollection persister,
+			SessionFactoryImplementor factory,
+			LoadQueryInfluencers influencers) {
+		return persister.isOneToMany() ?
+				new OneToManyLoader( persister, factory, influencers ) :
+				new BasicCollectionLoader( persister, factory, influencers );
+	}
 }

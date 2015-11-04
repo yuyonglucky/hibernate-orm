@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.exception;
 
@@ -31,6 +14,7 @@ import java.sql.Types;
 import org.junit.Test;
 
 import org.hibernate.Session;
+import org.hibernate.dialect.AbstractHANADialect;
 import org.hibernate.dialect.MySQLMyISAMDialect;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.ResultSetReturn;
@@ -57,8 +41,8 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@SkipForDialect(
-			value = MySQLMyISAMDialect.class,
-			comment = "MySQL (MyISAM) does not support FK violation checking"
+			value = { MySQLMyISAMDialect.class, AbstractHANADialect.class },
+			comment = "MySQL (MyISAM) / Hana do not support FK violation checking"
 	)
 	public void testIntegrityViolation() throws Exception {
 		final Session session = openSession();
@@ -72,10 +56,10 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 						// result in a constraint violation
 						PreparedStatement ps = null;
 						try {
-							ps = ((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().prepareStatement( "INSERT INTO T_MEMBERSHIP (user_id, group_id) VALUES (?, ?)" );
+							ps = ((SessionImplementor)session).getJdbcCoordinator().getStatementPreparer().prepareStatement( "INSERT INTO T_MEMBERSHIP (user_id, group_id) VALUES (?, ?)" );
 							ps.setLong(1, 52134241);    // Non-existent user_id
 							ps.setLong(2, 5342);        // Non-existent group_id
-							((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().executeUpdate( ps );
+							((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().executeUpdate( ps );
 
 							fail("INSERT should have failed");
 						}
@@ -105,8 +89,8 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 						// prepare/execute a query against a non-existent table
 						PreparedStatement ps = null;
 						try {
-							ps = ((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().prepareStatement( "SELECT user_id, user_name FROM tbl_no_there" );
-							((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( ps );
+							ps = ((SessionImplementor)session).getJdbcCoordinator().getStatementPreparer().prepareStatement( "SELECT user_id, user_name FROM tbl_no_there" );
+							((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().extract( ps );
 
 							fail("SQL compilation should have failed");
 						}
@@ -139,7 +123,7 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 				new Work() {
 					@Override
 					public void execute(Connection connection) throws SQLException {
-						final JdbcCoordinator jdbcCoordinator = ( (SessionImplementor) session ).getTransactionCoordinator().getJdbcCoordinator();
+						final JdbcCoordinator jdbcCoordinator = ( (SessionImplementor) session ).getJdbcCoordinator();
 						final StatementPreparer statementPreparer = jdbcCoordinator.getStatementPreparer();
 						final ResultSetReturn resultSetReturn = jdbcCoordinator.getResultSetReturn();
 						PreparedStatement ps = null;
@@ -168,7 +152,7 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 	private void releaseStatement(Session session, PreparedStatement ps) {
 		if ( ps != null ) {
 			try {
-				( (SessionImplementor) session ).getTransactionCoordinator().getJdbcCoordinator().release( ps );
+				( (SessionImplementor) session ).getJdbcCoordinator().getResourceRegistry().release( ps );
 			}
 			catch ( Throwable ignore ) {
 				// ignore...

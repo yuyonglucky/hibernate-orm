@@ -1,29 +1,10 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.tree;
-
 
 /**
  * Represents a FROM element implied by a path expression or a collection reference.
@@ -35,12 +16,12 @@ public class ImpliedFromElement extends FromElement {
 	 * True if this from element was implied from a path in the FROM clause, but not
 	 * explicitly declard in the from clause.
 	 */
-	private boolean impliedInFromClause = false;
+	private boolean impliedInFromClause;
 
 	/**
 	 * True if this implied from element should be included in the projection list.
 	 */
-	private boolean inProjectionList = false;
+	private boolean inProjectionList;
 
 	public boolean isImplied() {
 		return true;

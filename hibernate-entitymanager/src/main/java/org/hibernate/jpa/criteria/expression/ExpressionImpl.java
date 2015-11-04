@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria.expression;
 
@@ -46,9 +29,7 @@ public abstract class ExpressionImpl<T>
 		super( criteriaBuilder, javaType );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public <X> Expression<X> as(Class<X> type) {
 		return type.equals( getJavaType() )
@@ -56,105 +37,79 @@ public abstract class ExpressionImpl<T>
 				: new CastFunction<X, T>( criteriaBuilder(), type, this );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Predicate isNull() {
 		return criteriaBuilder().isNull( this );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Predicate isNotNull() {
 		return criteriaBuilder().isNotNull( this );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
-    public Predicate in(Object... values) {
+	@Override
+	public Predicate in(Object... values) {
 		return criteriaBuilder().in( this, values );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Predicate in(Expression<?>... values) {
 		return criteriaBuilder().in( this, values );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Predicate in(Collection<?> values) {
 		return criteriaBuilder().in( this, values.toArray() );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	public Predicate in(Expression<Collection<?>> values) {
 		return criteriaBuilder().in( this, values );
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public ExpressionImplementor<Long> asLong() {
 		resetJavaType( Long.class );
 		return (ExpressionImplementor<Long>) this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public ExpressionImplementor<Integer> asInteger() {
 		resetJavaType( Integer.class );
 		return (ExpressionImplementor<Integer>) this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public ExpressionImplementor<Float> asFloat() {
 		resetJavaType( Float.class );
 		return (ExpressionImplementor<Float>) this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public ExpressionImplementor<Double> asDouble() {
 		resetJavaType( Double.class );
 		return (ExpressionImplementor<Double>) this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public ExpressionImplementor<BigDecimal> asBigDecimal() {
 		resetJavaType( BigDecimal.class );
 		return (ExpressionImplementor<BigDecimal>) this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public ExpressionImplementor<BigInteger> asBigInteger() {
 		resetJavaType( BigInteger.class );
 		return (ExpressionImplementor<BigInteger>) this;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+	@Override
 	@SuppressWarnings({ "unchecked" })
 	public ExpressionImplementor<String> asString() {
 		resetJavaType( String.class );

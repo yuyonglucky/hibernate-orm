@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type.descriptor.java;
 
@@ -27,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.sql.Blob;
 import java.sql.SQLException;
+import java.util.Arrays;
 
 import org.hibernate.HibernateException;
 import org.hibernate.engine.jdbc.BinaryStream;
@@ -45,12 +29,25 @@ public class ByteArrayTypeDescriptor extends AbstractTypeDescriptor<Byte[]> {
 	public ByteArrayTypeDescriptor() {
 		super( Byte[].class, ArrayMutabilityPlan.INSTANCE );
 	}
+	@Override
+	public boolean areEqual(Byte[] one, Byte[] another) {
+		return one == another
+				|| ( one != null && another != null && Arrays.equals(one, another) );
+	}
+	@Override
+	public int extractHashCode(Byte[] bytes) {
+		int hashCode = 1;
+		for ( byte aByte : bytes ) {
+			hashCode = 31 * hashCode + aByte;
+		}
+		return hashCode;
+	}
 
-	@SuppressWarnings({ "UnnecessaryUnboxing" })
+	@Override
 	public String toString(Byte[] bytes) {
 		final StringBuilder buf = new StringBuilder();
 		for ( Byte aByte : bytes ) {
-			final String hexStr = Integer.toHexString( aByte.byteValue() - Byte.MIN_VALUE );
+			final String hexStr = Integer.toHexString( aByte - Byte.MIN_VALUE );
 			if ( hexStr.length() == 1 ) {
 				buf.append( '0' );
 			}
@@ -58,8 +55,7 @@ public class ByteArrayTypeDescriptor extends AbstractTypeDescriptor<Byte[]> {
 		}
 		return buf.toString();
 	}
-
-	@SuppressWarnings({ "UnnecessaryBoxing" })
+	@Override
 	public Byte[] fromString(String string) {
 		if ( string == null ) {
 			return null;
@@ -70,12 +66,13 @@ public class ByteArrayTypeDescriptor extends AbstractTypeDescriptor<Byte[]> {
 		Byte[] bytes = new Byte[string.length() / 2];
 		for ( int i = 0; i < bytes.length; i++ ) {
 			final String hexStr = string.substring( i * 2, (i + 1) * 2 );
-			bytes[i] = Byte.valueOf( (byte) (Integer.parseInt(hexStr, 16) + Byte.MIN_VALUE) );
+			bytes[i] = (byte) ( Integer.parseInt( hexStr, 16 ) + Byte.MIN_VALUE );
 		}
 		return bytes;
 	}
 
 	@SuppressWarnings({ "unchecked" })
+	@Override
 	public <X> X unwrap(Byte[] value, Class<X> type, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -98,7 +95,7 @@ public class ByteArrayTypeDescriptor extends AbstractTypeDescriptor<Byte[]> {
 
 		throw unknownUnwrap( type );
 	}
-
+	@Override
 	public <X> Byte[] wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -124,26 +121,24 @@ public class ByteArrayTypeDescriptor extends AbstractTypeDescriptor<Byte[]> {
 		throw unknownWrap( value.getClass() );
 	}
 
-	@SuppressWarnings({ "UnnecessaryBoxing" })
 	private Byte[] wrapBytes(byte[] bytes) {
 		if ( bytes == null ) {
 			return null;
 		}
 		final Byte[] result = new Byte[bytes.length];
 		for ( int i = 0; i < bytes.length; i++ ) {
-			result[i] = Byte.valueOf( bytes[i] );
+			result[i] = bytes[i];
 		}
 		return result;
 	}
 
-	@SuppressWarnings({ "UnnecessaryUnboxing" })
 	private byte[] unwrapBytes(Byte[] bytes) {
 		if ( bytes == null ) {
 			return null;
 		}
 		final byte[] result = new byte[bytes.length];
 		for ( int i = 0; i < bytes.length; i++ ) {
-			result[i] = bytes[i].byteValue();
+			result[i] = bytes[i];
 		}
 		return result;
 	}

@@ -1,38 +1,21 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.tree;
-import antlr.SemanticException;
-import antlr.collections.AST;
-import org.jboss.logging.Logger;
 
 import org.hibernate.hql.internal.antlr.HqlSqlTokenTypes;
 import org.hibernate.hql.internal.antlr.SqlTokenTypes;
 import org.hibernate.hql.internal.ast.util.ASTUtil;
 import org.hibernate.hql.internal.ast.util.ColumnHelper;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.type.Type;
+
+import antlr.SemanticException;
+import antlr.collections.AST;
 
 /**
  * Defines a top-level AST node representing an HQL select statement.
@@ -40,34 +23,29 @@ import org.hibernate.type.Type;
  * @author Joshua Davis
  */
 public class QueryNode extends AbstractRestrictableStatement implements SelectExpression {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, QueryNode.class.getName());
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( QueryNode.class );
 
 	private OrderByClause orderByClause;
 	private int scalarColumnIndex = -1;
 
-	/**
-	 * @see Statement#getStatementType()
-	 */
+	@Override
 	public int getStatementType() {
 		return HqlSqlTokenTypes.QUERY;
 	}
 
-	/**
-	 * @see Statement#needsExecutor()
-	 */
+	@Override
 	public boolean needsExecutor() {
 		return false;
 	}
 
 	@Override
-    protected int getWhereClauseParentTokenType() {
+	protected int getWhereClauseParentTokenType() {
 		return SqlTokenTypes.FROM;
 	}
 
 	@Override
-    protected CoreMessageLogger getLog() {
-        return LOG;
+	protected CoreMessageLogger getLog() {
+		return LOG;
 	}
 
 	/**
@@ -84,7 +62,7 @@ public class QueryNode extends AbstractRestrictableStatement implements SelectEx
 		// If it is not found; simply return null...
 		//
 		// Also, do not cache since it gets generated well after we are created.
-		return ( SelectClause ) ASTUtil.findTypeInChildren( this, SqlTokenTypes.SELECT_CLAUSE );
+		return (SelectClause) ASTUtil.findTypeInChildren( this, SqlTokenTypes.SELECT_CLAUSE );
 	}
 
 	public final boolean hasOrderByClause() {
@@ -99,7 +77,7 @@ public class QueryNode extends AbstractRestrictableStatement implements SelectEx
 			// if there is no order by, make one
 			if ( orderByClause == null ) {
 				LOG.debug( "getOrderByClause() : Creating a new ORDER BY clause" );
-				orderByClause = ( OrderByClause ) ASTUtil.create( getWalker().getASTFactory(), SqlTokenTypes.ORDER, "ORDER" );
+				orderByClause = (OrderByClause) getWalker().getASTFactory().create( SqlTokenTypes.ORDER, "ORDER" );
 
 				// Find the WHERE; if there is no WHERE, find the FROM...
 				AST prevSibling = ASTUtil.findTypeInChildren( this, SqlTokenTypes.WHERE );
@@ -116,51 +94,60 @@ public class QueryNode extends AbstractRestrictableStatement implements SelectEx
 	}
 
 	private OrderByClause locateOrderByClause() {
-		return ( OrderByClause ) ASTUtil.findTypeInChildren( this, SqlTokenTypes.ORDER );
+		return (OrderByClause) ASTUtil.findTypeInChildren( this, SqlTokenTypes.ORDER );
 	}
 
 
 	private String alias;
 
+	@Override
 	public String getAlias() {
 		return alias;
 	}
 
+	@Override
 	public FromElement getFromElement() {
 		return null;
 	}
 
+	@Override
 	public boolean isConstructor() {
 		return false;
 	}
 
+	@Override
 	public boolean isReturnableEntity() throws SemanticException {
 		return false;
 	}
 
+	@Override
 	public boolean isScalar() throws SemanticException {
 		return true;
 	}
 
+	@Override
 	public void setAlias(String alias) {
 		this.alias = alias;
 	}
 
+	@Override
 	public void setScalarColumn(int i) throws SemanticException {
 		scalarColumnIndex = i;
 		setScalarColumnText( i );
 	}
 
+	@Override
 	public int getScalarColumnIndex() {
 		return scalarColumnIndex;
 	}
 
+	@Override
 	public void setScalarColumnText(int i) throws SemanticException {
 		ColumnHelper.generateSingleScalarColumn( this, i );
 	}
 
 	@Override
-    public Type getDataType() {
+	public Type getDataType() {
 		return ( (SelectExpression) getSelectClause().getFirstSelectExpression() ).getDataType();
 	}
 

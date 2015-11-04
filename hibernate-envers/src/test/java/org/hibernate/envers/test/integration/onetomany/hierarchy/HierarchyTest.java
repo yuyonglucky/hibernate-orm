@@ -1,16 +1,21 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.onetomany.hierarchy;
 
-import javax.persistence.EntityManager;
 import java.util.Arrays;
+import javax.persistence.EntityManager;
 
 import org.hibernate.envers.test.BaseEnversJPAFunctionalTestCase;
 import org.hibernate.envers.test.Priority;
 import org.hibernate.envers.test.tools.TestTools;
 
+import org.hibernate.testing.TestForIssue;
 import org.junit.Assert;
 import org.junit.Test;
-
-import org.hibernate.testing.TestForIssue;
 
 /**
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
@@ -75,17 +80,17 @@ public class HierarchyTest extends BaseEnversJPAFunctionalTestCase {
 
 		Node ver1 = getAuditReader().find( Node.class, parentId, 1 );
 		Assert.assertEquals( parent, ver1 );
-		Assert.assertTrue( TestTools.checkList( ver1.getChildren(), child1, child2 ) );
+		Assert.assertTrue( TestTools.checkCollection( ver1.getChildren(), child1, child2 ) );
 
 		child1.setData( "child1 modified" );
 
 		Node ver2 = getAuditReader().find( Node.class, parentId, 2 );
 		Assert.assertEquals( parent, ver2 );
-		Assert.assertTrue( TestTools.checkList( ver2.getChildren(), child1, child2 ) );
+		Assert.assertTrue( TestTools.checkCollection( ver2.getChildren(), child1, child2 ) );
 
 		Node ver3 = getAuditReader().find( Node.class, parentId, 3 );
 		Assert.assertEquals( parent, ver3 );
-		Assert.assertTrue( TestTools.checkList( ver3.getChildren(), child1 ) );
+		Assert.assertTrue( TestTools.checkCollection( ver3.getChildren(), child1 ) );
 	}
 
 	@Test

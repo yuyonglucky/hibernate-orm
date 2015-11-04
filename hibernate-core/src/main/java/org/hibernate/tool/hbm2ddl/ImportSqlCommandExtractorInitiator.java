@@ -1,12 +1,18 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.tool.hbm2ddl;
 
 import java.util.Map;
 
 import org.hibernate.HibernateException;
 import org.hibernate.boot.registry.StandardServiceInitiator;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.cfg.Environment;
 import org.hibernate.internal.util.StringHelper;
-import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
 
 /**
@@ -29,12 +35,13 @@ public class ImportSqlCommandExtractorInitiator implements StandardServiceInitia
 		return instantiateExplicitCommandExtractor( extractorClassName, classLoaderService );
 	}
 
-	private ImportSqlCommandExtractor instantiateExplicitCommandExtractor(String extractorClassName,
-																		  ClassLoaderService classLoaderService) {
+	private ImportSqlCommandExtractor instantiateExplicitCommandExtractor(
+			String extractorClassName,
+			ClassLoaderService classLoaderService) {
 		try {
 			return (ImportSqlCommandExtractor) classLoaderService.classForName( extractorClassName ).newInstance();
 		}
-		catch ( Exception e ) {
+		catch (Exception e) {
 			throw new HibernateException(
 					"Could not instantiate import sql command extractor [" + extractorClassName + "]", e
 			);

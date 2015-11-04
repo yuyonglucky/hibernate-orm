@@ -1,42 +1,10 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2007-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.hql;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.sql.Date;
-import java.sql.Time;
-import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import org.jboss.logging.Logger;
-import org.junit.Test;
 
 import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
@@ -48,7 +16,10 @@ import org.hibernate.Transaction;
 import org.hibernate.TypeMismatchException;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
+import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.CUBRIDDialect;
 import org.hibernate.dialect.DB2Dialect;
+import org.hibernate.dialect.DerbyDialect;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.dialect.HSQLDialect;
 import org.hibernate.dialect.IngresDialect;
@@ -62,7 +33,7 @@ import org.hibernate.dialect.Sybase11Dialect;
 import org.hibernate.dialect.SybaseASE15Dialect;
 import org.hibernate.dialect.SybaseAnywhereDialect;
 import org.hibernate.dialect.SybaseDialect;
-import org.hibernate.dialect.CUBRIDDialect;
+import org.hibernate.dialect.TeradataDialect;
 import org.hibernate.hql.internal.ast.ASTQueryTranslatorFactory;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.persister.entity.DiscriminatorType;
@@ -88,6 +59,20 @@ import org.hibernate.transform.Transformers;
 import org.hibernate.type.ComponentType;
 import org.hibernate.type.ManyToOneType;
 import org.hibernate.type.Type;
+import org.jboss.logging.Logger;
+import org.junit.Test;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Date;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 import static org.hibernate.testing.junit4.ExtraAssertions.assertClassAssignability;
 import static org.junit.Assert.assertEquals;
@@ -131,6 +116,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 				"hql/Image.hbm.xml",
 				"hql/ComponentContainer.hbm.xml",
 				"hql/VariousKeywordPropertyEntity.hbm.xml",
+				"hql/Constructor.hbm.xml",
 				"batchfetch/ProductLine.hbm.xml",
 				"cid/Customer.hbm.xml",
 				"cid/Order.hbm.xml",
@@ -139,6 +125,14 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 				"any/Properties.hbm.xml",
 				"legacy/Commento.hbm.xml",
 				"legacy/Marelo.hbm.xml"
+		};
+	}
+	@Override
+	protected Class<?>[] getAnnotatedClasses() {
+		return new Class[] {
+				Department.class,
+				Employee.class,
+				Title.class
 		};
 	}
 
@@ -167,6 +161,74 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 
 		s.getTransaction().commit();
 		s.close();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-8432" )
+	public void testExpandListParameter() {
+		final Object[] namesArray = new Object[] {
+				"ZOO 1", "ZOO 2", "ZOO 3", "ZOO 4", "ZOO 5", "ZOO 6", "ZOO 7",
+				"ZOO 8", "ZOO 9", "ZOO 10", "ZOO 11", "ZOO 12"
+		};
+		final Object[] citiesArray = new Object[] {
+				"City 1", "City 2", "City 3", "City 4", "City 5", "City 6", "City 7",
+				"City 8", "City 9", "City 10", "City 11", "City 12"
+		};
+
+		Session session = openSession();
+
+		session.getTransaction().begin();
+		Address address = new Address();
+		Zoo zoo = new Zoo( "ZOO 1", address );
+		address.setCity( "City 1" );
+		session.save( zoo );
+		session.getTransaction().commit();
+
+		session.clear();
+
+		session.getTransaction().begin();
+		List result = session.createQuery( "FROM Zoo z WHERE z.name IN (?1) and z.address.city IN (?11)" )
+				.setParameterList( "1", namesArray )
+				.setParameterList( "11", citiesArray )
+				.list();
+		assertEquals( 1, result.size() );
+		session.getTransaction().commit();
+
+		session.clear();
+
+		session.getTransaction().begin();
+		zoo = (Zoo) session.get( Zoo.class, zoo.getId() );
+		session.delete( zoo );
+		session.getTransaction().commit();
+
+		session.close();
+	}
+
+	@Test
+	@TestForIssue(jiraKey = "HHH-8699")
+	// For now, restrict to H2.  Selecting w/ predicate functions cause issues for too many dialects.
+	@RequiresDialect(value = H2Dialect.class, jiraKey = "HHH-9052")
+	public void testBooleanPredicate() {
+		final Session session = openSession();
+
+		session.getTransaction().begin();
+		final Constructor constructor = new Constructor();
+		session.save( constructor );
+		session.getTransaction().commit();
+
+		session.clear();
+		Constructor.resetConstructorExecutionCount();
+
+		session.getTransaction().begin();
+		final Constructor result = (Constructor) session.createQuery(
+				"select new Constructor( c.id, c.id is not null, c.id = c.id, c.id + 1, concat( c.id, 'foo' ) ) from Constructor c where c.id = :id"
+		).setParameter( "id", constructor.getId() ).uniqueResult();
+		session.getTransaction().commit();
+
+		assertEquals( 1, Constructor.getConstructorExecutionCount() );
+		assertEquals( new Constructor( constructor.getId(), true, true, constructor.getId() + 1, constructor.getId() + "foo" ), result );
+
+		session.close();
 	}
 
 	@Test
@@ -236,6 +298,75 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		s.delete( root );
 		s.getTransaction().commit();
 		s.close();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-9642")
+	public void testLazyAssociationInComponent() {
+		Session session = openSession();
+		session.getTransaction().begin();
+
+		Address address = new Address();
+		Zoo zoo = new Zoo( "ZOO 1", address );
+		address.setCity( "City 1" );
+		StateProvince stateProvince = new StateProvince();
+		stateProvince.setName( "Illinois" );
+		session.save( stateProvince );
+		address.setStateProvince( stateProvince );
+		session.save( zoo );
+
+		session.getTransaction().commit();
+		session.close();
+
+		session = openSession();
+		session.getTransaction().begin();
+
+		zoo = (Zoo) session.createQuery( "from Zoo z" ).uniqueResult();
+		assertNotNull( zoo );
+		assertNotNull( zoo.getAddress() );
+		assertEquals( "City 1", zoo.getAddress().getCity() );
+		assertFalse( Hibernate.isInitialized( zoo.getAddress().getStateProvince() ) );
+		assertEquals( "Illinois", zoo.getAddress().getStateProvince().getName() );
+		assertTrue( Hibernate.isInitialized( zoo.getAddress().getStateProvince() ) );
+
+		session.getTransaction().commit();
+		session.close();
+
+
+		session = openSession();
+		session.getTransaction().begin();
+
+		zoo = (Zoo) session.createQuery( "from Zoo z join fetch z.address.stateProvince" ).uniqueResult();
+		assertNotNull( zoo );
+		assertNotNull( zoo.getAddress() );
+		assertEquals( "City 1", zoo.getAddress().getCity() );
+		assertTrue( Hibernate.isInitialized( zoo.getAddress().getStateProvince() ) );
+		assertEquals( "Illinois", zoo.getAddress().getStateProvince().getName() );
+
+		session.getTransaction().commit();
+		session.close();
+
+		session = openSession();
+		session.getTransaction().begin();
+
+		zoo = (Zoo) session.createQuery( "from Zoo z join fetch z.address a join fetch a.stateProvince" ).uniqueResult();
+		assertNotNull( zoo );
+		assertNotNull( zoo.getAddress() );
+		assertEquals( "City 1", zoo.getAddress().getCity() );
+		assertTrue( Hibernate.isInitialized( zoo.getAddress().getStateProvince() ) );
+		assertEquals( "Illinois", zoo.getAddress().getStateProvince().getName() );
+
+		session.getTransaction().commit();
+		session.close();
+
+		session = openSession();
+		session.getTransaction().begin();
+
+		zoo.getAddress().setStateProvince( null );
+		session.delete( stateProvince );
+		session.delete( zoo );
+		session.getTransaction().commit();
+		session.close();
 	}
 
 	@Test
@@ -515,6 +646,86 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@TestForIssue( jiraKey = "HHH-2851")
+	public void testMultipleRefsToSameParam() {
+		Session s = openSession();
+		s.beginTransaction();
+		Human h = new Human();
+		h.setName( new Name( "Johnny", 'B', "Goode" ) );
+		s.save( h );
+		h = new Human();
+		h.setName( new Name( "Steve", null, "Ebersole" ) );
+		s.save( h );
+		h = new Human();
+		h.setName( new Name( "Bono", null, null ) );
+		s.save( h );
+		h = new Human();
+		h.setName( new Name( "Steve", 'Z', "Johnny" ) );
+		h.setIntValue( 1 );
+		s.save( h );
+		h = new Human();
+		h.setName( new Name( null, null, null ) );
+		s.save( h );
+		s.getTransaction().commit();
+		s.close();
+
+		s = openSession();
+		s.beginTransaction();
+		List results = s.createQuery( "from Human where name.first = :name or name.last=:name" )
+				.setParameter( "name", "Johnny" )
+				.list();
+		assertEquals( 2, results.size() );
+
+		results = s.createQuery( "from Human where name.last = :name or :name is null" )
+				.setParameter( "name", "Goode" )
+				.list();
+		assertEquals( 1, results.size() );
+		results = s.createQuery( "from Human where :name is null or name.last = :name" )
+				.setParameter( "name", "Goode" )
+				.list();
+		assertEquals( 1, results.size() );
+
+		results = s.createQuery( "from Human where name.first = :firstName and (name.last = :name or :name is null)" )
+				.setParameter( "firstName", "Bono" )
+				.setParameter( "name", null )
+				.list();
+		assertEquals( 1, results.size() );
+		results = s.createQuery( "from Human where name.first = :firstName and ( :name is null or name.last = :name )" )
+				.setParameter( "firstName", "Bono" )
+				.setParameter( "name", null )
+				.list();
+		assertEquals( 1, results.size() );
+
+		results = s.createQuery( "from Human where intValue = :intVal or :intVal is null" )
+				.setParameter( "intVal", 1 )
+				.list();
+		assertEquals( 1, results.size() );
+		results = s.createQuery( "from Human where :intVal is null or intValue = :intVal" )
+				.setParameter( "intVal", 1 )
+				.list();
+		assertEquals( 1, results.size() );
+
+
+		results = s.createQuery( "from Human where intValue = :intVal or :intVal is null" )
+				.setParameter( "intVal", null )
+				.list();
+		assertEquals( 5, results.size() );
+		results = s.createQuery( "from Human where :intVal is null or intValue = :intVal" )
+				.setParameter( "intVal", null )
+				.list();
+		assertEquals( 5, results.size() );
+
+		s.getTransaction().commit();
+		s.close();
+
+		s = openSession();
+		s.beginTransaction();
+		s.createQuery( "delete Human" ).executeUpdate();
+		s.getTransaction().commit();
+		s.close();
+	}
+
+	@Test
 	public void testComponentNullnessChecks() {
 		Session s = openSession();
 		s.beginTransaction();
@@ -544,7 +755,12 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 						"from Human where cast(? as string) is null" :
 						"from Human where ? is null"
 				;
-		s.createQuery( query ).setParameter( 0, null ).list();
+		if ( getDialect() instanceof DerbyDialect ) {
+			s.createQuery( query ).setParameter( 0, "null" ).list();
+		}
+		else {
+			s.createQuery( query ).setParameter( 0, null ).list();
+		}
 
 		s.getTransaction().commit();
 		s.close();
@@ -713,9 +929,17 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		else {
 			s.createQuery( "from Animal where lower(upper('foo') || upper(:bar)) like 'f%'" ).setString( "bar", "xyz" ).list();
 		}
-		if ( ! ( getDialect() instanceof PostgreSQLDialect|| getDialect() instanceof PostgreSQL81Dialect || getDialect() instanceof MySQLDialect ) ) {
-			s.createQuery( "from Animal where abs(cast(1 as float) - cast(:param as float)) = 1.0" ).setLong( "param", 1 ).list();
+		
+		if ( getDialect() instanceof AbstractHANADialect ) {
+			s.createQuery( "from Animal where abs(cast(1 as double) - cast(:param as double)) = 1.0" )
+					.setLong( "param", 1 ).list();
 		}
+		else if ( !( getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect
+				|| getDialect() instanceof MySQLDialect ) ) {
+			s.createQuery( "from Animal where abs(cast(1 as float) - cast(:param as float)) = 1.0" )
+					.setLong( "param", 1 ).list();
+		}
+
 		s.getTransaction().commit();
 		s.close();
 	}
@@ -947,6 +1171,145 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@TestForIssue( jiraKey = "HHH-9305")
+	public void testExplicitToOneInnerJoin() {
+		final Employee employee1 = new Employee();
+		employee1.setFirstName( "Jane" );
+		employee1.setLastName( "Doe" );
+		final Title title1 = new Title();
+		title1.setDescription( "Jane's description" );
+		final Department dept1 = new Department();
+		dept1.setDeptName( "Jane's department" );
+		employee1.setTitle( title1 );
+		employee1.setDepartment( dept1 );
+
+		final Employee employee2 = new Employee();
+		employee2.setFirstName( "John" );
+		employee2.setLastName( "Doe" );
+		final Title title2 = new Title();
+		title2.setDescription( "John's title" );
+		employee2.setTitle( title2 );
+
+		Session s = openSession();
+		s.getTransaction().begin();
+		s.persist( title1 );
+		s.persist( dept1 );
+		s.persist( employee1 );
+		s.persist( title2 );
+		s.persist( employee2 );
+		s.getTransaction().commit();
+		s.close();
+
+		s = openSession();
+		s.getTransaction().begin();
+		Department department = (Department) s.createQuery( "select e.department from Employee e inner join e.department" ).uniqueResult();
+		assertEquals( employee1.getDepartment().getDeptName(), department.getDeptName() );
+		s.delete( employee1 );
+		s.delete( title1 );
+		s.delete( department );
+		s.delete( employee2 );
+		s.delete( title2 );
+		s.getTransaction().commit();
+		s.close();
+	}
+
+	@Test
+	public void testExplicitToOneOuterJoin() {
+		final Employee employee1 = new Employee();
+		employee1.setFirstName( "Jane" );
+		employee1.setLastName( "Doe" );
+		final Title title1 = new Title();
+		title1.setDescription( "Jane's description" );
+		final Department dept1 = new Department();
+		dept1.setDeptName( "Jane's department" );
+		employee1.setTitle( title1 );
+		employee1.setDepartment( dept1 );
+
+		final Employee employee2 = new Employee();
+		employee2.setFirstName( "John" );
+		employee2.setLastName( "Doe" );
+		final Title title2 = new Title();
+		title2.setDescription( "John's title" );
+		employee2.setTitle( title2 );
+
+		Session s = openSession();
+		s.getTransaction().begin();
+		s.persist( title1 );
+		s.persist( dept1 );
+		s.persist( employee1 );
+		s.persist( title2 );
+		s.persist( employee2 );
+		s.getTransaction().commit();
+		s.close();
+		s = openSession();
+		s.getTransaction().begin();
+		List list = s.createQuery( "select e.department from Employee e left join e.department" ).list();
+		assertEquals( 2, list.size() );
+		final Department dept;
+		if ( list.get( 0 ) == null ) {
+			dept = (Department) list.get( 1 );
+		}
+		else {
+			dept = (Department) list.get( 0 );
+			assertNull( list.get( 1 ) );
+		}
+		assertEquals( dept1.getDeptName(), dept.getDeptName() );
+		s.delete( employee1 );
+		s.delete( title1 );
+		s.delete( dept );
+		s.delete( employee2 );
+		s.delete( title2 );
+		s.getTransaction().commit();
+		s.close();
+	}
+
+	@Test
+	public void testExplicitToOneInnerJoinAndImplicitToOne() {
+		final Employee employee1 = new Employee();
+		employee1.setFirstName( "Jane" );
+		employee1.setLastName( "Doe" );
+		final Title title1 = new Title();
+		title1.setDescription( "Jane's description" );
+		final Department dept1 = new Department();
+		dept1.setDeptName( "Jane's department" );
+		employee1.setTitle( title1 );
+		employee1.setDepartment( dept1 );
+
+		final Employee employee2 = new Employee();
+		employee2.setFirstName( "John" );
+		employee2.setLastName( "Doe" );
+		final Title title2 = new Title();
+		title2.setDescription( "John's title" );
+		employee2.setTitle( title2 );
+
+		Session s = openSession();
+		s.getTransaction().begin();
+		s.persist( title1 );
+		s.persist( dept1 );
+		s.persist( employee1 );
+		s.persist( title2 );
+		s.persist( employee2 );
+		s.getTransaction().commit();
+		s.close();
+		s = openSession();
+		s.getTransaction().begin();
+		Object[] result = (Object[]) s.createQuery(
+				"select e.firstName, e.lastName, e.title.description, e.department from Employee e inner join e.department"
+		).uniqueResult();
+		assertEquals( employee1.getFirstName(), result[0] );
+		assertEquals( employee1.getLastName(), result[1] );
+		assertEquals( employee1.getTitle().getDescription(), result[2] );
+		assertEquals( employee1.getDepartment().getDeptName(), ( (Department) result[3] ).getDeptName() );
+		s.delete( employee1 );
+		s.delete( title1 );
+		s.delete( result[3] );
+		s.delete( employee2 );
+		s.delete( title2 );
+		s.getTransaction().commit();
+		s.close();
+	}
+
+	@Test
 	public void testNestedComponentIsNull() {
 		// (1) From MapTest originally...
 		// (2) Was then moved into HQLTest...
@@ -1029,10 +1392,12 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	public void testSimpleSelectWithLimitAndOffset() throws Exception {
 		// just checking correctness of param binding code...
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 		session.createQuery( "from Animal" )
 				.setFirstResult( 2 )
 				.setMaxResults( 1 )
 				.list();
+		t.commit();
 		session.close();
 	}
 
@@ -1075,7 +1440,11 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		s.createQuery( "from Human h where h.name = ('John', 'X', 'Doe')" ).list();
 		s.createQuery( "from Human h where ('John', 'X', 'Doe') = h.name" ).list();
 		s.createQuery( "from Human h where ('John', 'X', 'Doe') <> h.name" ).list();
-		s.createQuery( "from Human h where ('John', 'X', 'Doe') >= h.name" ).list();
+
+		// HANA only allows '=' and '<>'/'!='
+		if ( ! ( getDialect() instanceof AbstractHANADialect ) ) {
+			s.createQuery( "from Human h where ('John', 'X', 'Doe') >= h.name" ).list();
+		}
 
 		s.createQuery( "from Human h order by h.name" ).list();
 
@@ -1161,7 +1530,6 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	@FailureExpected( jiraKey = "unknown" )
 	public void testParameterTypeMismatch() {
 		Session s = openSession();
@@ -1207,6 +1575,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		// which in-and-of-itself is not necessarily bad.  But somewhere later
 		// the choices made there caused joins to be dropped.
 		Session s = openSession();
+		Transaction t = s.beginTransaction();
 		String qryString =
 				"select a.id, a.description" +
 				" from Animal a" +
@@ -1239,6 +1608,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 				"      where h = f1" +
 				")";
 		s.createQuery( qryString ).list();
+		t.commit();
 		s.close();
 	}
 
@@ -1439,7 +1809,13 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		// note: simply performing syntax and column/table resolution checking in the db
 		Session s = openSession();
 		s.beginTransaction();
-		s.createQuery( "from Animal where mother = :mother" ).setParameter( "mother", null ).list();
+		if ( getDialect() instanceof AbstractHANADialect ) {
+			s.createQuery( "from Animal where mother is null" ).list();
+		}
+		else {
+			s.createQuery( "from Animal where mother = :mother" ).setParameter( "mother", null ).list();
+		}
+
 		s.getTransaction().commit();
 		s.close();
 	}
@@ -1478,7 +1854,6 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryUnboxing"})
 	public void testArithmetic() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -1601,6 +1976,134 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		s.clear();
 		s.delete(plat);
 		s.delete(zoo);
+		t.commit();
+		s.close();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-9305")
+	@SuppressWarnings( {"unchecked"})
+	public void testSelectClauseImplicitJoinOrderByJoinedProperty() {
+		Session s = openSession();
+		Transaction t = s.beginTransaction();
+		Zoo zoo = new Zoo();
+		zoo.setName("The Zoo");
+		zoo.setMammals( new HashMap() );
+		zoo.setAnimals( new HashMap() );
+		Mammal plat = new Mammal();
+		plat.setBodyWeight( 11f );
+		plat.setDescription( "Platypus" );
+		plat.setZoo( zoo );
+		plat.setSerialNumber( "plat123" );
+		zoo.getMammals().put( "Platypus", plat );
+		zoo.getAnimals().put("plat123", plat);
+		Zoo otherZoo = new Zoo();
+		otherZoo.setName("The Other Zoo");
+		otherZoo.setMammals( new HashMap() );
+		otherZoo.setAnimals( new HashMap() );
+		Mammal zebra = new Mammal();
+		zebra.setBodyWeight( 110f );
+		zebra.setDescription( "Zebra" );
+		zebra.setZoo( otherZoo );
+		zebra.setSerialNumber( "zebra123" );
+		otherZoo.getMammals().put( "Zebra", zebra );
+		otherZoo.getAnimals().put("zebra123", zebra);
+		Mammal elephant = new Mammal();
+		elephant.setBodyWeight( 550f );
+		elephant.setDescription( "Elephant" );
+		elephant.setZoo( otherZoo );
+		elephant.setSerialNumber( "elephant123" );
+		otherZoo.getMammals().put( "Elephant", elephant );
+		otherZoo.getAnimals().put( "elephant123", elephant );
+		s.persist( plat );
+		s.persist(zoo);
+		s.persist( zebra );
+		s.persist( elephant );
+		s.persist( otherZoo );
+		s.flush();
+		s.clear();
+		Query q = s.createQuery("select a.zoo from Animal a where a.zoo is not null order by a.zoo.name");
+		Type type = q.getReturnTypes()[0];
+		assertTrue( type instanceof ManyToOneType );
+		assertEquals( ( (ManyToOneType) type ).getAssociatedEntityName(), "org.hibernate.test.hql.Zoo" );
+		List<Zoo> zoos = (List<Zoo>) q.list();
+		assertEquals( 3, zoos.size() );
+		assertEquals( otherZoo.getName(), zoos.get( 0 ).getName() );
+		assertEquals( 2, zoos.get( 0 ).getMammals().size() );
+		assertEquals( 2, zoos.get( 0 ).getAnimals().size() );
+		assertSame( zoos.get( 0 ), zoos.get( 1 ) );
+		assertEquals( zoo.getName(), zoos.get( 2 ).getName() );
+		assertEquals( 1, zoos.get( 2 ).getMammals().size() );
+		assertEquals( 1, zoos.get( 2 ).getAnimals().size() );
+		s.clear();
+		s.delete(plat);
+		s.delete( zebra );
+		s.delete( elephant );
+		s.delete(zoo);
+		s.delete( otherZoo );
+		t.commit();
+		s.close();
+	}
+
+	@Test
+	@SuppressWarnings( {"unchecked"})
+	public void testSelectClauseDistinctImplicitJoinOrderByJoinedProperty() {
+		Session s = openSession();
+		Transaction t = s.beginTransaction();
+		Zoo zoo = new Zoo();
+		zoo.setName("The Zoo");
+		zoo.setMammals( new HashMap() );
+		zoo.setAnimals( new HashMap() );
+		Mammal plat = new Mammal();
+		plat.setBodyWeight( 11f );
+		plat.setDescription( "Platypus" );
+		plat.setZoo( zoo );
+		plat.setSerialNumber( "plat123" );
+		zoo.getMammals().put( "Platypus", plat );
+		zoo.getAnimals().put("plat123", plat);
+		Zoo otherZoo = new Zoo();
+		otherZoo.setName("The Other Zoo");
+		otherZoo.setMammals( new HashMap() );
+		otherZoo.setAnimals( new HashMap() );
+		Mammal zebra = new Mammal();
+		zebra.setBodyWeight( 110f );
+		zebra.setDescription( "Zebra" );
+		zebra.setZoo( otherZoo );
+		zebra.setSerialNumber( "zebra123" );
+		otherZoo.getMammals().put( "Zebra", zebra );
+		otherZoo.getAnimals().put("zebra123", zebra);
+		Mammal elephant = new Mammal();
+		elephant.setBodyWeight( 550f );
+		elephant.setDescription( "Elephant" );
+		elephant.setZoo( otherZoo );
+		elephant.setSerialNumber( "elephant123" );
+		otherZoo.getMammals().put( "Elephant", elephant );
+		otherZoo.getAnimals().put( "elephant123", elephant );
+		s.persist( plat );
+		s.persist(zoo);
+		s.persist( zebra );
+		s.persist( elephant );
+		s.persist( otherZoo );
+		s.flush();
+		s.clear();
+		Query q = s.createQuery("select distinct a.zoo from Animal a where a.zoo is not null order by a.zoo.name");
+		Type type = q.getReturnTypes()[0];
+		assertTrue( type instanceof ManyToOneType );
+		assertEquals( ( (ManyToOneType) type ).getAssociatedEntityName(), "org.hibernate.test.hql.Zoo" );
+		List<Zoo> zoos = (List<Zoo>) q.list();
+		assertEquals( 2, zoos.size() );
+		assertEquals( otherZoo.getName(), zoos.get( 0 ).getName() );
+		assertEquals( 2, zoos.get( 0 ).getMammals().size() );
+		assertEquals( 2, zoos.get( 0 ).getAnimals().size() );
+		assertEquals( zoo.getName(), zoos.get( 1 ).getName() );
+		assertEquals( 1, zoos.get( 1 ).getMammals().size() );
+		assertEquals( 1, zoos.get( 1 ).getAnimals().size() );
+		s.clear();
+		s.delete(plat);
+		s.delete( zebra );
+		s.delete( elephant );
+		s.delete(zoo);
+		s.delete( otherZoo );
 		t.commit();
 		s.close();
 	}
@@ -1796,7 +2299,6 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testNumericExpressionReturnTypes() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -1959,7 +2461,6 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testIndexParams() {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -1992,7 +2493,6 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 
 	@Test
     @SkipForDialect( value = SybaseASE15Dialect.class, jiraKey = "HHH-6424")
-	@SuppressWarnings( {"UnnecessaryUnboxing"})
 	public void testAggregation() {
 		Session s = openSession();
 		s.beginTransaction();
@@ -2114,8 +2614,8 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		an.setBodyWeight(123.45f);
 		session.persist( an );
 		String str = (String) session.createQuery("select str(an.bodyWeight) from Animal an where str(an.bodyWeight) like '%1%'").uniqueResult();
-		if ( getDialect() instanceof DB2Dialect ) {
-			assertTrue( str.startsWith("1.234") );
+		if ( (getDialect() instanceof DB2Dialect || getDialect() instanceof TeradataDialect) && !(getDialect() instanceof DerbyDialect) ) {
+			assertTrue( str.startsWith( "1.234" ) );
 		}
 		else //noinspection deprecation
 			if ( getDialect() instanceof SybaseDialect || getDialect() instanceof Sybase11Dialect || getDialect() instanceof SybaseASE15Dialect || getDialect() instanceof SybaseAnywhereDialect || getDialect() instanceof SQLServerDialect ) {
@@ -2132,7 +2632,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		}
 
 		//noinspection deprecation
-		if ( ! ( getDialect() instanceof SybaseDialect ) && ! ( getDialect() instanceof Sybase11Dialect ) && ! ( getDialect() instanceof SybaseASE15Dialect ) && ! ( getDialect() instanceof SybaseAnywhereDialect ) && ! ( getDialect() instanceof SQLServerDialect ) ) {
+		if ( ! ( getDialect() instanceof SybaseDialect ) && ! ( getDialect() instanceof Sybase11Dialect ) && ! ( getDialect() instanceof SybaseASE15Dialect ) && ! ( getDialect() instanceof SybaseAnywhereDialect ) && ! ( getDialect() instanceof SQLServerDialect || getDialect() instanceof TeradataDialect ) ) {
 			// In TransactSQL (the variant spoken by Sybase and SQLServer), the str() function
 			// is explicitly intended for numeric values only...
 			String dateStr1 = (String) session.createQuery("select str(current_date) from Animal").uniqueResult();
@@ -2404,9 +2904,11 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	public void testFromOnly() throws Exception {
 		createTestBaseData();
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 		List results = session.createQuery( "from Animal" ).list();
 		assertEquals( "Incorrect result size", 2, results.size() );
 		assertTrue( "Incorrect result return type", results.get( 0 ) instanceof Animal );
+		t.commit();
 		session.close();
 		destroyTestBaseData();
 	}
@@ -2415,9 +2917,11 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	public void testSimpleSelect() throws Exception {
 		createTestBaseData();
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 		List results = session.createQuery( "select a from Animal as a" ).list();
 		assertEquals( "Incorrect result size", 2, results.size() );
 		assertTrue( "Incorrect result return type", results.get( 0 ) instanceof Animal );
+		t.commit();
 		session.close();
 		destroyTestBaseData();
 	}
@@ -2426,8 +2930,10 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	public void testEntityPropertySelect() throws Exception {
 		createTestBaseData();
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 		List results = session.createQuery( "select a.mother from Animal as a" ).list();
 		assertTrue( "Incorrect result return type", results.get( 0 ) instanceof Animal );
+		t.commit();
 		session.close();
 		destroyTestBaseData();
 	}
@@ -2437,6 +2943,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		createTestBaseData();
 
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 		List results = session.createQuery( "from Animal an where an.bodyWeight > 10" ).list();
 		assertEquals( "Incorrect result size", 1, results.size() );
 
@@ -2455,6 +2962,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		results = session.createQuery( "from Animal an where (an.bodyWeight > 10 and an.bodyWeight < 100) or an.bodyWeight is null" ).list();
 		assertEquals( "Incorrect result size", 1, results.size() );
 
+		t.commit();
 		session.close();
 
 		destroyTestBaseData();
@@ -2465,6 +2973,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		createTestBaseData();
 
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 
 		List results = session.createQuery( "from Animal an join fetch an.mother" ).list();
 		assertEquals( "Incorrect result size", 1, results.size() );
@@ -2478,6 +2987,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		mother = ( ( Animal ) results.get( 0 ) ).getMother();
 		assertTrue( "fetch uninitialized", mother != null && Hibernate.isInitialized( mother ) );
 
+		t.commit();
 		session.close();
 
 		destroyTestBaseData();
@@ -2488,6 +2998,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		createTestBaseData();
 
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 		List results = session.createQuery( "from Animal an join fetch an.offspring" ).list();
 		assertEquals( "Incorrect result size", 1, results.size() );
 		assertTrue( "Incorrect result return type", results.get( 0 ) instanceof Animal );
@@ -2500,6 +3011,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		os = ( ( Animal ) results.get( 0 ) ).getOffspring();
 		assertTrue( "fetch uninitialized", os != null && Hibernate.isInitialized( os ) && os.size() == 1 );
 
+		t.commit();
 		session.close();
 
 		destroyTestBaseData();
@@ -2520,6 +3032,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		session.save( mammal );
 		session.save( zoo );
 		txn.commit();
+		session.close();
 
 		session = openSession();
 		txn = session.beginTransaction();
@@ -2552,6 +3065,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		session.save( mammal );
 		session.save( zoo );
 		txn.commit();
+		session.close();
 
 		session = openSession();
 		txn = session.beginTransaction();
@@ -2584,6 +3098,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		session.save( mammal );
 		session.save( zoo );
 		txn.commit();
+		session.close();
 
 		session = openSession();
 		txn = session.beginTransaction();
@@ -2605,11 +3120,15 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	public void testProjectionQueries() throws Exception {
 		createTestBaseData();
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
+
 		List results = session.createQuery( "select an.mother.id, max(an.bodyWeight) from Animal an group by an.mother.id" ).list();
 		// mysql returns nulls in this group by
 		assertEquals( "Incorrect result size", 2, results.size() );
 		assertTrue( "Incorrect return type", results.get( 0 ) instanceof Object[] );
-		assertEquals( "Incorrect return dimensions", 2, ( ( Object[] ) results.get( 0 ) ).length );
+		assertEquals( "Incorrect return dimensions", 2, ((Object[]) results.get( 0 )).length );
+
+		t.commit();
 		session.close();
 		destroyTestBaseData();
 	}
@@ -2642,6 +3161,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		createTestBaseData();
 
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 
 		List results = session.createQuery( "select new Animal(an.description, an.bodyWeight) from Animal an" ).list();
 		assertEquals( "Incorrect result size", 2, results.size() );
@@ -2720,9 +3240,122 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		assertEquals( "incorrect result size", 2, results.size() );
 		assertClassAssignability( Animal.class, results.get( 0 ).getClass() );
 
+		t.commit();
 		session.close();
 
 		destroyTestBaseData();
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-9305")
+	public void testDynamicInstantiationWithToOneQueries() throws Exception {
+		final Employee employee1 = new Employee();
+		employee1.setFirstName( "Jane" );
+		employee1.setLastName( "Doe" );
+		final Title title1 = new Title();
+		title1.setDescription( "Jane's description" );
+		final Department dept1 = new Department();
+		dept1.setDeptName( "Jane's department" );
+		employee1.setTitle( title1 );
+		employee1.setDepartment( dept1 );
+
+		final Employee employee2 = new Employee();
+		employee2.setFirstName( "John" );
+		employee2.setLastName( "Doe" );
+		final Title title2 = new Title();
+		title2.setDescription( "John's title" );
+		employee2.setTitle( title2 );
+
+		Session s = openSession();
+		s.getTransaction().begin();
+		s.persist( title1 );
+		s.persist( dept1 );
+		s.persist( employee1 );
+		s.persist( title2 );
+		s.persist( employee2 );
+		s.getTransaction().commit();
+		s.close();
+
+		// There are 2 to-one associations: Employee.title and Employee.department.
+		// It appears that adding an explicit join for one of these to-one associations keeps ANSI joins
+		// at the beginning of the FROM clause, avoiding failures on DBs that cannot handle cross joins
+		// interleaved with ANSI joins (e.g., PostgreSql).
+
+		s = openSession();
+		s.getTransaction().begin();
+		List results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, e.department, e.firstName) from Employee e inner join e.title"
+		).list();
+		assertEquals( "Incorrect result size", 1, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, t.id, t.description, e.department, e.firstName) from Employee e inner join e.title t"
+		).list();
+		assertEquals( "Incorrect result size", 1, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, e.department, e.firstName) from Employee e inner join e.department"
+		).list();
+		assertEquals( "Incorrect result size", 1, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, d, e.firstName) from Employee e inner join e.department d"
+		).list();
+		assertEquals( "Incorrect result size", 1, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, e.department, e.firstName) from Employee e left outer join e.department"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, d, e.firstName) from Employee e left outer join e.department d"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, e.department, e.firstName) from Employee e left outer join e.department inner join e.title"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, t.id, t.description, d, e.firstName) from Employee e left outer join e.department d inner join e.title t"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, e.department, e.firstName) from Employee e left outer join e.department left outer join e.title"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, t.id, t.description, d, e.firstName) from Employee e left outer join e.department d left outer join e.title t"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, e.department, e.firstName) from Employee e left outer join e.department order by e.title.description"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		results = session.createQuery(
+				"select new Employee(e.id, e.lastName, e.title.id, e.title.description, e.department, e.firstName) from Employee e left outer join e.department d order by e.title.description"
+		).list();
+		assertEquals( "Incorrect result size", 2, results.size() );
+		assertClassAssignability( results.get( 0 ).getClass(), Employee.class );
+		s.getTransaction().commit();
+
+		s.close();
+
+		s = openSession();
+		s.getTransaction().begin();
+		s.delete( employee1 );
+		s.delete( title1 );
+		s.delete( dept1 );
+		s.delete( employee2 );
+		s.delete( title2 );
+		s.getTransaction().commit();
+		s.close();
 	}
 
 	@Test
@@ -2829,7 +3462,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	@Test
 	public void testIllegalMixedTransformerQueries() {
 		Session session = openSession();
-
+		Transaction t = session.beginTransaction();
 		try {
 			getSelectNewQuery( session ).setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP).list();
 			fail("'select new' together with a resulttransformer should result in error!");
@@ -2850,7 +3483,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		} catch(HibernateException he) {
 			assertTrue(he.getMessage().indexOf("ResultTransformer")==0);
 		}
-
+		t.commit();
 		session.close();
 	}
 
@@ -2865,50 +3498,59 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		String query = "select an.description as description, an.bodyWeight as bodyWeight from Animal an order by bodyWeight desc";
 
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 
 		List results = session.createQuery( query )
 		.setResultTransformer(Transformers.aliasToBean(Animal.class)).list();
+
 		assertEquals( "Incorrect result size", results.size(), 2 );
 		assertTrue( "Incorrect return type", results.get(0) instanceof Animal );
 		Animal firstAnimal = (Animal) results.get(0);
 		Animal secondAnimal = (Animal) results.get(1);
 		assertEquals("Mammal #1", firstAnimal.getDescription());
-		assertEquals("Mammal #2", secondAnimal.getDescription());
-		assertFalse(session.contains(firstAnimal));
+		assertEquals( "Mammal #2", secondAnimal.getDescription() );
+		assertFalse( session.contains( firstAnimal ) );
+		t.commit();
 		session.close();
 
 		session = openSession();
-
+		t = session.beginTransaction();
 		Iterator iter = session.createQuery( query )
 	     .setResultTransformer(Transformers.aliasToBean(Animal.class)).iterate();
 		assertTrue( "Incorrect result size", iter.hasNext() );
 		assertTrue( "Incorrect return type", iter.next() instanceof Animal );
 
+		t.commit();
 		session.close();
 
 		session = openSession();
+		t = session.beginTransaction();
 
 		ScrollableResults sr = session.createQuery( query )
-	     .setResultTransformer(Transformers.aliasToBean(Animal.class)).scroll();
+			     .setResultTransformer(Transformers.aliasToBean(Animal.class)).scroll();
+
 		assertTrue( "Incorrect result size", sr.next() );
 		assertTrue( "Incorrect return type", sr.get(0) instanceof Animal );
 		assertFalse( session.contains( sr.get( 0 ) ) );
 		sr.close();
 
+		t.commit();
 		session.close();
 
 		session = openSession();
+		t = session.beginTransaction();
 
 		results = session.createQuery( "select a from Animal a, Animal b order by a.id" )
 				.setResultTransformer( DistinctRootEntityResultTransformer.INSTANCE )
 				.list();
 		assertEquals( "Incorrect result size", 2, results.size());
-		assertTrue( "Incorrect return type", results.get(0) instanceof Animal );
+		assertTrue( "Incorrect return type", results.get( 0 ) instanceof Animal );
 		firstAnimal = (Animal) results.get(0);
 		secondAnimal = (Animal) results.get(1);
 		assertEquals( "Mammal #1", firstAnimal.getDescription() );
 		assertEquals( "Mammal #2", secondAnimal.getDescription() );
 
+		t.commit();
 		session.close();
 
 		destroyTestBaseData();
@@ -2921,6 +3563,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		String query = "select an as an from Animal an order by bodyWeight desc";
 
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 
 		List results = session.createQuery( query )
 		.setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP).list();
@@ -2933,11 +3576,13 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		Animal secondAnimal = (Animal) map.get("an");
 		assertEquals( "Mammal #1", firstAnimal.getDescription() );
 		assertEquals("Mammal #2", secondAnimal.getDescription());
-		assertTrue(session.contains(firstAnimal));
+		assertTrue( session.contains( firstAnimal));
 		assertSame( firstAnimal, session.get( Animal.class, firstAnimal.getId() ) );
+		t.commit();
 		session.close();
 
 		session = openSession();
+		t = session.beginTransaction();
 
 		Iterator iter = session.createQuery( query )
 	     .setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP).iterate();
@@ -2947,17 +3592,21 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		assertEquals( "Mammal #1", firstAnimal.getDescription() );
 		assertTrue( "Incorrect result size", iter.hasNext() );
 
+		t.commit();
 		session.close();
 
 		session = openSession();
+		t = session.beginTransaction();
 
 		ScrollableResults sr = session.createQuery( query )
-	     .setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP).scroll();
+				.setResultTransformer(Transformers.ALIAS_TO_ENTITY_MAP).scroll();
+
 		assertTrue( "Incorrect result size", sr.next() );
 		assertTrue( "Incorrect return type", sr.get(0) instanceof Map );
 		assertFalse( session.contains( sr.get( 0 ) ) );
 		sr.close();
 
+		t.commit();
 		session.close();
 
 		destroyTestBaseData();
@@ -2966,6 +3615,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 	@Test
 	public void testEJBQLFunctions() throws Exception {
 		Session session = openSession();
+		Transaction t = session.beginTransaction();
 
 		String hql = "from Animal a where a.description = concat('1', concat('2','3'), '4'||'5')||'0'";
 		session.createQuery(hql).list();
@@ -3032,17 +3682,20 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		 * PostgreSQL >= 8.3.7 typecasts are no longer automatically allowed
 		 * <link>http://www.postgresql.org/docs/current/static/release-8-3.html</link>
 		 */
-		if(getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect || getDialect() instanceof HSQLDialect){
+		if ( getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect
+				|| getDialect() instanceof HSQLDialect ) {
 			hql = "from Animal a where bit_length(str(a.bodyWeight)) = 24";
 		}
-		else{
+		else {
 			hql = "from Animal a where bit_length(a.bodyWeight) = 24";
 		}
 
 		session.createQuery(hql).list();
-		if(getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect || getDialect() instanceof HSQLDialect){
+		if ( getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect
+				|| getDialect() instanceof HSQLDialect ) {
 			hql = "select bit_length(str(a.bodyWeight)) from Animal a";
-		}else{
+		}
+		else {
 			hql = "select bit_length(a.bodyWeight) from Animal a";
 		}
 
@@ -3065,6 +3718,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 		hql = "from Animal a where a.description like 'x%ax%' escape 'x'";
 		session.createQuery(hql).list();
 
+		t.commit();
 		session.close();
 	}
 

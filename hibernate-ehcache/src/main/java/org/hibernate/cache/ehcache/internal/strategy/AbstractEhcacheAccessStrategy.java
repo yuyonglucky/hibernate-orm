@@ -1,32 +1,17 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.ehcache.internal.strategy;
 
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.ehcache.internal.regions.EhcacheTransactionalDataRegion;
+import org.hibernate.cache.spi.access.RegionAccessStrategy;
 import org.hibernate.cache.spi.access.SoftLock;
-import org.hibernate.cfg.Settings;
+import org.hibernate.engine.spi.SessionImplementor;
 
 /**
  * Ultimate superclass for all Ehcache specific Hibernate AccessStrategy implementations.
@@ -38,7 +23,7 @@ import org.hibernate.cfg.Settings;
  */
 abstract class AbstractEhcacheAccessStrategy<T extends EhcacheTransactionalDataRegion> {
 	private final T region;
-	private final Settings settings;
+	private final SessionFactoryOptions settings;
 
 	/**
 	 * Create an access strategy wrapping the given region.
@@ -46,7 +31,7 @@ abstract class AbstractEhcacheAccessStrategy<T extends EhcacheTransactionalDataR
 	 * @param region The wrapped region.  Accessible to subclasses via {@link #region()}
 	 * @param settings The Hibernate settings.  Accessible to subclasses via {@link #settings()}
 	 */
-	AbstractEhcacheAccessStrategy(T region, Settings settings) {
+	AbstractEhcacheAccessStrategy(T region, SessionFactoryOptions settings) {
 		this.region = region;
 		this.settings = settings;
 	}
@@ -61,7 +46,7 @@ abstract class AbstractEhcacheAccessStrategy<T extends EhcacheTransactionalDataR
 	/**
 	 * The settings for this persistence unit.
 	 */
-	protected Settings settings() {
+	protected SessionFactoryOptions settings() {
 		return settings;
 	}
 
@@ -69,21 +54,21 @@ abstract class AbstractEhcacheAccessStrategy<T extends EhcacheTransactionalDataR
 	 * This method is a placeholder for method signatures supplied by interfaces pulled in further down the class
 	 * hierarchy.
 	 *
-	 * @see org.hibernate.cache.spi.access.EntityRegionAccessStrategy#putFromLoad(java.lang.Object, java.lang.Object, long, java.lang.Object)
-	 * @see org.hibernate.cache.spi.access.CollectionRegionAccessStrategy#putFromLoad(java.lang.Object, java.lang.Object, long, java.lang.Object)
+	 * @see RegionAccessStrategy#putFromLoad(SessionImplementor, Object, Object, long, Object)
+	 * @see RegionAccessStrategy#putFromLoad(SessionImplementor, Object, Object, long, Object)
 	 */
-	public final boolean putFromLoad(Object key, Object value, long txTimestamp, Object version) throws CacheException {
-		return putFromLoad( key, value, txTimestamp, version, settings.isMinimalPutsEnabled() );
+	public final boolean putFromLoad(SessionImplementor session, Object key, Object value, long txTimestamp, Object version) throws CacheException {
+		return putFromLoad( session, key, value, txTimestamp, version, settings.isMinimalPutsEnabled() );
 	}
 
 	/**
 	 * This method is a placeholder for method signatures supplied by interfaces pulled in further down the class
 	 * hierarchy.
 	 *
-	 * @see org.hibernate.cache.spi.access.EntityRegionAccessStrategy#putFromLoad(java.lang.Object, java.lang.Object, long, java.lang.Object, boolean)
-	 * @see org.hibernate.cache.spi.access.CollectionRegionAccessStrategy#putFromLoad(java.lang.Object, java.lang.Object, long, java.lang.Object, boolean)
+	 * @see RegionAccessStrategy#putFromLoad(SessionImplementor, Object, Object, long, Object, boolean)
+	 * @see RegionAccessStrategy#putFromLoad(SessionImplementor, Object, Object, long, Object, boolean)
 	 */
-	public abstract boolean putFromLoad(Object key, Object value, long txTimestamp, Object version, boolean minimalPutOverride)
+	public abstract boolean putFromLoad(SessionImplementor session, Object key, Object value, long txTimestamp, Object version, boolean minimalPutOverride)
 			throws CacheException;
 
 	/**
@@ -113,10 +98,10 @@ abstract class AbstractEhcacheAccessStrategy<T extends EhcacheTransactionalDataR
 	/**
 	 * A no-op since this is an asynchronous cache access strategy.
 	 *
-	 * @see org.hibernate.cache.spi.access.EntityRegionAccessStrategy#remove(java.lang.Object)
-	 * @see org.hibernate.cache.spi.access.CollectionRegionAccessStrategy#remove(java.lang.Object)
+	 * @see RegionAccessStrategy#remove(SessionImplementor, Object)
+	 * @see RegionAccessStrategy#remove(SessionImplementor, Object)
 	 */
-	public void remove(Object key) throws CacheException {
+	public void remove(SessionImplementor session, Object key) throws CacheException {
 	}
 
 	/**

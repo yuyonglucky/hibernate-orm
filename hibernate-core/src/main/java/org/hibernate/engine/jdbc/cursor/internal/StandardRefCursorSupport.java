@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.jdbc.cursor.internal;
 
@@ -31,12 +14,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
-import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.jdbc.cursor.spi.RefCursorSupport;
+import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.service.spi.InjectService;
+
+import org.jboss.logging.Logger;
 
 /**
  * Standard implementation of RefCursorSupport
@@ -174,12 +157,11 @@ public class StandardRefCursorSupport implements RefCursorSupport {
 	 *
 	 * @return {@code true} if the metadata indicates that the driver defines REF_CURSOR support
 	 */
-	@SuppressWarnings("UnnecessaryUnboxing")
 	public static boolean supportsRefCursors(DatabaseMetaData meta) {
 		// Standard JDBC REF_CURSOR support was not added until Java 8, so we need to use reflection to attempt to
 		// access these fields/methods...
 		try {
-			return ( (Boolean) meta.getClass().getMethod( "supportsRefCursors" ).invoke( null ) ).booleanValue();
+			return (Boolean) meta.getClass().getMethod( "supportsRefCursors" ).invoke( null );
 		}
 		catch (NoSuchMethodException e) {
 			log.trace( "JDBC DatabaseMetaData class does not define supportsRefCursors method..." );
@@ -193,7 +175,6 @@ public class StandardRefCursorSupport implements RefCursorSupport {
 
 	private static Integer refCursorTypeCode;
 
-	@SuppressWarnings("UnnecessaryUnboxing")
 	private int refCursorTypeCode() {
 		if ( refCursorTypeCode == null ) {
 			try {

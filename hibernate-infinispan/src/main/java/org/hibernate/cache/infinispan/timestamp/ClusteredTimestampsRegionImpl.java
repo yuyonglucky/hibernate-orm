@@ -1,43 +1,29 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2012 Red Hat Inc. and/or its affiliates and other
- * contributors as indicated by the @author tags. All rights reserved.
- * See the copyright.txt in the distribution for a full listing of
- * individual contributors.
+ * Hibernate, Relational Persistence for Idiomatic Java
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.infinispan.timestamp;
 
-import javax.transaction.Transaction;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.transaction.Transaction;
 
+import org.hibernate.cache.CacheException;
+import org.hibernate.cache.infinispan.util.Caches;
+import org.hibernate.cache.spi.RegionFactory;
+
+import org.hibernate.engine.spi.SessionImplementor;
 import org.infinispan.AdvancedCache;
+import org.infinispan.commons.util.CloseableIterable;
+import org.infinispan.container.entries.CacheEntry;
 import org.infinispan.context.Flag;
 import org.infinispan.notifications.Listener;
 import org.infinispan.notifications.cachelistener.annotation.CacheEntryModified;
 import org.infinispan.notifications.cachelistener.annotation.CacheEntryRemoved;
 import org.infinispan.notifications.cachelistener.event.CacheEntryModifiedEvent;
 import org.infinispan.notifications.cachelistener.event.CacheEntryRemovedEvent;
-
-import org.hibernate.cache.CacheException;
-import org.hibernate.cache.infinispan.util.Caches;
-import org.hibernate.cache.spi.RegionFactory;
 
 /**
  * Timestamp cache region for clustered environments.
@@ -78,24 +64,11 @@ public class ClusteredTimestampsRegionImpl extends TimestampsRegionImpl {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public Object get(Object key) throws CacheException {
+	public Object get(SessionImplementor session, Object key) throws CacheException {
 		Object value = localCache.get( key );
 
-		// If the region is not valid, skip cache store to avoid going remote to retrieve the query.
-		// The aim of this is to maintain same logic/semantics as when state transfer was configured.
-		// TODO: Once https://issues.jboss.org/browse/ISPN-835 has been resolved, revert to state transfer and remove workaround
-		boolean skipCacheStore = false;
-		if ( !isValid() ) {
-			skipCacheStore = true;
-		}
-
 		if ( value == null && checkValid() ) {
-			if ( skipCacheStore ) {
-				value = cache.withFlags( Flag.SKIP_CACHE_STORE ).get( key );
-			}
-			else {
-				value = cache.get( key );
-			}
+			value = cache.get( key );
 
 			if ( value != null ) {
 				localCache.put( key, value );
@@ -136,9 +109,14 @@ public class ClusteredTimestampsRegionImpl extends TimestampsRegionImpl {
 	 * Brings all data from the distributed cache into our local cache.
 	 */
 	private void populateLocalCache() {
-		final Set children = cache.keySet();
-		for ( Object key : children ) {
-			get( key );
+		CloseableIterable<Object> iterable = Caches.keys(cache);
+		try {
+			for (Object key : iterable) {
+				get(null, key);
+			}
+		}
+		finally {
+			iterable.close();
 		}
 	}
 

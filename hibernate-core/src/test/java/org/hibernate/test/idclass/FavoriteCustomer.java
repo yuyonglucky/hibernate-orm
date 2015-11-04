@@ -1,6 +1,10 @@
-//$Id: FavoriteCustomer.java 7858 2005-08-11 21:46:58Z epbernard $
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.idclass;
-
 
 /**
  * @author Emmanuel Bernard

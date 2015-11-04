@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.spi;
 
@@ -34,6 +17,8 @@ import org.hibernate.persister.entity.PropertyMapping;
  * @author Gavin King
  */
 public class SubselectFetch {
+	private static final String FROM_STRING = " from ";
+
 	private final Set resultingEntityKeys;
 	private final String queryString;
 	private final String alias;
@@ -42,13 +27,12 @@ public class SubselectFetch {
 	private final Map namedParameterLocMap;
 
 	public SubselectFetch(
-		//final String queryString,
-		final String alias,
-		final Loadable loadable,
-		final QueryParameters queryParameters,
-		final Set resultingEntityKeys,
-		final Map namedParameterLocMap
-	) {
+			//final String queryString,
+			final String alias,
+			final Loadable loadable,
+			final QueryParameters queryParameters,
+			final Set resultingEntityKeys,
+			final Map namedParameterLocMap) {
 		this.resultingEntityKeys = resultingEntityKeys;
 		this.queryParameters = queryParameters;
 		this.namedParameterLocMap = namedParameterLocMap;
@@ -57,12 +41,50 @@ public class SubselectFetch {
 
 		//TODO: ugly here:
 		final String queryString = queryParameters.getFilteredSQL();
-		int fromIndex = queryString.indexOf(" from ");
-		int orderByIndex = queryString.lastIndexOf("order by");
-		this.queryString = orderByIndex>0 ?
-				queryString.substring(fromIndex, orderByIndex) :
-				queryString.substring(fromIndex);
+		final int fromIndex = getFromIndex( queryString );
+		final int orderByIndex = queryString.lastIndexOf( "order by" );
+		this.queryString = orderByIndex > 0
+				? queryString.substring( fromIndex, orderByIndex )
+				: queryString.substring( fromIndex );
+	}
 
+	private static int getFromIndex(String queryString) {
+		int index = queryString.indexOf( FROM_STRING );
+
+		if ( index < 0 ) {
+			return index;
+		}
+
+		while ( !parenthesesMatch( queryString.substring( 0, index ) ) ) {
+			String subString = queryString.substring( index + FROM_STRING.length() );
+
+			int subIndex = subString.indexOf( FROM_STRING );
+
+			if ( subIndex < 0 ) {
+				return subIndex;
+			}
+
+			index += FROM_STRING.length() + subIndex;
+		}
+
+		return index;
+	}
+
+	private static boolean parenthesesMatch(String string) {
+		int parenCount = 0;
+
+		for ( int i = 0; i < string.length(); i++ ) {
+			char character = string.charAt( i );
+
+			if ( character == '(' ) {
+				parenCount++;
+			}
+			else if ( character == ')' ) {
+				parenCount--;
+			}
+		}
+
+		return parenCount == 0;
 	}
 
 	public QueryParameters getQueryParameters() {
@@ -77,20 +99,15 @@ public class SubselectFetch {
 	}
 
 	public String toSubselectString(String ukname) {
+		String[] joinColumns = ukname == null
+				? StringHelper.qualify( alias, loadable.getIdentifierColumnNames() )
+				: ( (PropertyMapping) loadable ).toColumns( alias, ukname );
 
-		String[] joinColumns = ukname==null ?
-			StringHelper.qualify( alias, loadable.getIdentifierColumnNames() ) :
-			( (PropertyMapping) loadable ).toColumns(alias, ukname);
-
-		return new StringBuilder()
-			.append("select ")
-			.append( StringHelper.join(", ", joinColumns) )
-			.append(queryString)
-			.toString();
+		return "select " + StringHelper.join( ", ", joinColumns ) + queryString;
 	}
 
 	@Override
-    public String toString() {
+	public String toString() {
 		return "SubselectFetch(" + queryString + ')';
 	}
 

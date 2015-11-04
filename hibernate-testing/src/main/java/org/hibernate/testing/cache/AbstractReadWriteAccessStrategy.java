@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.testing.cache;
 
 import java.io.Serializable;
@@ -6,19 +12,18 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.spi.access.SoftLock;
-import org.hibernate.internal.CoreMessageLogger;
+
+import org.hibernate.engine.spi.SessionImplementor;
+import org.jboss.logging.Logger;
 
 /**
  * @author Strong Liu
  */
 abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy {
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger(
-			CoreMessageLogger.class, AbstractReadWriteAccessStrategy.class.getName()
-	);
+	private static final Logger LOG = Logger.getLogger( AbstractReadWriteAccessStrategy.class.getName() );
+
 	private final UUID uuid = UUID.randomUUID();
 	private final AtomicLong nextLockId = new AtomicLong();
 	private ReentrantReadWriteLock reentrantReadWriteLock = new ReentrantReadWriteLock();
@@ -30,11 +35,11 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 	 * after the start of this transaction.
 	 */
 	@Override
-	public final Object get(Object key, long txTimestamp) throws CacheException {
+	public final Object get(SessionImplementor session, Object key, long txTimestamp) throws CacheException {
 		LOG.debugf( "getting key[%s] from region[%s]", key, getInternalRegion().getName() );
 		try {
 			readLock.lock();
-			Lockable item = (Lockable) getInternalRegion().get( key );
+			Lockable item = (Lockable) getInternalRegion().get( session, key );
 
 			boolean readable = item != null && item.isReadable( txTimestamp );
 			if ( readable ) {
@@ -43,8 +48,9 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 			}
 			else {
 				if ( item == null ) {
-					LOG.debugf( "miss key[%s] in region[%s]", key, getInternalRegion().getName());
-				} else {
+					LOG.debugf( "miss key[%s] in region[%s]", key, getInternalRegion().getName() );
+				}
+				else {
 					LOG.debugf( "hit key[%s] in region[%s], but it is unreadable", key, getInternalRegion().getName() );
 				}
 				return null;
@@ -62,20 +68,36 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 	 * key.
 	 */
 	@Override
-	public final boolean putFromLoad(Object key, Object value, long txTimestamp, Object version, boolean minimalPutOverride)
+	public final boolean putFromLoad(
+			SessionImplementor session,
+			Object key,
+			Object value,
+			long txTimestamp,
+			Object version,
+			boolean minimalPutOverride)
 			throws CacheException {
 		try {
 			LOG.debugf( "putting key[%s] -> value[%s] into region[%s]", key, value, getInternalRegion().getName() );
 			writeLock.lock();
-			Lockable item = (Lockable) getInternalRegion().get( key );
+			Lockable item = (Lockable) getInternalRegion().get( session, key );
 			boolean writeable = item == null || item.isWriteable( txTimestamp, version, getVersionComparator() );
 			if ( writeable ) {
-				LOG.debugf( "putting key[%s] -> value[%s] into region[%s] success", key, value, getInternalRegion().getName() );
-				getInternalRegion().put( key, new Item( value, version, getInternalRegion().nextTimestamp() ) );
+				LOG.debugf(
+						"putting key[%s] -> value[%s] into region[%s] success",
+						key,
+						value,
+						getInternalRegion().getName()
+				);
+				getInternalRegion().put( session, key, new Item( value, version, getInternalRegion().nextTimestamp() ) );
 				return true;
 			}
 			else {
-				LOG.debugf( "putting key[%s] -> value[%s] into region[%s] fail due to it is unwriteable", key, value, getInternalRegion().getName() );
+				LOG.debugf(
+						"putting key[%s] -> value[%s] into region[%s] fail due to it is unwriteable",
+						key,
+						value,
+						getInternalRegion().getName()
+				);
 				return false;
 			}
 		}
@@ -87,19 +109,20 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 	/**
 	 * Soft-lock a cache item.
 	 */
-	public final SoftLock lockItem(Object key, Object version) throws CacheException {
+	@Override
+	public final SoftLock lockItem(SessionImplementor session, Object key, Object version) throws CacheException {
 
 		try {
 			LOG.debugf( "locking key[%s] in region[%s]", key, getInternalRegion().getName() );
 			writeLock.lock();
-			Lockable item = (Lockable) getInternalRegion().get( key );
+			Lockable item = (Lockable) getInternalRegion().get( session, key );
 			long timeout = getInternalRegion().nextTimestamp() + getInternalRegion().getTimeout();
 			final Lock lock = ( item == null ) ? new Lock( timeout, uuid, nextLockId(), version ) : item.lock(
 					timeout,
 					uuid,
 					nextLockId()
 			);
-			getInternalRegion().put( key, lock );
+			getInternalRegion().put( session, key, lock );
 			return lock;
 		}
 		finally {
@@ -110,18 +133,19 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 	/**
 	 * Soft-unlock a cache item.
 	 */
-	public final void unlockItem(Object key, SoftLock lock) throws CacheException {
+	@Override
+	public final void unlockItem(SessionImplementor session, Object key, SoftLock lock) throws CacheException {
 
 		try {
 			LOG.debugf( "unlocking key[%s] in region[%s]", key, getInternalRegion().getName() );
 			writeLock.lock();
-			Lockable item = (Lockable) getInternalRegion().get( key );
+			Lockable item = (Lockable) getInternalRegion().get( session, key );
 
 			if ( ( item != null ) && item.isUnlockable( lock ) ) {
-				decrementLock( key, (Lock) item );
+				decrementLock(session, key, (Lock) item );
 			}
 			else {
-				handleLockExpiry( key, item );
+				handleLockExpiry(session, key, item );
 			}
 		}
 		finally {
@@ -136,54 +160,55 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 	/**
 	 * Unlock and re-put the given key, lock combination.
 	 */
-	protected void decrementLock(Object key, Lock lock) {
+	protected void decrementLock(SessionImplementor session, Object key, Lock lock) {
 		lock.unlock( getInternalRegion().nextTimestamp() );
-		getInternalRegion().put( key, lock );
+		getInternalRegion().put( session, key, lock );
 	}
 
 	/**
 	 * Handle the timeout of a previous lock mapped to this key
 	 */
-	protected void handleLockExpiry(Object key, Lockable lock) {
-		LOG.expired(key);
+	protected void handleLockExpiry(SessionImplementor session, Object key, Lockable lock) {
+		LOG.info( "Cached entry expired : " + key );
+
 		long ts = getInternalRegion().nextTimestamp() + getInternalRegion().getTimeout();
 		// create new lock that times out immediately
 		Lock newLock = new Lock( ts, uuid, nextLockId.getAndIncrement(), null );
 		newLock.unlock( ts );
-		getInternalRegion().put( key, newLock );
+		getInternalRegion().put( session, key, newLock );
 	}
 
 	/**
 	 * Interface type implemented by all wrapper objects in the cache.
 	 */
-	protected static interface Lockable {
+	protected interface Lockable {
 
 		/**
 		 * Returns <code>true</code> if the enclosed value can be read by a transaction started at the given time.
 		 */
-		public boolean isReadable(long txTimestamp);
+		boolean isReadable(long txTimestamp);
 
 		/**
 		 * Returns <code>true</code> if the enclosed value can be replaced with one of the given version by a
 		 * transaction started at the given time.
 		 */
-		public boolean isWriteable(long txTimestamp, Object version, Comparator versionComparator);
+		boolean isWriteable(long txTimestamp, Object version, Comparator versionComparator);
 
 		/**
 		 * Returns the enclosed value.
 		 */
-		public Object getValue();
+		Object getValue();
 
 		/**
 		 * Returns <code>true</code> if the given lock can be unlocked using the given SoftLock instance as a handle.
 		 */
-		public boolean isUnlockable(SoftLock lock);
+		boolean isUnlockable(SoftLock lock);
 
 		/**
 		 * Locks this entry, stamping it with the UUID and lockId given, with the lock timeout occuring at the specified
 		 * time.  The returned Lock object can be used to unlock the entry in the future.
 		 */
-		public Lock lock(long timeout, UUID uuid, long lockId);
+		Lock lock(long timeout, UUID uuid, long lockId);
 	}
 
 	/**
@@ -205,37 +230,27 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 			this.timestamp = timestamp;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public boolean isReadable(long txTimestamp) {
 			return txTimestamp > timestamp;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public boolean isWriteable(long txTimestamp, Object newVersion, Comparator versionComparator) {
 			return version != null && versionComparator.compare( version, newVersion ) < 0;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public Object getValue() {
 			return value;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public boolean isUnlockable(SoftLock lock) {
 			return false;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public Lock lock(long timeout, UUID uuid, long lockId) {
 			return new Lock( timeout, uuid, lockId, version );
 		}
@@ -267,16 +282,12 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 			this.sourceUuid = sourceUuid;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public boolean isReadable(long txTimestamp) {
 			return false;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public boolean isWriteable(long txTimestamp, Object newVersion, Comparator versionComparator) {
 			if ( txTimestamp > timeout ) {
 				// if timedout then allow write
@@ -292,23 +303,16 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 			) < 0;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public Object getValue() {
 			return null;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public boolean isUnlockable(SoftLock lock) {
 			return equals( lock );
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
 		@Override
 		public boolean equals(Object o) {
 			if ( o == this ) {
@@ -322,9 +326,6 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 			}
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
 		@Override
 		public int hashCode() {
 			int hash = ( sourceUuid != null ? sourceUuid.hashCode() : 0 );
@@ -342,9 +343,7 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 			return concurrent;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public Lock lock(long timeout, UUID uuid, long lockId) {
 			concurrent = true;
 			multiplicity++;
@@ -361,12 +360,9 @@ abstract class AbstractReadWriteAccessStrategy extends BaseRegionAccessStrategy 
 			}
 		}
 
-		/**
-		 * {@inheritDoc}
-		 */
+		@Override
 		public String toString() {
-			StringBuilder sb = new StringBuilder( "Lock Source-UUID:" + sourceUuid + " Lock-ID:" + lockId );
-			return sb.toString();
+			return "Lock Source-UUID:" + sourceUuid + " Lock-ID:" + lockId;
 		}
 	}
 }

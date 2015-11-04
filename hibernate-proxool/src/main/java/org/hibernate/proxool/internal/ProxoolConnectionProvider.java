@@ -1,49 +1,39 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2007, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.proxool.internal;
 
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.Properties;
+
+import org.hibernate.HibernateException;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
+import org.hibernate.cfg.Environment;
+import org.hibernate.engine.jdbc.connections.internal.ConnectionProviderInitiator;
+import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
+import org.hibernate.internal.util.StringHelper;
+import org.hibernate.internal.util.config.ConfigurationHelper;
+import org.hibernate.service.UnknownUnwrapTypeException;
+import org.hibernate.service.spi.Configurable;
+import org.hibernate.service.spi.ServiceRegistryAwareService;
+import org.hibernate.service.spi.ServiceRegistryImplementor;
+import org.hibernate.service.spi.Stoppable;
+
+import org.jboss.logging.Logger;
 
 import org.logicalcobwebs.proxool.ProxoolException;
 import org.logicalcobwebs.proxool.ProxoolFacade;
 import org.logicalcobwebs.proxool.configuration.JAXPConfigurator;
 import org.logicalcobwebs.proxool.configuration.PropertyConfigurator;
-
-import org.jboss.logging.Logger;
-
-import org.hibernate.HibernateException;
-import org.hibernate.cfg.Environment;
-import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
-import org.hibernate.internal.util.ConfigHelper;
-import org.hibernate.internal.util.StringHelper;
-import org.hibernate.internal.util.config.ConfigurationHelper;
-import org.hibernate.service.UnknownUnwrapTypeException;
-import org.hibernate.service.spi.Configurable;
-import org.hibernate.service.spi.Stoppable;
 
 /**
  * A connection provider that uses a Proxool connection pool. Hibernate will use this by
@@ -51,7 +41,8 @@ import org.hibernate.service.spi.Stoppable;
  *
  * @see ConnectionProvider
  */
-public class ProxoolConnectionProvider implements ConnectionProvider, Configurable, Stoppable {
+public class ProxoolConnectionProvider
+		implements ConnectionProvider, Configurable, Stoppable, ServiceRegistryAwareService {
 	private static final ProxoolMessageLogger LOG = Logger.getMessageLogger(
 			ProxoolMessageLogger.class,
 			ProxoolConnectionProvider.class.getName()
@@ -69,6 +60,8 @@ public class ProxoolConnectionProvider implements ConnectionProvider, Configurab
 	private Integer isolation;
 
 	private boolean autocommit;
+
+	private ClassLoaderService classLoaderService;
 
 	@Override
 	public Connection getConnection() throws SQLException {
@@ -113,6 +106,11 @@ public class ProxoolConnectionProvider implements ConnectionProvider, Configurab
 	}
 
 	@Override
+	public void injectServices(ServiceRegistryImplementor serviceRegistry) {
+		this.classLoaderService = serviceRegistry.getService( ClassLoaderService.class );
+	}
+
+	@Override
 	public void configure(Map props) {
 		// Get the configurator files (if available)
 		final String jaxpFile = (String) props.get( Environment.PROXOOL_XML );
@@ -152,7 +150,7 @@ public class ProxoolConnectionProvider implements ConnectionProvider, Configurab
 			}
 
 			try {
-				JAXPConfigurator.configure( ConfigHelper.getConfigStreamReader( jaxpFile ), false );
+				JAXPConfigurator.configure( getConfigStreamReader( jaxpFile ), false );
 			}
 			catch (ProxoolException e) {
 				final String msg = LOG.unableToLoadJaxpConfiguratorFile( jaxpFile );
@@ -177,7 +175,7 @@ public class ProxoolConnectionProvider implements ConnectionProvider, Configurab
 			}
 
 			try {
-				PropertyConfigurator.configure( ConfigHelper.getConfigProperties( propFile ) );
+				PropertyConfigurator.configure( getConfigProperties( propFile ) );
 			}
 			catch (ProxoolException e) {
 				final String msg = LOG.unableToLoadPropertyConfiguratorFile( propFile );
@@ -191,13 +189,26 @@ public class ProxoolConnectionProvider implements ConnectionProvider, Configurab
 		}
 
 		// Remember Isolation level
-		isolation = ConfigurationHelper.getInteger( Environment.ISOLATION, props );
-		if ( isolation != null ) {
-			LOG.jdbcIsolationLevel( Environment.isolationLevelToString( isolation.intValue() ) );
-		}
+		isolation = ConnectionProviderInitiator.extractIsolation( props );
+		LOG.jdbcIsolationLevel( ConnectionProviderInitiator.toIsolationNiceName( isolation ) );
 
 		autocommit = ConfigurationHelper.getBoolean( Environment.AUTOCOMMIT, props );
 		LOG.autoCommmitMode( autocommit );
+	}
+
+	private Reader getConfigStreamReader(String resource) {
+		return new InputStreamReader( classLoaderService.locateResourceStream( resource ) );
+	}
+
+	private Properties getConfigProperties(String resource) {
+		try {
+			Properties properties = new Properties();
+			properties.load( classLoaderService.locateResourceStream( resource ) );
+			return properties;
+		}
+		catch (IOException e) {
+			throw new HibernateException( "Unable to load properties from specified config file: " + resource, e );
+		}
 	}
 
 	@Override
@@ -242,5 +253,4 @@ public class ProxoolConnectionProvider implements ConnectionProvider, Configurab
 	public void close() throws HibernateException {
 		stop();
 	}
-
 }

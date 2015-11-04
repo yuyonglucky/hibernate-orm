@@ -1,39 +1,24 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.lob;
 
 import java.sql.Clob;
 
-import org.junit.Test;
-
-import org.hibernate.LockMode;
+import org.hibernate.LockOptions;
 import org.hibernate.Session;
 import org.hibernate.dialect.SybaseASE157Dialect;
+import org.hibernate.dialect.TeradataDialect;
+import org.hibernate.type.descriptor.java.DataHelper;
+
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.hibernate.type.descriptor.java.DataHelper;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -57,6 +42,11 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(
+			value = TeradataDialect.class,
+			jiraKey = "HHH-6637",
+			comment = "Teradata requires locator to be used in same session where it was created/retrieved"
+	)
 	public void testBoundedClobLocatorAccess() throws Throwable {
 		String original = buildString( CLOB_SIZE, 'x' );
 		String changed = buildString( CLOB_SIZE, 'y' );
@@ -72,7 +62,7 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+		entity = s.get( LobHolder.class, entity.getId() );
 		assertEquals( CLOB_SIZE, entity.getClobLocator().length() );
 		assertEquals( original, extractData( entity.getClobLocator() ) );
 		s.getTransaction().commit();
@@ -82,7 +72,7 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 		if ( getDialect().supportsLobValueChangePropogation() ) {
 			s = openSession();
 			s.beginTransaction();
-			entity = ( LobHolder ) s.get( LobHolder.class, entity.getId(), LockMode.UPGRADE );
+			entity = ( LobHolder ) s.byId( LobHolder.class ).with( LockOptions.UPGRADE ).load( entity.getId() );
 			entity.getClobLocator().truncate( 1 );
 			entity.getClobLocator().setString( 1, changed );
 			s.getTransaction().commit();
@@ -90,7 +80,7 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 
 			s = openSession();
 			s.beginTransaction();
-			entity = ( LobHolder ) s.get( LobHolder.class, entity.getId(), LockMode.UPGRADE );
+			entity = ( LobHolder ) s.byId( LobHolder.class ).with( LockOptions.UPGRADE ).load( entity.getId() );
 			assertNotNull( entity.getClobLocator() );
 			assertEquals( CLOB_SIZE, entity.getClobLocator().length() );
 			assertEquals( changed, extractData( entity.getClobLocator() ) );
@@ -103,7 +93,7 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 		// test mutation via supplying a new clob locator instance...
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId(), LockMode.UPGRADE );
+		entity = ( LobHolder ) s.byId( LobHolder.class ).with( LockOptions.UPGRADE ).load( entity.getId() );
 		assertNotNull( entity.getClobLocator() );
 		assertEquals( CLOB_SIZE, entity.getClobLocator().length() );
 		assertEquals( original, extractData( entity.getClobLocator() ) );
@@ -115,7 +105,7 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 		if ( !(getDialect() instanceof SybaseASE157Dialect) ) { // Skip for Sybase. HHH-6425
 			s = openSession();
 			s.beginTransaction();
-			entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+			entity = s.get( LobHolder.class, entity.getId() );
 			assertEquals( CLOB_SIZE, entity.getClobLocator().length() );
 			assertEquals( changed, extractData( entity.getClobLocator() ) );
 			entity.setClobLocator( s.getLobHelper().createClob( empty ) );
@@ -124,7 +114,7 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 
 			s = openSession();
 			s.beginTransaction();
-			entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+			entity = s.get( LobHolder.class, entity.getId() );
 			if ( entity.getClobLocator() != null) {
 				assertEquals( empty.length(), entity.getClobLocator().length() );
 				assertEquals( empty, extractData( entity.getClobLocator() ) );
@@ -160,7 +150,7 @@ public class ClobLocatorTest extends BaseCoreFunctionalTestCase {
 		// at that point it is unbounded...
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+		entity = s.get( LobHolder.class, entity.getId() );
 		s.getTransaction().commit();
 		s.close();
 

@@ -1,4 +1,10 @@
 <?xml version="1.0"?>
+<!--
+  ~ Hibernate, Relational Persistence for Idiomatic Java
+  ~
+  ~ License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+  ~ See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+  -->
 <!DOCTYPE hibernate-mapping PUBLIC
 	"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
 	"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
@@ -14,7 +20,7 @@
     <class name="Person" table="t_person" abstract="false">
         <!-- <class name="Person" table="t_person" discriminator-value="person"> -->
 		<id name="id">
-            <generator class="native"/>
+            <generator class="increment"/>
         </id>
         <discriminator column="t_person_dis" force="false"/>
 		<property name="name"/>
@@ -34,14 +40,14 @@
     <!-- Company interface mapping -->
 	<class name="Company" table="t_company" abstract="false">
 		<id name="id">
-            <generator class="native"/>
+            <generator class="increment"/>
         </id>
 		<property name="name"/>
 	</class>
 
     <class name="Address" table="t_address" abstract="false">
         <id name="id">
-            <generator class="native"/>
+            <generator class="increment"/>
         </id>
         <property name="street"/>
         <property name="city"/>

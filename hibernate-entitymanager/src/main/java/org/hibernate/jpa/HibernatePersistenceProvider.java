@@ -1,32 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA\
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.PersistenceException;
 import javax.persistence.spi.LoadState;
@@ -34,14 +16,16 @@ import javax.persistence.spi.PersistenceProvider;
 import javax.persistence.spi.PersistenceUnitInfo;
 import javax.persistence.spi.ProviderUtil;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
+import org.hibernate.jpa.boot.internal.PersistenceUnitInfoDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
+import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
 import org.hibernate.jpa.boot.spi.ProviderChecker;
 import org.hibernate.jpa.internal.util.PersistenceUtilHelper;
+
+import org.jboss.logging.Logger;
 
 /**
  * The Hibernate {@link PersistenceProvider} implementation
@@ -64,27 +48,36 @@ public class HibernatePersistenceProvider implements PersistenceProvider {
 	public EntityManagerFactory createEntityManagerFactory(String persistenceUnitName, Map properties) {
 		log.tracef( "Starting createEntityManagerFactory for persistenceUnitName %s", persistenceUnitName );
 
-		final EntityManagerFactoryBuilder builder = getEntityManagerFactoryBuilderOrNull( persistenceUnitName, properties );
-		if ( builder == null ) {
-			log.trace( "Could not obtain matching EntityManagerFactoryBuilder, returning null" );
-			return null;
+		try {
+			final EntityManagerFactoryBuilder builder = getEntityManagerFactoryBuilderOrNull( persistenceUnitName, properties );
+			if ( builder == null ) {
+				log.trace( "Could not obtain matching EntityManagerFactoryBuilder, returning null" );
+				return null;
+			}
+			else {
+				return builder.build();
+			}
 		}
-		else {
-			return builder.build();
+		catch (PersistenceException pe) {
+			throw pe;
+		}
+		catch (Exception e) {
+			log.debug( "Unable to build entity manager factory", e );
+			throw new PersistenceException( "Unable to build entity manager factory", e );
 		}
 	}
 
 	protected EntityManagerFactoryBuilder getEntityManagerFactoryBuilderOrNull(String persistenceUnitName, Map properties) {
+		return getEntityManagerFactoryBuilderOrNull( persistenceUnitName, properties, null );
+	}
+
+	protected EntityManagerFactoryBuilder getEntityManagerFactoryBuilderOrNull(String persistenceUnitName, Map properties, ClassLoader providedClassLoader) {
 		log.tracef( "Attempting to obtain correct EntityManagerFactoryBuilder for persistenceUnitName : %s", persistenceUnitName );
 
 		final Map integration = wrap( properties );
 		final List<ParsedPersistenceXmlDescriptor> units;
 		try {
 			units = PersistenceXmlParser.locatePersistenceUnits( integration );
-		}
-		catch (RuntimeException e) {
-			log.debug( "Unable to locate persistence units", e );
-			throw e;
 		}
 		catch (Exception e) {
 			log.debug( "Unable to locate persistence units", e );
@@ -118,7 +111,7 @@ public class HibernatePersistenceProvider implements PersistenceProvider {
 				continue;
 			}
 
-			return Bootstrap.getEntityManagerFactoryBuilder( persistenceUnit, integration );
+			return getEntityManagerFactoryBuilder( persistenceUnit, integration, providedClassLoader );
 		}
 
 		log.debug( "Found no matching persistence units" );
@@ -126,7 +119,7 @@ public class HibernatePersistenceProvider implements PersistenceProvider {
 	}
 
 	@SuppressWarnings("unchecked")
-	private static Map wrap(Map properties) {
+	protected static Map wrap(Map properties) {
 		return properties == null ? Collections.emptyMap() : Collections.unmodifiableMap( properties );
 	}
 
@@ -139,14 +132,14 @@ public class HibernatePersistenceProvider implements PersistenceProvider {
 	public EntityManagerFactory createContainerEntityManagerFactory(PersistenceUnitInfo info, Map properties) {
 		log.tracef( "Starting createContainerEntityManagerFactory : %s", info.getPersistenceUnitName() );
 
-		return Bootstrap.getEntityManagerFactoryBuilder( info, properties ).build();
+		return getEntityManagerFactoryBuilder( info, properties ).build();
 	}
 
 	@Override
 	public void generateSchema(PersistenceUnitInfo info, Map map) {
 		log.tracef( "Starting generateSchema : PUI.name=%s", info.getPersistenceUnitName() );
 
-		final EntityManagerFactoryBuilder builder = Bootstrap.getEntityManagerFactoryBuilder( info, map );
+		final EntityManagerFactoryBuilder builder = getEntityManagerFactoryBuilder( info, map );
 		builder.generateSchema();
 	}
 
@@ -161,6 +154,15 @@ public class HibernatePersistenceProvider implements PersistenceProvider {
 		}
 		builder.generateSchema();
 		return true;
+	}
+
+	private EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(PersistenceUnitInfo info, Map integration) {
+		return getEntityManagerFactoryBuilder( new PersistenceUnitInfoDescriptor( info ), integration, null );
+	}
+
+	protected EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(PersistenceUnitDescriptor persistenceUnitDescriptor,
+			Map integration, ClassLoader providedClassLoader) {
+		return Bootstrap.getEntityManagerFactoryBuilder( persistenceUnitDescriptor, integration, providedClassLoader );
 	}
 
 	private final ProviderUtil providerUtil = new ProviderUtil() {

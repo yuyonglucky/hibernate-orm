@@ -1,32 +1,15 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.index.jpa;
 
 import java.util.Iterator;
 
-import org.junit.Test;
-
+import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.mapping.Bag;
 import org.hibernate.mapping.Column;
@@ -37,7 +20,9 @@ import org.hibernate.mapping.Property;
 import org.hibernate.mapping.Set;
 import org.hibernate.mapping.Table;
 import org.hibernate.mapping.UniqueKey;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -47,10 +32,16 @@ import static org.junit.Assert.assertTrue;
 /**
  * @author Strong Liu <stliu@hibernate.org>
  */
-public abstract class AbstractJPAIndexTest extends BaseCoreFunctionalTestCase {
+public abstract class AbstractJPAIndexTest extends BaseNonConfigCoreFunctionalTestCase {
+	@Override
+	protected void configureMetadataBuilder(MetadataBuilder metadataBuilder) {
+		super.configureMetadataBuilder( metadataBuilder );
+		metadataBuilder.applyImplicitNamingStrategy( ImplicitNamingStrategyJpaCompliantImpl.INSTANCE );
+	}
+
 	@Test
 	public void testTableIndex() {
-		PersistentClass entity = configuration().getClassMapping( Car.class.getName() );
+		PersistentClass entity = metadata().getEntityBinding( Car.class.getName() );
 		Iterator itr = entity.getTable().getUniqueKeyIterator();
 		assertTrue( itr.hasNext() );
 		UniqueKey uk = (UniqueKey) itr.next();
@@ -77,7 +68,7 @@ public abstract class AbstractJPAIndexTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testSecondaryTableIndex(){
-		PersistentClass entity = configuration().getClassMapping( Car.class.getName() );
+		PersistentClass entity = metadata().getEntityBinding( Car.class.getName() );
 
 		Join join = (Join)entity.getJoinIterator().next();
 		Iterator<Index> itr = join.getTable().getIndexIterator();
@@ -97,7 +88,7 @@ public abstract class AbstractJPAIndexTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testCollectionTableIndex(){
-		PersistentClass entity = configuration().getClassMapping( Car.class.getName() );
+		PersistentClass entity = metadata().getEntityBinding( Car.class.getName() );
 		Property property = entity.getProperty( "otherDealers" );
 		Set set = (Set)property.getValue();
 		Table collectionTable = set.getCollectionTable();
@@ -117,7 +108,7 @@ public abstract class AbstractJPAIndexTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testJoinTableIndex(){
-		PersistentClass entity = configuration().getClassMapping( Importer.class.getName() );
+		PersistentClass entity = metadata().getEntityBinding( Importer.class.getName() );
 		Property property = entity.getProperty( "cars" );
 		Bag set = (Bag)property.getValue();
 		Table collectionTable = set.getCollectionTable();

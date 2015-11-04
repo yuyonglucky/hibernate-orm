@@ -1,48 +1,38 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009, 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.internal;
 
+import java.util.List;
+import java.util.Map;
 import javax.persistence.EntityGraph;
 import javax.persistence.PersistenceContextType;
 import javax.persistence.PersistenceException;
 import javax.persistence.SynchronizationType;
 import javax.persistence.spi.PersistenceUnitTransactionType;
-import java.util.List;
-import java.util.Map;
+import javax.transaction.SystemException;
 
-import org.jboss.logging.Logger;
-
+import org.hibernate.FlushMode;
 import org.hibernate.HibernateException;
 import org.hibernate.Interceptor;
 import org.hibernate.Session;
-import org.hibernate.annotations.common.util.ReflectHelper;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
+import org.hibernate.boot.registry.classloading.spi.ClassLoadingException;
 import org.hibernate.ejb.AbstractEntityManagerImpl;
 import org.hibernate.engine.spi.SessionBuilderImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.SessionOwner;
+import org.hibernate.internal.SessionImpl;
 import org.hibernate.jpa.AvailableSettings;
 import org.hibernate.jpa.graph.internal.EntityGraphImpl;
+import org.hibernate.resource.transaction.backend.jta.internal.synchronization.AfterCompletionAction;
+import org.hibernate.resource.transaction.backend.jta.internal.synchronization.ExceptionMapper;
+import org.hibernate.resource.transaction.backend.jta.internal.synchronization.ManagedFlushChecker;
+
+import static org.hibernate.jpa.internal.HEMLogging.messageLogger;
 
 /**
  * Hibernate implementation of {@link javax.persistence.EntityManager}.
@@ -50,9 +40,7 @@ import org.hibernate.jpa.graph.internal.EntityGraphImpl;
  * @author Gavin King
  */
 public class EntityManagerImpl extends AbstractEntityManagerImpl implements SessionOwner {
-
-    public static final EntityManagerMessageLogger LOG = Logger.getMessageLogger(EntityManagerMessageLogger.class,
-                                                                          EntityManagerImpl.class.getName());
+	public static final EntityManagerMessageLogger LOG = messageLogger( EntityManagerImpl.class.getName() );
 
 	protected Session session;
 	protected boolean open;
@@ -79,11 +67,11 @@ public class EntityManagerImpl extends AbstractEntityManagerImpl implements Sess
 				sessionInterceptorClass = (Class) localSessionInterceptor;
 			}
 			else if (localSessionInterceptor instanceof String) {
+				final ClassLoaderService cls = entityManagerFactory.getSessionFactory().getServiceRegistry().getService( ClassLoaderService.class );
 				try {
-					sessionInterceptorClass =
-							ReflectHelper.classForName( (String) localSessionInterceptor, EntityManagerImpl.class );
+					sessionInterceptorClass = cls.classForName( (String) localSessionInterceptor );
 				}
-				catch (ClassNotFoundException e) {
+				catch (ClassLoadingException e) {
 					throw new PersistenceException("Unable to instanciate interceptor: " + localSessionInterceptor, e);
 				}
 			}
@@ -104,20 +92,20 @@ public class EntityManagerImpl extends AbstractEntityManagerImpl implements Sess
 	public void checkOpen(boolean markForRollbackIfClosed) {
 		if( ! isOpen() ) {
 			if ( markForRollbackIfClosed ) {
-				markAsRollback();
+				markForRollbackOnly();
 			}
 			throw new IllegalStateException( "EntityManager is closed" );
 		}
 	}
 
 	@Override
-    public Session getSession() {
+	public Session getSession() {
 		checkOpen();
 		return internalGetSession();
 	}
 
 	@Override
-    protected Session getRawSession() {
+	protected Session getRawSession() {
 		return internalGetSession();
 	}
 
@@ -141,11 +129,8 @@ public class EntityManagerImpl extends AbstractEntityManagerImpl implements Sess
 					throw new PersistenceException("Session interceptor does not implement Interceptor: " + sessionInterceptorClass, e);
 				}
 			}
-			sessionBuilder.autoJoinTransactions( getTransactionType() != PersistenceUnitTransactionType.JTA );
+			sessionBuilder.autoJoinTransactions( getSynchronizationType() == SynchronizationType.SYNCHRONIZED );
 			session = sessionBuilder.openSession();
-			if ( persistenceContextType == PersistenceContextType.TRANSACTION ) {
-				( (SessionImplementor) session ).setAutoClear( true );
-			}
 		}
 		return session;
 	}
@@ -197,7 +182,7 @@ public class EntityManagerImpl extends AbstractEntityManagerImpl implements Sess
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public <T> EntityGraph<T> getEntityGraph(String graphName) {
+	public EntityGraph<?> getEntityGraph(String graphName) {
 		checkOpen();
 		final EntityGraphImpl named = getEntityManagerFactory().findEntityGraphByName( graphName );
 		if ( named == null ) {
@@ -217,9 +202,69 @@ public class EntityManagerImpl extends AbstractEntityManagerImpl implements Sess
 		return !isOpen();
 	}
 
+	@Override
+	public ExceptionMapper getExceptionMapper() {
+		return new CallbackExceptionMapperImpl();
+	}
+
+	@Override
+	public AfterCompletionAction getAfterCompletionAction() {
+		return new AfterCompletionActionImpl();
+	}
+
+	@Override
+	public ManagedFlushChecker getManagedFlushChecker() {
+		return new ManagedFlushCheckerImpl();
+	}
+
 	private void checkEntityManagerFactory() {
 		if ( ! internalGetEntityManagerFactory().isOpen() ) {
 			open = false;
 		}
+	}
+
+	private class CallbackExceptionMapperImpl implements ExceptionMapper {
+		@Override
+		public RuntimeException mapStatusCheckFailure(String message, SystemException systemException) {
+			throw new PersistenceException( message, systemException );
+		}
+
+		@Override
+		public RuntimeException mapManagedFlushFailure(String message, RuntimeException failure) {
+			if ( HibernateException.class.isInstance( failure ) ) {
+				throw convert( failure );
+			}
+			if ( PersistenceException.class.isInstance( failure ) ) {
+				throw failure;
+			}
+			throw new PersistenceException( message, failure );
+		}
+	}
+
+	private class AfterCompletionActionImpl implements AfterCompletionAction {
+
+		@Override
+		public void doAction( boolean successful) {
+			if ( ((SessionImplementor)EntityManagerImpl.this.session).isClosed()) {
+				LOG.trace( "Session was closed; nothing to do" );
+				return;
+			}
+
+			if ( !successful && EntityManagerImpl.this.getTransactionType() == PersistenceUnitTransactionType.JTA ) {
+				session.clear();
+			}
+		}
+	}
+
+	private class ManagedFlushCheckerImpl implements ManagedFlushChecker {
+		@Override
+		public boolean shouldDoManagedFlush(SessionImpl session) {
+			return !session.isClosed()
+					&& !isManualFlushMode( session.getFlushMode() );
+		}
+	}
+
+	private boolean isManualFlushMode(FlushMode mode){
+		return FlushMode.MANUAL == mode;
 	}
 }

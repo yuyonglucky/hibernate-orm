@@ -1,28 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.query.spi.sql;
+
 import org.hibernate.type.Type;
 
 /**
@@ -41,6 +24,13 @@ public class NativeSQLQueryScalarReturn implements NativeSQLQueryReturn {
 		this.hashCode = determineHashCode();
 	}
 
+	private int determineHashCode() {
+		int result = type != null ? type.hashCode() : 0;
+		result = 31 * result + ( getClass().getName().hashCode() );
+		result = 31 * result + ( columnAlias != null ? columnAlias.hashCode() : 0 );
+		return result;
+	}
+
 	public String getColumnAlias() {
 		return columnAlias;
 	}
@@ -49,6 +39,8 @@ public class NativeSQLQueryScalarReturn implements NativeSQLQueryReturn {
 		return type;
 	}
 
+	@Override
+	@SuppressWarnings("RedundantIfStatement")
 	public boolean equals(Object o) {
 		if ( this == o ) {
 			return true;
@@ -57,8 +49,7 @@ public class NativeSQLQueryScalarReturn implements NativeSQLQueryReturn {
 			return false;
 		}
 
-		NativeSQLQueryScalarReturn that = ( NativeSQLQueryScalarReturn ) o;
-
+		final NativeSQLQueryScalarReturn that = (NativeSQLQueryScalarReturn) o;
 		if ( columnAlias != null ? !columnAlias.equals( that.columnAlias ) : that.columnAlias != null ) {
 			return false;
 		}
@@ -69,14 +60,16 @@ public class NativeSQLQueryScalarReturn implements NativeSQLQueryReturn {
 		return true;
 	}
 
+	@Override
 	public int hashCode() {
 		return hashCode;
 	}
 
-	private int determineHashCode() {
-		int result = type != null ? type.hashCode() : 0;
-		result = 31 * result + ( getClass().getName().hashCode() );
-		result = 31 * result + ( columnAlias != null ? columnAlias.hashCode() : 0 );
-		return result;
+	@Override
+	public void traceLog(TraceLogger logger) {
+		logger.writeLine( "Scalar[" );
+		logger.writeLine( "    columnAlias=" + columnAlias + "," );
+		logger.writeLine( "    type=" + ( type == null ? "<unknown>" : type.getName() ) + "," );
+		logger.writeLine( "]" );
 	}
 }

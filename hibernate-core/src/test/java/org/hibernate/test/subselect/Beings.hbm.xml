@@ -1,9 +1,15 @@
 <?xml version="1.0"?>
-<!DOCTYPE hibernate-mapping PUBLIC 
+<!--
+  ~ Hibernate, Relational Persistence for Idiomatic Java
+  ~
+  ~ License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+  ~ See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+  -->
+<!DOCTYPE hibernate-mapping PUBLIC
 	"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
 	"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
 
-<!-- 
+<!--
 
   This mapping demonstrates 
 
@@ -24,10 +30,8 @@
 	default-access="field">
 	
 	<class name="Human" table="humans">
-		
-		<id name="id" unsaved-value="0" 
-		        column="bid">
-			<generator class="hilo"/>
+		<id name="id" unsaved-value="0" column="bid">
+			<generator class="enhanced-sequence"/>
 		</id>
 		
 		<property name="name" 
@@ -46,10 +50,8 @@
 	</class>
 	
 	<class name="Alien" table="aliens">
-		
-		<id name="id" unsaved-value="0" 
-		        column="bid">
-			<generator class="hilo"/>
+		<id name="id" unsaved-value="0" column="bid">
+			<generator class="enhanced-sequence"/>
 		</id>
 		
 		<property name="identity" 
@@ -81,9 +83,8 @@
 		<synchronize table="humans"/>
 		<synchronize table="aliens"/>
 		
-		<id name="id" unsaved-value="0" 
-		        column="bid">
-			<generator class="native"/>
+		<id name="id" unsaved-value="0" column="bid">
+			<generator class="enhanced-sequence"/>
 		</id>
 		
 		<property name="identity" column="ident"/>

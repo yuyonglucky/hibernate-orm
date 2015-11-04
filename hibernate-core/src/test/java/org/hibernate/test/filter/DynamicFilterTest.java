@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2007-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.filter;
 
@@ -29,20 +12,17 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-
-import org.jboss.logging.Logger;
-import org.junit.Test;
 
 import org.hibernate.Criteria;
 import org.hibernate.FetchMode;
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
-import org.hibernate.cache.spi.CacheKey;
+import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
 import org.hibernate.cache.spi.entry.CollectionCacheEntry;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.cfg.Environment;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Property;
 import org.hibernate.criterion.Restrictions;
@@ -51,9 +31,13 @@ import org.hibernate.dialect.IngresDialect;
 import org.hibernate.dialect.SybaseASE15Dialect;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.persister.collection.CollectionPersister;
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.hibernate.transform.DistinctRootEntityResultTransformer;
+
+import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.Test;
+
+import org.jboss.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -66,7 +50,7 @@ import static org.junit.Assert.assertTrue;
  * @author Steve Ebersole
  */
 @SkipForDialect( value = SybaseASE15Dialect.class, jiraKey = "HHH-3637")
-public class DynamicFilterTest extends BaseCoreFunctionalTestCase {
+public class DynamicFilterTest extends BaseNonConfigCoreFunctionalTestCase {
 	private static final Logger log = Logger.getLogger( DynamicFilterTest.class );
 
 	@Override
@@ -88,10 +72,10 @@ public class DynamicFilterTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Override
-	public void configure(Configuration cfg) {
-		cfg.setProperty( Environment.MAX_FETCH_DEPTH, "1" );
-		cfg.setProperty( Environment.GENERATE_STATISTICS, "true" );
-		cfg.setProperty( Environment.USE_QUERY_CACHE, "true" );
+	public void addSettings(Map settings) {
+		settings.put( AvailableSettings.MAX_FETCH_DEPTH, "1" );
+		settings.put( AvailableSettings.GENERATE_STATISTICS, "true" );
+		settings.put( AvailableSettings.USE_QUERY_CACHE, "true" );
 	}
 
 	@Test
@@ -116,12 +100,14 @@ public class DynamicFilterTest extends BaseCoreFunctionalTestCase {
 		Hibernate.initialize( sp.getOrders() );
 		CollectionPersister persister = sessionFactory().getCollectionPersister( Salesperson.class.getName() + ".orders" );
 		assertTrue( "No cache for collection", persister.hasCache() );
-		CacheKey cacheKey = ( (SessionImplementor) session ).generateCacheKey(
+		CollectionRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+		Object cacheKey = cache.generateCacheKey(
 				testData.steveId,
-				persister.getKeyType(),
-				persister.getRole()
+				persister,
+				sessionFactory(),
+				session.getTenantIdentifier()
 		);
-		CollectionCacheEntry cachedData = ( CollectionCacheEntry ) persister.getCacheAccessStrategy().get( cacheKey, ts );
+		CollectionCacheEntry cachedData = ( CollectionCacheEntry ) cache.get( ( SessionImplementor ) session, cacheKey, ts );
 		assertNotNull( "collection was not in cache", cachedData );
 
 		session.close();
@@ -130,16 +116,17 @@ public class DynamicFilterTest extends BaseCoreFunctionalTestCase {
 		ts = ( ( SessionImplementor ) session ).getTimestamp();
 		session.enableFilter( "fulfilledOrders" ).setParameter( "asOfDate", testData.lastMonth.getTime() );
 		sp = ( Salesperson ) session.createQuery( "from Salesperson as s where s.id = :id" )
-		        .setLong( "id", testData.steveId )
-		        .uniqueResult();
+				.setLong( "id", testData.steveId )
+				.uniqueResult();
 		assertEquals( "Filtered-collection not bypassing 2L-cache", 1, sp.getOrders().size() );
 
-		CacheKey cacheKey2 = ( (SessionImplementor) session ).generateCacheKey(
+		Object cacheKey2 = cache.generateCacheKey(
 				testData.steveId,
-				persister.getKeyType(),
-				persister.getRole()
+				persister,
+				sessionFactory(),
+				session.getTenantIdentifier()
 		);
-		CollectionCacheEntry cachedData2 = ( CollectionCacheEntry ) persister.getCacheAccessStrategy().get( cacheKey2, ts );
+		CollectionCacheEntry cachedData2 = ( CollectionCacheEntry ) persister.getCacheAccessStrategy().get( ( SessionImplementor ) session, cacheKey2, ts );
 		assertNotNull( "collection no longer in cache!", cachedData2 );
 		assertSame( "Different cache values!", cachedData, cachedData2 );
 

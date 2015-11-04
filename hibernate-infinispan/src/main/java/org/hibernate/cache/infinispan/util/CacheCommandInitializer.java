@@ -1,30 +1,22 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.infinispan.util;
 
+import org.hibernate.cache.infinispan.access.PutFromLoadValidator;
 import org.infinispan.commands.ReplicableCommand;
 import org.infinispan.commands.module.ModuleCommandInitializer;
+import org.infinispan.configuration.cache.Configuration;
+import org.infinispan.context.Flag;
+import org.infinispan.factories.annotations.Inject;
+import org.infinispan.interceptors.locking.ClusteringDependentLogic;
+import org.infinispan.notifications.cachelistener.CacheNotifier;
+
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Command initializer
@@ -34,7 +26,32 @@ import org.infinispan.commands.module.ModuleCommandInitializer;
  */
 public class CacheCommandInitializer implements ModuleCommandInitializer {
 
-   /**
+	private final ConcurrentHashMap<String, PutFromLoadValidator> putFromLoadValidators
+			= new ConcurrentHashMap<String, PutFromLoadValidator>();
+	private CacheNotifier notifier;
+	private Configuration configuration;
+	private ClusteringDependentLogic clusteringDependentLogic;
+
+	@Inject
+	public void injectDependencies(CacheNotifier notifier, Configuration configuration, ClusteringDependentLogic clusteringDependentLogic) {
+		this.notifier = notifier;
+		this.configuration = configuration;
+		this.clusteringDependentLogic = clusteringDependentLogic;
+	}
+
+	public void addPutFromLoadValidator(String cacheName, PutFromLoadValidator putFromLoadValidator) {
+		// there could be two instances of PutFromLoadValidator bound to the same cache when
+		// there are two JndiInfinispanRegionFactories bound to the same cacheManager via JNDI.
+		// In that case, as putFromLoadValidator does not really own the pendingPuts cache,
+		// it's safe to have more instances.
+		putFromLoadValidators.put(cacheName, putFromLoadValidator);
+	}
+
+	public PutFromLoadValidator removePutFromLoadValidator(String cacheName) {
+		return putFromLoadValidators.remove(cacheName);
+	}
+
+	/**
     * Build an instance of {@link EvictAllCommand} for a given region.
     *
     * @param regionName name of region for {@link EvictAllCommand}
@@ -48,9 +65,25 @@ public class CacheCommandInitializer implements ModuleCommandInitializer {
 		return new EvictAllCommand( regionName );
 	}
 
-	@Override
-	public void initializeReplicableCommand(ReplicableCommand c, boolean isRemote) {
-		// No need to initialize...
+	public BeginInvalidationCommand buildBeginInvalidationCommand(Set<Flag> flags, Object[] keys, Object sessionTransactionId) {
+		return new BeginInvalidationCommand(notifier, flags, keys, clusteringDependentLogic.getAddress(), sessionTransactionId);
 	}
 
+	public EndInvalidationCommand buildEndInvalidationCommand(String cacheName, Object[] keys, Object sessionTransactionId) {
+		return new EndInvalidationCommand( cacheName, keys, sessionTransactionId );
+	}
+
+	@Override
+	public void initializeReplicableCommand(ReplicableCommand c, boolean isRemote) {
+		switch (c.getCommandId()) {
+			case CacheCommandIds.END_INVALIDATION:
+				EndInvalidationCommand endInvalidationCommand = (EndInvalidationCommand) c;
+				endInvalidationCommand.setPutFromLoadValidator(putFromLoadValidators.get(endInvalidationCommand.getCacheName()));
+				break;
+			case CacheCommandIds.BEGIN_INVALIDATION:
+				BeginInvalidationCommand beginInvalidationCommand = (BeginInvalidationCommand) c;
+				beginInvalidationCommand.init(notifier, configuration);
+				break;
+		}
+	}
 }

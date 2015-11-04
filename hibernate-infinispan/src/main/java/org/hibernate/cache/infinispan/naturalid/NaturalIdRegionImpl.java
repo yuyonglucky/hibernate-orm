@@ -1,38 +1,23 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.infinispan.naturalid;
 
-import org.infinispan.AdvancedCache;
-
 import org.hibernate.cache.CacheException;
-import org.hibernate.cache.infinispan.access.PutFromLoadValidator;
+import org.hibernate.cache.infinispan.access.AccessDelegate;
 import org.hibernate.cache.infinispan.impl.BaseTransactionalDataRegion;
 import org.hibernate.cache.spi.CacheDataDescription;
+import org.hibernate.cache.spi.CacheKeysFactory;
 import org.hibernate.cache.spi.NaturalIdRegion;
 import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
+import org.infinispan.AdvancedCache;
+
+import javax.transaction.TransactionManager;
 
 /**
  * Natural ID cache region
@@ -43,34 +28,31 @@ import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
 public class NaturalIdRegionImpl extends BaseTransactionalDataRegion
 		implements NaturalIdRegion {
 
-   /**
-    * Constructor for the natural id region.
-    *
-    * @param cache instance to store natural ids
-    * @param name of natural id region
-    * @param metadata for the natural id region
-    * @param factory for the natural id region
-    */
+	/**
+	 * Constructor for the natural id region.
+	 *
+	 * @param cache instance to store natural ids
+	 * @param name of natural id region
+	 * @param transactionManager
+	 * @param metadata for the natural id region
+	 * @param factory for the natural id region
+	* @param cacheKeysFactory factory for cache keys
+	 */
 	public NaturalIdRegionImpl(
-			AdvancedCache cache, String name,
-			CacheDataDescription metadata, RegionFactory factory) {
-		super( cache, name, metadata, factory );
+			AdvancedCache cache, String name, TransactionManager transactionManager,
+			CacheDataDescription metadata, RegionFactory factory, CacheKeysFactory cacheKeysFactory) {
+		super( cache, name, transactionManager, metadata, factory, cacheKeysFactory );
 	}
 
 	@Override
 	public NaturalIdRegionAccessStrategy buildAccessStrategy(AccessType accessType) throws CacheException {
-		switch ( accessType ) {
-			case READ_ONLY:
-				return new ReadOnlyAccess( this );
-			case TRANSACTIONAL:
-				return new TransactionalAccess( this );
-			default:
-				throw new CacheException( "Unsupported access type [" + accessType.getExternalName() + "]" );
+		checkAccessType( accessType );
+		AccessDelegate accessDelegate = createAccessDelegate(accessType);
+		if ( accessType == AccessType.READ_ONLY || !getCacheDataDescription().isMutable() ) {
+			return new ReadOnlyAccess( this, accessDelegate );
+		}
+		else {
+			return new ReadWriteAccess( this, accessDelegate );
 		}
 	}
-
-	public PutFromLoadValidator getPutFromLoadValidator() {
-		return new PutFromLoadValidator( cache );
-	}
-
 }

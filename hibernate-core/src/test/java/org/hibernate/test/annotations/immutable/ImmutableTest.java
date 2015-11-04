@@ -1,41 +1,24 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations.immutable;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jboss.logging.Logger;
-import org.junit.Test;
-
 import org.hibernate.AnnotationException;
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.testing.ServiceRegistryBuilder;
+import org.hibernate.boot.MetadataSources;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
+
+import org.jboss.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -152,15 +135,12 @@ public class ImmutableTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	public void testMiscplacedImmutableAnnotation() {
+	public void testMisplacedImmutableAnnotation() {
 		try {
-			Configuration config = new Configuration();
-			config.addAnnotatedClass(Foobar.class);
-			config.buildMappings(  );
-			fail();
+			new MetadataSources().addAnnotatedClass( Foobar.class ).buildMetadata();
+			fail( "Expecting exception due to misplaced @Immutable annotation");
 		}
-		catch (AnnotationException ae) {
-            log.debug("succes");
+		catch (AnnotationException ignore) {
 		}
 	}
 

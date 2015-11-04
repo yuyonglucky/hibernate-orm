@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.ehcache;
 
@@ -31,11 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.sf.ehcache.CacheManager;
 import net.sf.ehcache.config.Configuration;
 
-import org.jboss.logging.Logger;
-
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.ehcache.internal.util.HibernateEhcacheUtils;
-import org.hibernate.cfg.Settings;
+
+import org.jboss.logging.Logger;
 
 /**
  * A singleton EhCacheRegionFactory implementation.
@@ -71,7 +54,7 @@ public class SingletonEhCacheRegionFactory extends AbstractEhcacheRegionFactory 
 	}
 
 	@Override
-	public void start(Settings settings, Properties properties) throws CacheException {
+	public void start(SessionFactoryOptions settings, Properties properties) throws CacheException {
 		this.settings = settings;
 		try {
 			String configurationResourceName = null;

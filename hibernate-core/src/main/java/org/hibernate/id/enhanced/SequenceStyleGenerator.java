@@ -1,46 +1,33 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.id.enhanced;
 
 import java.io.Serializable;
 import java.util.Properties;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
+import org.hibernate.boot.model.naming.Identifier;
+import org.hibernate.boot.model.relational.Database;
+import org.hibernate.boot.model.relational.QualifiedName;
+import org.hibernate.boot.model.relational.QualifiedNameParser;
 import org.hibernate.cfg.Environment;
-import org.hibernate.cfg.ObjectNameNormalizer;
 import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.id.BulkInsertionCapableIdentifierGenerator;
 import org.hibernate.id.Configurable;
 import org.hibernate.id.PersistentIdentifierGenerator;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.config.ConfigurationHelper;
-import org.hibernate.mapping.Table;
+import org.hibernate.service.ServiceRegistry;
 import org.hibernate.type.Type;
+
+import org.jboss.logging.Logger;
 
 /**
  * Generates identifier values based on an sequence-style database structure.
@@ -227,11 +214,14 @@ public class SequenceStyleGenerator
 	// Configurable implementation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	@Override
-	public void configure(Type type, Properties params, Dialect dialect) throws MappingException {
+	public void configure(Type type, Properties params, ServiceRegistry serviceRegistry) throws MappingException {
+		final JdbcEnvironment jdbcEnvironment = serviceRegistry.getService( JdbcEnvironment.class );
+		final Dialect dialect = jdbcEnvironment.getDialect();
+
 		this.identifierType = type;
 		boolean forceTableUse = ConfigurationHelper.getBoolean( FORCE_TBL_PARAM, params, false );
 
-		final String sequenceName = determineSequenceName( params, dialect );
+		final QualifiedName sequenceName = determineSequenceName( params, dialect, jdbcEnvironment );
 
 		final int initialValue = determineInitialValue( params );
 		int incrementSize = determineIncrementSize( params );
@@ -249,7 +239,7 @@ public class SequenceStyleGenerator
 		this.databaseStructure = buildDatabaseStructure(
 				type,
 				params,
-				dialect,
+				jdbcEnvironment,
 				forceTableUse,
 				sequenceName,
 				initialValue,
@@ -272,30 +262,35 @@ public class SequenceStyleGenerator
 	 *
 	 * @param params The params supplied in the generator config (plus some standard useful extras).
 	 * @param dialect The dialect in effect
+	 * @param jdbcEnv The JdbcEnvironment
 	 * @return The sequence name
 	 */
-	protected String determineSequenceName(Properties params, Dialect dialect) {
+	@SuppressWarnings("UnusedParameters")
+	protected QualifiedName determineSequenceName(Properties params, Dialect dialect, JdbcEnvironment jdbcEnv) {
 		final String sequencePerEntitySuffix = ConfigurationHelper.getString( CONFIG_SEQUENCE_PER_ENTITY_SUFFIX, params, DEF_SEQUENCE_SUFFIX );
 		// JPA_ENTITY_NAME value honors <class ... entity-name="..."> (HBM) and @Entity#name (JPA) overrides.
-		String sequenceName = ConfigurationHelper.getBoolean( CONFIG_PREFER_SEQUENCE_PER_ENTITY, params, false )
+		final String defaultSequenceName = ConfigurationHelper.getBoolean( CONFIG_PREFER_SEQUENCE_PER_ENTITY, params, false )
 				? params.getProperty( JPA_ENTITY_NAME ) + sequencePerEntitySuffix
 				: DEF_SEQUENCE_NAME;
-		final ObjectNameNormalizer normalizer = (ObjectNameNormalizer) params.get( IDENTIFIER_NORMALIZER );
-		sequenceName = ConfigurationHelper.getString( SEQUENCE_PARAM, params, sequenceName );
-		if ( sequenceName.indexOf( '.' ) < 0 ) {
-			sequenceName = normalizer.normalizeIdentifierQuoting( sequenceName );
-			final String schemaName = params.getProperty( SCHEMA );
-			final String catalogName = params.getProperty( CATALOG );
-			sequenceName = Table.qualify(
-					dialect.quote( catalogName ),
-					dialect.quote( schemaName ),
-					dialect.quote( sequenceName )
+
+		final String sequenceName = ConfigurationHelper.getString( SEQUENCE_PARAM, params, defaultSequenceName );
+		if ( sequenceName.contains( "." ) ) {
+			return QualifiedNameParser.INSTANCE.parse( sequenceName );
+		}
+		else {
+			// todo : need to incorporate implicit catalog and schema names
+			final Identifier catalog = jdbcEnv.getIdentifierHelper().toIdentifier(
+					ConfigurationHelper.getString( CATALOG, params )
+			);
+			final Identifier schema =  jdbcEnv.getIdentifierHelper().toIdentifier(
+					ConfigurationHelper.getString( SCHEMA, params )
+			);
+			return new QualifiedNameParser.NameParts(
+					catalog,
+					schema,
+					jdbcEnv.getIdentifierHelper().toIdentifier( sequenceName )
 			);
 		}
-		// if already qualified there is not much we can do in a portable manner so we pass it
-		// through and assume the user has set up the name correctly.
-
-		return sequenceName;
 	}
 
 	/**
@@ -306,13 +301,13 @@ public class SequenceStyleGenerator
 	 * physical table</b>.
 	 *
 	 * @param params The params supplied in the generator config (plus some standard useful extras).
-	 * @param dialect The dialect in effect.
+	 * @param jdbcEnvironment The JDBC environment
 	 * @return The value column name
 	 */
-	protected String determineValueColumnName(Properties params, Dialect dialect) {
-		final ObjectNameNormalizer normalizer = (ObjectNameNormalizer) params.get( IDENTIFIER_NORMALIZER );
+	@SuppressWarnings("UnusedParameters")
+	protected Identifier determineValueColumnName(Properties params, JdbcEnvironment jdbcEnvironment) {
 		final String name = ConfigurationHelper.getString( VALUE_COLUMN_PARAM, params, DEF_VALUE_COLUMN );
-		return dialect.quote( normalizer.normalizeIdentifierQuoting( name ) );
+		return jdbcEnvironment.getIdentifierHelper().toIdentifier( name );
 	}
 
 	/**
@@ -388,7 +383,7 @@ public class SequenceStyleGenerator
 	 *
 	 * @param type The Hibernate type of the identifier property
 	 * @param params The params supplied in the generator config (plus some standard useful extras).
-	 * @param dialect The dialect being used.
+	 * @param jdbcEnvironment The JDBC environment in which the sequence will be used.
 	 * @param forceTableUse Should a table be used even if the dialect supports sequences?
 	 * @param sequenceName The name to use for the sequence or table.
 	 * @param initialValue The initial value.
@@ -399,18 +394,18 @@ public class SequenceStyleGenerator
 	protected DatabaseStructure buildDatabaseStructure(
 			Type type,
 			Properties params,
-			Dialect dialect,
+			JdbcEnvironment jdbcEnvironment,
 			boolean forceTableUse,
-			String sequenceName,
+			QualifiedName sequenceName,
 			int initialValue,
 			int incrementSize) {
-		final boolean useSequence = dialect.supportsSequences() && !forceTableUse;
+		final boolean useSequence = jdbcEnvironment.getDialect().supportsSequences() && !forceTableUse;
 		if ( useSequence ) {
-			return new SequenceStructure( dialect, sequenceName, initialValue, incrementSize, type.getReturnedClass() );
+			return new SequenceStructure( jdbcEnvironment, sequenceName, initialValue, incrementSize, type.getReturnedClass() );
 		}
 		else {
-			final String valueColumnName = determineValueColumnName( params, dialect );
-			return new TableStructure( dialect, sequenceName, valueColumnName, initialValue, incrementSize, type.getReturnedClass() );
+			final Identifier valueColumnName = determineValueColumnName( params, jdbcEnvironment );
+			return new TableStructure( jdbcEnvironment, sequenceName, valueColumnName, initialValue, incrementSize, type.getReturnedClass() );
 		}
 	}
 
@@ -455,5 +450,10 @@ public class SequenceStyleGenerator
 	@Override
 	public String determineBulkInsertionIdentifierGenerationSelectFragment(Dialect dialect) {
 		return dialect.getSelectSequenceNextValString( getDatabaseStructure().getName() );
+	}
+
+	@Override
+	public void registerExportables(Database database) {
+		databaseStructure.registerExportables( database );
 	}
 }

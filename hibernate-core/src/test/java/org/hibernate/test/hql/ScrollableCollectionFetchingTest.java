@@ -1,47 +1,32 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.hql;
-
-import org.hibernate.dialect.CUBRIDDialect;
-import org.junit.Test;
-
-import org.hibernate.HibernateException;
-import org.hibernate.ScrollMode;
-import org.hibernate.ScrollableResults;
-import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.dialect.SybaseASE15Dialect;
-import org.hibernate.testing.DialectChecks;
-import org.hibernate.testing.RequiresDialectFeature;
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import org.hibernate.HibernateException;
+import org.hibernate.ScrollMode;
+import org.hibernate.ScrollableResults;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import org.hibernate.dialect.CUBRIDDialect;
+import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.SybaseASE15Dialect;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.testing.DialectChecks;
+import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.SkipForDialects;
+import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
 
 /**
  * Tests the new functionality of allowing scrolling of results which
@@ -72,7 +57,9 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 	}
 
 	@Test
-    @SkipForDialect( value = SybaseASE15Dialect.class, jiraKey = "HHH-5229")
+	@SkipForDialects(value = {
+			@SkipForDialect(value = SybaseASE15Dialect.class , jiraKey = "HHH-5229"),
+			@SkipForDialect(value = { AbstractHANADialect.class }, comment = "HANA only supports forward-only cursors.") })
 	public void testScrollingJoinFetchesEmptyResultSet() {
 		Session s = openSession();
 		Transaction txn = s.beginTransaction();
@@ -140,11 +127,10 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 	}
 
 	@Test
-    @SkipForDialect(
-            value = CUBRIDDialect.class,
-            comment = "As of verion 8.4.1 CUBRID doesn't support temporary tables. This test fails with" +
-                    "HibernateException: cannot doAfterTransactionCompletion multi-table deletes using dialect not supporting temp tables"
-    )
+	@SkipForDialects(value = {
+			@SkipForDialect(value = CUBRIDDialect.class, comment = "As of verion 8.4.1 CUBRID doesn't support temporary tables. This test fails with"
+					+ "HibernateException: cannot doAfterTransactionCompletion multi-table deletes using dialect not supporting temp tables"),
+			@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA only supports forward-only cursors") })
 	public void testScrollingJoinFetchesSingleRowResultSet() {
 		Session s = openSession();
 		Transaction txn = s.beginTransaction();
@@ -173,13 +159,12 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 		        .uniqueResult() );
 
 		ScrollableResults results = s
-		        .createQuery( "from Animal a left join fetch a.offspring where a.description like :desc order by a.id" )
-		        .setString( "desc", "root%" )
-		        .scroll();
+				.createQuery( "from Animal a left join fetch a.offspring where a.description like :desc order by a.id" )
+				.setString( "desc", "root%" ).scroll();
 
 		assertFalse( results.isFirst() );
 		assertFalse( results.isLast() );
-		assertFalse( results.previous() );		
+		assertFalse( results.previous() );
 
 		assertTrue( results.next() );
 		assertTrue( results.isFirst() );
@@ -223,7 +208,7 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 
 		assertTrue( results.first() );
 		assertTrue( results.isFirst() );
-		assertTrue( results.isLast() );		
+		assertTrue( results.isLast() );
 
 		for ( int i=1; i<3; i++ ) {
 			assertTrue( results.setRowNumber( 1 ) );
@@ -298,11 +283,10 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 	}
 
 	@Test
-    @SkipForDialect(
-            value = CUBRIDDialect.class,
-            comment = "As of verion 8.4.1 CUBRID doesn't support temporary tables. This test fails with" +
-                    "HibernateException: cannot doAfterTransactionCompletion multi-table deletes using dialect not supporting temp tables"
-    )
+	@SkipForDialects(value = {
+			@SkipForDialect(value = CUBRIDDialect.class, comment = "As of verion 8.4.1 CUBRID doesn't support temporary tables. This test fails with"
+					+ "HibernateException: cannot doAfterTransactionCompletion multi-table deletes using dialect not supporting temp tables"),
+			@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA only supports forward-only cursors.") })
 	public void testScrollingJoinFetchesReverse() {
 		TestData data = new TestData();
 		data.prepare();
@@ -310,10 +294,10 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 		Session s = openSession();
 		Transaction txn = s.beginTransaction();
 
-		ScrollableResults results = s
-		        .createQuery( "from Animal a left join fetch a.offspring where a.description like :desc order by a.id" )
-		        .setString( "desc", "root%" )
-		        .scroll();
+		 ScrollableResults results = s
+					.createQuery(
+							"from Animal a left join fetch a.offspring where a.description like :desc order by a.id" )
+					.setString( "desc", "root%" ).scroll();
 
 		results.afterLast();
 
@@ -332,11 +316,10 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 	}
 
 	@Test
-    @SkipForDialect(
-            value = CUBRIDDialect.class,
-            comment = "As of verion 8.4.1 CUBRID doesn't support temporary tables. This test fails with" +
-                    "HibernateException: cannot doAfterTransactionCompletion multi-table deletes using dialect not supporting temp tables"
-    )
+	@SkipForDialects(value = {
+			@SkipForDialect(value = CUBRIDDialect.class, comment = "As of verion 8.4.1 CUBRID doesn't support temporary tables. This test fails with"
+					+ "HibernateException: cannot doAfterTransactionCompletion multi-table deletes using dialect not supporting temp tables"),
+			@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA only supports forward-only cursors.") })
 	public void testScrollingJoinFetchesPositioning() {
 		TestData data = new TestData();
 		data.prepare();
@@ -344,7 +327,7 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 		Session s = openSession();
 		Transaction txn = s.beginTransaction();
 
-		ScrollableResults results = s
+ 		ScrollableResults results = s
 		        .createQuery( "from Animal a left join fetch a.offspring where a.description like :desc order by a.id" )
 		        .setString( "desc", "root%" )
 		        .scroll();
@@ -440,7 +423,7 @@ public class ScrollableCollectionFetchingTest extends BaseCoreFunctionalTestCase
 		private void cleanup() {
 			Session s = openSession();
 			Transaction txn = s.beginTransaction();
-			
+
 			s.createQuery( "delete Animal where description like 'grand%'" ).executeUpdate();
 			s.createQuery( "delete Animal where not description like 'root%'" ).executeUpdate();
 			s.createQuery( "delete Animal" ).executeUpdate();

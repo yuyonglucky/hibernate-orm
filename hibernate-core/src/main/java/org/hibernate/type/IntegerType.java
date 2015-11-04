@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type;
 
@@ -41,13 +24,12 @@ public class IntegerType extends AbstractSingleColumnStandardBasicType<Integer>
 
 	public static final IntegerType INSTANCE = new IntegerType();
 
-	@SuppressWarnings({ "UnnecessaryBoxing" })
-	public static final Integer ZERO = Integer.valueOf( 0 );
+	public static final Integer ZERO = 0;
 
 	public IntegerType() {
 		super( org.hibernate.type.descriptor.sql.IntegerTypeDescriptor.INSTANCE, IntegerTypeDescriptor.INSTANCE );
 	}
-
+	@Override
 	public String getName() {
 		return "integer";
 	}
@@ -56,32 +38,31 @@ public class IntegerType extends AbstractSingleColumnStandardBasicType<Integer>
 	public String[] getRegistrationKeys() {
 		return new String[] { getName(), int.class.getName(), Integer.class.getName() };
 	}
-
+	@Override
 	public Serializable getDefaultValue() {
 		return ZERO;
 	}
-
+	@Override
 	public Class getPrimitiveClass() {
 		return int.class;
 	}
-
+	@Override
 	public String objectToSQLString(Integer value, Dialect dialect) throws Exception {
 		return toString( value );
 	}
-
+	@Override
 	public Integer stringToObject(String xml) {
 		return fromString( xml );
 	}
-
+	@Override
 	public Integer seed(SessionImplementor session) {
 		return ZERO;
 	}
-
-	@SuppressWarnings({ "UnnecessaryBoxing", "UnnecessaryUnboxing" })
+	@Override
 	public Integer next(Integer current, SessionImplementor session) {
 		return current+1;
 	}
-
+	@Override
 	public Comparator<Integer> getComparator() {
 		return getJavaTypeDescriptor().getComparator();
 	}

@@ -1,29 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.event.spi;
 
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.synchronization.AuditProcess;
 import org.hibernate.envers.internal.synchronization.work.AuditWorkUnit;
 import org.hibernate.envers.internal.synchronization.work.ModWorkUnit;
@@ -39,23 +22,23 @@ import org.hibernate.persister.entity.EntityPersister;
  * @author Steve Ebersole
  */
 public class EnversPostUpdateEventListenerImpl extends BaseEnversEventListener implements PostUpdateEventListener {
-	protected EnversPostUpdateEventListenerImpl(AuditConfiguration enversConfiguration) {
-		super( enversConfiguration );
+	public EnversPostUpdateEventListenerImpl(EnversService enversService) {
+		super( enversService );
 	}
 
 	@Override
 	public void onPostUpdate(PostUpdateEvent event) {
 		final String entityName = event.getPersister().getEntityName();
 
-		if ( getAuditConfiguration().getEntCfg().isVersioned( entityName ) ) {
+		if ( getEnversService().getEntitiesConfigurations().isVersioned( entityName ) ) {
 			checkIfTransactionInProgress( event.getSession() );
 
-			final AuditProcess auditProcess = getAuditConfiguration().getSyncManager().get( event.getSession() );
+			final AuditProcess auditProcess = getEnversService().getAuditProcessManager().get( event.getSession() );
 			final Object[] newDbState = postUpdateDBState( event );
 			final AuditWorkUnit workUnit = new ModWorkUnit(
 					event.getSession(),
 					event.getPersister().getEntityName(),
-					getAuditConfiguration(),
+					getEnversService(),
 					event.getId(),
 					event.getPersister(),
 					newDbState,
@@ -93,6 +76,6 @@ public class EnversPostUpdateEventListenerImpl extends BaseEnversEventListener i
 
 	@Override
 	public boolean requiresPostCommitHanding(EntityPersister persister) {
-		return getAuditConfiguration().getEntCfg().isVersioned( persister.getEntityName() );
+		return getEnversService().getEntitiesConfigurations().isVersioned( persister.getEntityName() );
 	}
 }

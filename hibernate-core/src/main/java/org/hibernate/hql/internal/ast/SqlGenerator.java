@@ -1,26 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast;
 
@@ -28,10 +10,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-
-import antlr.RecognitionException;
-import antlr.collections.AST;
-import org.jboss.logging.Logger;
 
 import org.hibernate.NullPrecedence;
 import org.hibernate.QueryException;
@@ -45,10 +23,15 @@ import org.hibernate.hql.internal.ast.tree.Node;
 import org.hibernate.hql.internal.ast.tree.ParameterContainer;
 import org.hibernate.hql.internal.ast.tree.ParameterNode;
 import org.hibernate.hql.internal.ast.util.ASTPrinter;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.StringHelper;
+import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.param.ParameterSpecification;
 import org.hibernate.type.Type;
+
+import antlr.RecognitionException;
+import antlr.collections.AST;
 
 /**
  * Generates SQL by overriding callback methods in the base class, which does
@@ -58,10 +41,9 @@ import org.hibernate.type.Type;
  * @author Steve Ebersole
  */
 public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( SqlGenerator.class );
 
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, SqlGenerator.class.getName());
-
-	public static boolean REGRESSION_STYLE_CROSS_JOINS = false;
+	public static boolean REGRESSION_STYLE_CROSS_JOINS;
 
 	/**
 	 * all append invocations on the buf should go through this Output instance variable.
@@ -81,12 +63,16 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 
 	// handle trace logging ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	private int traceDepth = 0;
+	private int traceDepth;
 
 	@Override
 	public void traceIn(String ruleName, AST tree) {
-		if ( !LOG.isTraceEnabled() ) return;
-		if ( inputState.guessing > 0 ) return;
+		if ( !LOG.isTraceEnabled() ) {
+			return;
+		}
+		if ( inputState.guessing > 0 ) {
+			return;
+		}
 		String prefix = StringHelper.repeat( '-', ( traceDepth++ * 2 ) ) + "-> ";
 		String traceText = ruleName + " (" + buildTraceNodeName( tree ) + ")";
 		LOG.trace( prefix + traceText );
@@ -100,8 +86,12 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 
 	@Override
 	public void traceOut(String ruleName, AST tree) {
-		if ( !LOG.isTraceEnabled() ) return;
-		if ( inputState.guessing > 0 ) return;
+		if ( !LOG.isTraceEnabled() ) {
+			return;
+		}
+		if ( inputState.guessing > 0 ) {
+			return;
+		}
 		String prefix = "<-" + StringHelper.repeat( '-', ( --traceDepth * 2 ) ) + " ";
 		LOG.trace( prefix + ruleName );
 	}
@@ -111,25 +101,25 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 	}
 
 	@Override
-    protected void out(String s) {
+	protected void out(String s) {
 		writer.clause( s );
 	}
 
 	@Override
-    protected void out(AST n) {
+	protected void out(AST n) {
 		if ( n instanceof Node ) {
-			out( ( ( Node ) n ).getRenderText( sessionFactory ) );
+			out( ( (Node) n ).getRenderText( sessionFactory ) );
 		}
 		else {
 			super.out( n );
 		}
 
 		if ( n instanceof ParameterNode ) {
-			collectedParameters.add( ( ( ParameterNode ) n ).getHqlParameterSpecification() );
+			collectedParameters.add( ( (ParameterNode) n ).getHqlParameterSpecification() );
 		}
 		else if ( n instanceof ParameterContainer ) {
-			if ( ( ( ParameterContainer ) n ).hasEmbeddedParameters() ) {
-				ParameterSpecification[] specifications = ( ( ParameterContainer ) n ).getEmbeddedParameters();
+			if ( ( (ParameterContainer) n ).hasEmbeddedParameters() ) {
+				ParameterSpecification[] specifications = ( (ParameterContainer) n ).getEmbeddedParameters();
 				if ( specifications != null ) {
 					collectedParameters.addAll( Arrays.asList( specifications ) );
 				}
@@ -138,22 +128,22 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 	}
 
 	@Override
-    protected void commaBetweenParameters(String comma) {
-		writer.commaBetweenParameters( comma );
+	protected void betweenFunctionArguments() {
+		writer.betweenFunctionArguments();
 	}
 
 	@Override
-    public void reportError(RecognitionException e) {
-		parseErrorHandler.reportError( e ); // Use the delegate.
+	public void reportError(RecognitionException e) {
+		parseErrorHandler.reportError( e );
 	}
 
 	@Override
-    public void reportError(String s) {
-		parseErrorHandler.reportError( s ); // Use the delegate.
+	public void reportError(String s) {
+		parseErrorHandler.reportError( s );
 	}
 
 	@Override
-    public void reportWarning(String s) {
+	public void reportWarning(String s) {
 		parseErrorHandler.reportWarning( s );
 	}
 
@@ -172,7 +162,7 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 	}
 
 	@Override
-    protected void optionalSpace() {
+	protected void optionalSpace() {
 		int c = getLastChar();
 		switch ( c ) {
 			case -1:
@@ -189,10 +179,10 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 	}
 
 	@Override
-    protected void beginFunctionTemplate(AST node, AST nameNode) {
+	protected void beginFunctionTemplate(AST node, AST nameNode) {
 		// NOTE for AGGREGATE both nodes are the same; for METHOD the first is the METHOD, the second is the
 		// 		METHOD_NAME
-		FunctionNode functionNode = ( FunctionNode ) node;
+		FunctionNode functionNode = (FunctionNode) node;
 		SQLFunction sqlFunction = functionNode.getSQLFunction();
 		if ( sqlFunction == null ) {
 			// if SQLFunction is null we just write the function out as it appears in the hql statement
@@ -201,13 +191,18 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 		else {
 			// this function has a registered SQLFunction -> redirect output and catch the arguments
 			outputStack.addFirst( writer );
-			writer = new FunctionArguments();
+			if ( node.getType() == CAST ) {
+				writer = new CastFunctionArguments();
+			}
+			else {
+				writer = new StandardFunctionArguments();
+			}
 		}
 	}
 
 	@Override
-    protected void endFunctionTemplate(AST node) {
-		FunctionNode functionNode = ( FunctionNode ) node;
+	protected void endFunctionTemplate(AST node) {
+		FunctionNode functionNode = (FunctionNode) node;
 		SQLFunction sqlFunction = functionNode.getSQLFunction();
 		if ( sqlFunction == null ) {
 			super.endFunctionTemplate( node );
@@ -215,7 +210,7 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 		else {
 			final Type functionType = functionNode.getFirstArgumentType();
 			// this function has a registered SQLFunction -> redirect output and catch the arguments
-			FunctionArguments functionArguments = ( FunctionArguments ) writer;
+			FunctionArgumentsCollectingWriter functionArguments = (FunctionArgumentsCollectingWriter) writer;
 			writer = outputStack.removeFirst();
 			out( sqlFunction.render( functionType, functionArguments.getArgs(), sessionFactory ) );
 		}
@@ -229,24 +224,22 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 	interface SqlWriter {
 		void clause(String clause);
 
-		/**
-		 * todo remove this hack
-		 * The parameter is either ", " or " , ". This is needed to pass sql generating tests as the old
-		 * sql generator uses " , " in the WHERE and ", " in SELECT.
-		 *
-		 * @param comma either " , " or ", "
-		 */
-		void commaBetweenParameters(String comma);
+		void betweenFunctionArguments();
+	}
+
+	interface FunctionArgumentsCollectingWriter extends SqlWriter {
+		public List getArgs();
 	}
 
 	/**
 	 * SQL function processing code redirects generated SQL output to an instance of this class
 	 * which catches function arguments.
 	 */
-	class FunctionArguments implements SqlWriter {
+	static class StandardFunctionArguments implements FunctionArgumentsCollectingWriter {
 		private int argInd;
-		private final List<String> args = new ArrayList<String>(3);
+		private final List<String> args = new ArrayList<String>( 3 );
 
+		@Override
 		public void clause(String clause) {
 			if ( argInd == args.size() ) {
 				args.add( clause );
@@ -256,7 +249,8 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 			}
 		}
 
-		public void commaBetweenParameters(String comma) {
+		@Override
+		public void betweenFunctionArguments() {
 			++argInd;
 		}
 
@@ -266,32 +260,80 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 	}
 
 	/**
+	 * SQL function processing code redirects generated SQL output to an instance of this class
+	 * which catches function arguments.
+	 */
+	static class CastFunctionArguments implements FunctionArgumentsCollectingWriter {
+		private String castExpression;
+		private String castTargetType;
+
+		private boolean startedType;
+
+		@Override
+		public void clause(String clause) {
+			if ( startedType ) {
+				if ( castTargetType == null ) {
+					castTargetType = clause;
+				}
+				else {
+					castTargetType += clause;
+				}
+			}
+			else {
+				if ( castExpression == null ) {
+					castExpression = clause;
+				}
+				else {
+					castExpression += clause;
+				}
+			}
+		}
+
+		@Override
+		public void betweenFunctionArguments() {
+			if ( startedType ) {
+				throw new QueryException( "CAST function should only have 2 arguments" );
+			}
+			startedType = true;
+		}
+
+		public List getArgs() {
+			List<String> rtn = CollectionHelper.arrayList( 2 );
+			rtn.add( castExpression );
+			rtn.add( castTargetType );
+			return rtn;
+		}
+	}
+
+	/**
 	 * The default SQL writer.
 	 */
 	class DefaultWriter implements SqlWriter {
+		@Override
 		public void clause(String clause) {
 			getStringBuilder().append( clause );
 		}
 
-		public void commaBetweenParameters(String comma) {
-			getStringBuilder().append( comma );
+		@Override
+		public void betweenFunctionArguments() {
+			getStringBuilder().append( ", " );
 		}
 	}
 
-    public static void panic() {
+	public static void panic() {
 		throw new QueryException( "TreeWalker: panic" );
 	}
 
 	@Override
-    protected void fromFragmentSeparator(AST a) {
+	protected void fromFragmentSeparator(AST a) {
 		// check two "adjecent" nodes at the top of the from-clause tree
 		AST next = a.getNextSibling();
 		if ( next == null || !hasText( a ) ) {
 			return;
 		}
 
-		FromElement left = ( FromElement ) a;
-		FromElement right = ( FromElement ) next;
+		FromElement left = (FromElement) a;
+		FromElement right = (FromElement) next;
 
 		///////////////////////////////////////////////////////////////////////
 		// HACK ALERT !!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -303,7 +345,7 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 		// Essentially, look-ahead to the next FromElement that actually
 		// writes something to the SQL
 		while ( right != null && !hasText( right ) ) {
-			right = ( FromElement ) right.getNextSibling();
+			right = (FromElement) right.getNextSibling();
 		}
 		if ( right == null ) {
 			return;
@@ -315,7 +357,7 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 		}
 
 		if ( right.getRealOrigin() == left ||
-		     ( right.getRealOrigin() != null && right.getRealOrigin() == left.getRealOrigin() ) ) {
+				( right.getRealOrigin() != null && right.getRealOrigin() == left.getRealOrigin() ) ) {
 			// right represents a joins originating from left; or
 			// both right and left reprersent joins originating from the same FromElement
 			if ( right.getJoinSequence() != null && right.getJoinSequence().isThetaStyle() ) {
@@ -341,14 +383,14 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 	}
 
 	@Override
-    protected void nestedFromFragment(AST d, AST parent) {
+	protected void nestedFromFragment(AST d, AST parent) {
 		// check a set of parent/child nodes in the from-clause tree
 		// to determine if a comma is required between them
 		if ( d != null && hasText( d ) ) {
 			if ( parent != null && hasText( parent ) ) {
 				// again, both should be FromElements
-				FromElement left = ( FromElement ) parent;
-				FromElement right = ( FromElement ) d;
+				FromElement left = (FromElement) parent;
+				FromElement right = (FromElement) d;
 				if ( right.getRealOrigin() == left ) {
 					// right represents a joins originating from left...
 					if ( right.getJoinSequence() != null && right.getJoinSequence().isThetaStyle() ) {
@@ -370,7 +412,10 @@ public class SqlGenerator extends SqlGeneratorBase implements ErrorReporter {
 
 	@Override
 	protected String renderOrderByElement(String expression, String order, String nulls) {
-		final NullPrecedence nullPrecedence = NullPrecedence.parse( nulls, sessionFactory.getSettings().getDefaultNullPrecedence() );
+		final NullPrecedence nullPrecedence = NullPrecedence.parse( nulls,
+																	sessionFactory.getSettings()
+																			.getDefaultNullPrecedence()
+		);
 		return sessionFactory.getDialect().renderOrderByElement( expression, null, order, nullPrecedence );
 	}
 }

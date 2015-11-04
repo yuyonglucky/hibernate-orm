@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.spi;
 
@@ -30,14 +13,16 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.EntityMode;
-import org.hibernate.cache.spi.CacheKey;
+import org.hibernate.cache.spi.access.CollectionRegionAccessStrategy;
+import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
 import org.hibernate.collection.spi.PersistentCollection;
-import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.engine.internal.CacheHelper;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.entity.EntityPersister;
+
+import org.jboss.logging.Logger;
 
 /**
  * Tracks entity and collection keys that are available for batch
@@ -49,7 +34,7 @@ import org.hibernate.persister.entity.EntityPersister;
  * @author Guenther Demetz
  */
 public class BatchFetchQueue {
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, BatchFetchQueue.class.getName() );
+	private static final Logger LOG = CoreLogging.logger( BatchFetchQueue.class );
 
 	private final PersistenceContext context;
 
@@ -217,13 +202,16 @@ public class BatchFetchQueue {
 	}
 
 	private boolean isCached(EntityKey entityKey, EntityPersister persister) {
-		if ( persister.hasCache() ) {
-			CacheKey key = context.getSession().generateCacheKey(
+		final SessionImplementor session = context.getSession();
+		if ( context.getSession().getCacheMode().isGetEnabled() && persister.hasCache() ) {
+			final EntityRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+			final Object key = cache.generateCacheKey(
 					entityKey.getIdentifier(),
-					persister.getIdentifierType(),
-					entityKey.getEntityName()
+					persister,
+					session.getFactory(),
+					session.getTenantIdentifier()
 			);
-			return persister.getCacheAccessStrategy().get( key, context.getSession().getTimestamp() ) != null;
+			return CacheHelper.fromSharedCache( session, key, cache ) != null;
 		}
 		return false;
 	}
@@ -330,14 +318,18 @@ public class BatchFetchQueue {
 	}
 
 	private boolean isCached(Serializable collectionKey, CollectionPersister persister) {
-		if ( persister.hasCache() ) {
-			CacheKey cacheKey = context.getSession().generateCacheKey(
+		SessionImplementor session = context.getSession();
+		if ( session.getCacheMode().isGetEnabled() && persister.hasCache() ) {
+			CollectionRegionAccessStrategy cache = persister.getCacheAccessStrategy();
+			Object cacheKey = cache.generateCacheKey(
 					collectionKey,
-			        persister.getKeyType(),
-			        persister.getRole()
+					persister,
+					session.getFactory(),
+					session.getTenantIdentifier()
 			);
-			return persister.getCacheAccessStrategy().get( cacheKey, context.getSession().getTimestamp() ) != null;
+			return CacheHelper.fromSharedCache( session, cacheKey, cache ) != null;
 		}
 		return false;
 	}
+
 }

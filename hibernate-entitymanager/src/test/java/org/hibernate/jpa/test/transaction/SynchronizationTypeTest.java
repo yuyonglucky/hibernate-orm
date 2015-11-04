@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.transaction;
 
@@ -31,13 +14,11 @@ import javax.persistence.criteria.CriteriaDelete;
 import javax.persistence.criteria.CriteriaUpdate;
 import java.util.Map;
 
-import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.engine.transaction.internal.jta.CMTTransaction;
 import org.hibernate.engine.transaction.internal.jta.JtaStatusHelper;
 import org.hibernate.jpa.AvailableSettings;
+import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
+import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorImpl;
 
 import org.junit.Test;
 
@@ -92,20 +73,25 @@ public class SynchronizationTypeTest extends BaseEntityManagerFunctionalTestCase
 
 		EntityManager entityManager = entityManagerFactory().createEntityManager( SynchronizationType.UNSYNCHRONIZED, null );
 		SessionImplementor session = entityManager.unwrap( SessionImplementor.class );
-		Transaction hibernateTransaction = ( (Session) session ).getTransaction();
-		ExtraAssertions.assertTyping( CMTTransaction.class, hibernateTransaction );
-		assertFalse( "EM was auto joined on creation", session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertFalse( "EM was auto joined on creation", hibernateTransaction.isParticipating() );
+
+		ExtraAssertions.assertTyping( JtaTransactionCoordinatorImpl.class, session.getTransactionCoordinator() );
+		JtaTransactionCoordinatorImpl transactionCoordinator = (JtaTransactionCoordinatorImpl) session.getTransactionCoordinator();
+
+		assertFalse( "EM was auto joined on creation", transactionCoordinator.isSynchronizationRegistered() );
+		assertTrue( "EM was auto joined on creation", transactionCoordinator.isActive() );
+		assertFalse( "EM was auto joined on creation", transactionCoordinator.isJoined() );
 
 		session.getFlushMode();
-		assertFalse( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertFalse( hibernateTransaction.isParticipating() );
+		assertFalse( transactionCoordinator.isSynchronizationRegistered() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertFalse( transactionCoordinator.isJoined() );
 
 		entityManager.joinTransaction();
 		assertTrue( JtaStatusHelper.isActive( TestingJtaPlatformImpl.INSTANCE.getTransactionManager() ) );
-		assertTrue( hibernateTransaction.isActive() );
-		assertTrue( session.getTransactionCoordinator().isSynchronizationRegistered() );
-		assertTrue( hibernateTransaction.isParticipating() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertTrue( transactionCoordinator.isSynchronizationRegistered() );
+		assertTrue( transactionCoordinator.isActive() );
+		assertTrue( transactionCoordinator.isJoined() );
 
 		assertTrue( entityManager.isOpen() );
 		assertTrue( session.isOpen() );

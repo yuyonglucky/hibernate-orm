@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.criteria.expression.function;
 
@@ -110,19 +93,19 @@ public class AggregationFunction<T>
 	            // converting to the column(s) associated with the entity's ID in the rendered SQL.  However, some DBs don't support
 	            // the multiple columns that would end up here for entities with composite IDs.  So, since we modify the query to
 	            // instead specify star since that's functionally equivalent and supported by all DBs.
-			    List<Expression<?>> argExprs = getArgumentExpressions();
-			    if (argExprs.size() == 1) {
-        	        Expression argExpr = argExprs.get(0);
-        	        if (argExpr instanceof Root<?>) {
-        	            Root<?> root = (Root<?>)argExpr;
-        	            if (root.getModel().getIdType() != null) {
-        	                buffer.append('*');
-        	                return;
-        	            }
-        	        }
-			    }
+				List<Expression<?>> argExprs = getArgumentExpressions();
+				if (argExprs.size() == 1) {
+					Expression argExpr = argExprs.get(0);
+					if (argExpr instanceof Root<?>) {
+						Root<?> root = (Root<?>)argExpr;
+						if (!root.getModel().hasSingleIdAttribute()) {
+							buffer.append('*');
+							return;
+						}
+					}
+				}
 			}
-            super.renderArguments(buffer, renderingContext);
+			super.renderArguments(buffer, renderingContext);
 		}
 
 		public boolean isDistinct() {

@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.components.dynamic;
 
 import java.io.Serializable;
@@ -29,7 +35,7 @@ public class NotAuditedDynamicMapComponent implements Serializable {
 		if ( this == o ) {
 			return true;
 		}
-		if ( !(o instanceof NotAuditedDynamicMapComponent) ) {
+		if ( !( o instanceof NotAuditedDynamicMapComponent ) ) {
 			return false;
 		}
 
@@ -50,9 +56,9 @@ public class NotAuditedDynamicMapComponent implements Serializable {
 
 	@Override
 	public int hashCode() {
-		int result = (int) (id ^ (id >>> 32));
-		result = 31 * result + (note != null ? note.hashCode() : 0);
-		result = 31 * result + (customFields != null ? customFields.hashCode() : 0);
+		int result = (int) ( id ^ ( id >>> 32 ) );
+		result = 31 * result + ( note != null ? note.hashCode() : 0 );
+		result = 31 * result + ( customFields != null ? customFields.hashCode() : 0 );
 		return result;
 	}
 

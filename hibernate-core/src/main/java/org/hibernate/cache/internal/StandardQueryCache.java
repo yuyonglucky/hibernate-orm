@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.internal;
 
@@ -30,20 +13,21 @@ import java.util.Properties;
 import java.util.Set;
 import javax.persistence.EntityNotFoundException;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
 import org.hibernate.UnresolvableObjectException;
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.spi.QueryCache;
 import org.hibernate.cache.spi.QueryKey;
 import org.hibernate.cache.spi.QueryResultsRegion;
+import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.UpdateTimestampsCache;
-import org.hibernate.cfg.Settings;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.type.Type;
 import org.hibernate.type.TypeHelper;
+
+import org.jboss.logging.Logger;
 
 /**
  * The standard implementation of the Hibernate QueryCache interface.  This
@@ -75,7 +59,7 @@ public class StandardQueryCache implements QueryCache {
 	 * @param regionName The base query cache region name
 	 */
 	public StandardQueryCache(
-			final Settings settings,
+			final SessionFactoryOptions settings,
 			final Properties props,
 			final UpdateTimestampsCache updateTimestampsCache,
 			final String regionName) {
@@ -89,7 +73,10 @@ public class StandardQueryCache implements QueryCache {
 		}
 		LOG.startingQueryCache( regionNameToUse );
 
-		this.cacheRegion = settings.getRegionFactory().buildQueryResultsRegion( regionNameToUse, props );
+		this.cacheRegion = settings.getServiceRegistry().getService( RegionFactory.class ).buildQueryResultsRegion(
+				regionNameToUse,
+				props
+		);
 		this.updateTimestampsCache = updateTimestampsCache;
 	}
 
@@ -124,15 +111,13 @@ public class StandardQueryCache implements QueryCache {
 		if ( isNaturalKeyLookup && result.isEmpty() ) {
 			return false;
 		}
-		final long ts = cacheRegion.nextTimestamp();
-
 		if ( DEBUGGING ) {
-			LOG.debugf( "Caching query results in region: %s; timestamp=%s", cacheRegion.getName(), ts );
+			LOG.debugf( "Caching query results in region: %s; timestamp=%s", cacheRegion.getName(), session.getTimestamp() );
 		}
 
 		final List cacheable = new ArrayList( result.size() + 1 );
 		logCachedResultDetails( key, null, returnTypes, cacheable );
-		cacheable.add( ts );
+		cacheable.add( session.getTimestamp() );
 
 		final boolean isSingleResult = returnTypes.length == 1;
 		for ( Object aResult : result ) {
@@ -143,7 +128,14 @@ public class StandardQueryCache implements QueryCache {
 			logCachedResultRowDetails( returnTypes, aResult );
 		}
 
-		cacheRegion.put( key, cacheable );
+		try {
+			session.getEventListenerManager().cachePutStart();
+			cacheRegion.put( session, key, cacheable );
+		}
+		finally {
+			session.getEventListenerManager().cachePutEnd();
+		}
+
 		return true;
 	}
 
@@ -153,13 +145,13 @@ public class StandardQueryCache implements QueryCache {
 			final QueryKey key,
 			final Type[] returnTypes,
 			final boolean isNaturalKeyLookup,
-			final Set spaces,
+			final Set<Serializable> spaces,
 			final SessionImplementor session) throws HibernateException {
 		if ( DEBUGGING ) {
 			LOG.debugf( "Checking cached query results in region: %s", cacheRegion.getName() );
 		}
 
-		final List cacheable = (List) cacheRegion.get( key );
+		final List cacheable = getCachedResults( key, session );
 		logCachedResultDetails( key, spaces, returnTypes, cacheable );
 
 		if ( cacheable == null ) {
@@ -170,7 +162,7 @@ public class StandardQueryCache implements QueryCache {
 		}
 
 		final Long timestamp = (Long) cacheable.get( 0 );
-		if ( !isNaturalKeyLookup && !isUpToDate( spaces, timestamp ) ) {
+		if ( !isNaturalKeyLookup && !isUpToDate( spaces, timestamp, session ) ) {
 			if ( DEBUGGING ) {
 				LOG.debug( "Cached query results were not up-to-date" );
 			}
@@ -223,11 +215,24 @@ public class StandardQueryCache implements QueryCache {
 		return result;
 	}
 
-	protected boolean isUpToDate(final Set spaces, final Long timestamp) {
+	private List getCachedResults(QueryKey key, SessionImplementor session) {
+		List cacheable = null;
+		try {
+			session.getEventListenerManager().cacheGetStart();
+			cacheable = (List) cacheRegion.get( session, key );
+		}
+		finally {
+			session.getEventListenerManager().cacheGetEnd( cacheable != null );
+		}
+		return cacheable;
+	}
+
+
+	protected boolean isUpToDate(Set<Serializable> spaces, Long timestamp, SessionImplementor session) {
 		if ( DEBUGGING ) {
 			LOG.debugf( "Checking query spaces are up-to-date: %s", spaces );
 		}
-		return updateTimestampsCache.isUpToDate( spaces, timestamp );
+		return updateTimestampsCache.isUpToDate( spaces, timestamp, session );
 	}
 
 	@Override

@@ -1,74 +1,65 @@
-/* 
+/*
  * Hibernate, Relational Persistence for Idiomatic Java
- * 
- * JBoss, Home of Professional Open Source
- * Copyright 2012 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
  *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.constraint;
+
+import java.util.Iterator;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.OneToOne;
+import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
+
+import org.hibernate.boot.model.relational.Namespace;
+import org.hibernate.mapping.Column;
+import org.hibernate.mapping.ForeignKey;
+import org.hibernate.mapping.UniqueKey;
+
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.util.Iterator;
-
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.OneToOne;
-import javax.persistence.Table;
-import javax.persistence.UniqueConstraint;
-
-import org.hibernate.mapping.Column;
-import org.hibernate.mapping.ForeignKey;
-import org.hibernate.mapping.UniqueKey;
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.junit.Test;
-
-public class ConstraintTest extends BaseCoreFunctionalTestCase {
+/**
+ * @author Brett Meyer
+ */
+public class ConstraintTest extends BaseNonConfigCoreFunctionalTestCase {
 	
 	private static final int MAX_NAME_LENGTH = 30;
 	
-	private static final String EXPLICIT_FK_NAME = "fk_explicit";
+	private static final String EXPLICIT_FK_NAME_NATIVE = "fk_explicit_native";
+	
+	private static final String EXPLICIT_FK_NAME_JPA = "fk_explicit_jpa";
 	
 	private static final String EXPLICIT_UK_NAME = "uk_explicit";
 	
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
-		return new Class<?>[] {
-				DataPoint.class, DataPoint2.class
-		};
+		return new Class<?>[] { DataPoint.class, DataPoint2.class };
 	}
 	
 	@Test
 	@TestForIssue( jiraKey = "HHH-7797" )
 	public void testUniqueConstraints() {
-		Column column = (Column) configuration().getClassMapping( DataPoint.class.getName() )
+		Column column = (Column) metadata().getEntityBinding( DataPoint.class.getName() )
 				.getProperty( "foo1" ).getColumnIterator().next();
 		assertFalse( column.isNullable() );
 		assertTrue( column.isUnique() );
 
-		column = (Column) configuration().getClassMapping( DataPoint.class.getName() )
+		column = (Column) metadata().getEntityBinding( DataPoint.class.getName() )
 				.getProperty( "foo2" ).getColumnIterator().next();
 		assertTrue( column.isNullable() );
 		assertTrue( column.isUnique() );
 
-		column = (Column) configuration().getClassMapping( DataPoint.class.getName() )
+		column = (Column) metadata().getEntityBinding( DataPoint.class.getName() )
 				.getProperty( "id" ).getColumnIterator().next();
 		assertFalse( column.isNullable() );
 		assertTrue( column.isUnique() );
@@ -77,36 +68,45 @@ public class ConstraintTest extends BaseCoreFunctionalTestCase {
 	@Test
 	@TestForIssue( jiraKey = "HHH-1904" )
 	public void testConstraintNameLength() {
-		Iterator<org.hibernate.mapping.Table> tableItr = configuration().getTableMappings();
-		while (tableItr.hasNext()) {
-			org.hibernate.mapping.Table table = tableItr.next();
-			
-			Iterator fkItr = table.getForeignKeyIterator();
-			while (fkItr.hasNext()) {
-				ForeignKey fk = (ForeignKey) fkItr.next();
-				assertTrue( fk.getName().length() <= MAX_NAME_LENGTH );
-				
-				// ensure the randomly generated constraint name doesn't
-				// happen if explicitly given
-				Column column = fk.getColumn( 0 );
-				if ( column.getName().equals( "explicit" ) ) {
-					assertEquals( fk.getName(), EXPLICIT_FK_NAME );
+		int foundCount = 0;
+		for ( Namespace namespace : metadata().getDatabase().getNamespaces() ) {
+			for ( org.hibernate.mapping.Table table : namespace.getTables() ) {
+				Iterator fkItr = table.getForeignKeyIterator();
+				while (fkItr.hasNext()) {
+					ForeignKey fk = (ForeignKey) fkItr.next();
+					assertTrue( fk.getName().length() <= MAX_NAME_LENGTH );
+
+					// ensure the randomly generated constraint name doesn't
+					// happen if explicitly given
+					Column column = fk.getColumn( 0 );
+					if ( column.getName().equals( "explicit_native" ) ) {
+						foundCount++;
+						assertEquals( fk.getName(), EXPLICIT_FK_NAME_NATIVE );
+					}
+					else if ( column.getName().equals( "explicit_jpa" ) ) {
+						foundCount++;
+						assertEquals( fk.getName(), EXPLICIT_FK_NAME_JPA );
+					}
+				}
+
+				Iterator ukItr = table.getUniqueKeyIterator();
+				while (ukItr.hasNext()) {
+					UniqueKey uk = (UniqueKey) ukItr.next();
+					assertTrue( uk.getName().length() <= MAX_NAME_LENGTH );
+
+					// ensure the randomly generated constraint name doesn't
+					// happen if explicitly given
+					Column column = uk.getColumn( 0 );
+					if ( column.getName().equals( "explicit" ) ) {
+						foundCount++;
+						assertEquals( uk.getName(), EXPLICIT_UK_NAME );
+					}
 				}
 			}
-			
-			Iterator ukItr = table.getUniqueKeyIterator();
-			while (ukItr.hasNext()) {
-				UniqueKey uk = (UniqueKey) ukItr.next();
-				assertTrue( uk.getName().length() <= MAX_NAME_LENGTH );
-				
-				// ensure the randomly generated constraint name doesn't
-				// happen if explicitly given
-				Column column = uk.getColumn( 0 );
-				if ( column.getName().equals( "explicit" ) ) {
-					assertEquals( uk.getName(), EXPLICIT_UK_NAME );
-				}
-			}
+
 		}
+		
+		assertEquals("Could not find the necessary columns.", 3, foundCount);
 	}
 	
 	@Entity
@@ -139,7 +139,12 @@ public class ConstraintTest extends BaseCoreFunctionalTestCase {
 		public DataPoint dp;
 		
 		@OneToOne
-		@org.hibernate.annotations.ForeignKey(name = EXPLICIT_FK_NAME)
-		public DataPoint explicit;
+		@org.hibernate.annotations.ForeignKey(name = EXPLICIT_FK_NAME_NATIVE)
+		@JoinColumn(name = "explicit_native")
+		public DataPoint explicit_native;
+		
+		@OneToOne
+		@JoinColumn(name = "explicit_jpa", foreignKey = @javax.persistence.ForeignKey(name = EXPLICIT_FK_NAME_JPA))
+		public DataPoint explicit_jpa;
 	}
 }

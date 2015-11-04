@@ -1,13 +1,21 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
+
 //$Id: IJTest.java 10977 2006-12-12 23:28:04Z steve.ebersole@jboss.com $
 package org.hibernate.test.legacy;
 
 import java.io.Serializable;
 
-import org.junit.Test;
-
 import org.hibernate.LockMode;
+import org.hibernate.LockOptions;
 import org.hibernate.Session;
 import org.hibernate.dialect.HSQLDialect;
+
+import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
@@ -43,16 +51,16 @@ public class IJTest extends LegacyTestCase {
 		s.beginTransaction();
 		j = (J) s.get(I.class, jid);
 		i = (I) s.get(I.class, iid);
-		assertTrue( i.getClass()==I.class );
+		assertTrue( i.getClass() == I.class );
 		j.setAmount( 0.5f );
-		s.lock(i, LockMode.UPGRADE);
+		s.lock( i, LockMode.UPGRADE );
 		s.getTransaction().commit();
 		s.close();
 
 		s = sessionFactory().openSession();
 		s.beginTransaction();
-		j = (J) s.get(I.class, jid, LockMode.UPGRADE);
-		i = (I) s.get(I.class, iid, LockMode.UPGRADE);
+		j = (J) s.byId( I.class ).with( LockOptions.UPGRADE ).load( jid );
+		i = (I) s.byId( I.class ).with( LockOptions.UPGRADE ).load( iid );
 		s.getTransaction().commit();
 		s.close();
 

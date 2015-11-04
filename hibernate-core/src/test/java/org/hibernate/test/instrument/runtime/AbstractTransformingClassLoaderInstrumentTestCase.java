@@ -1,42 +1,28 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.instrument.runtime;
 
 import java.lang.reflect.InvocationTargetException;
-
-import org.junit.Rule;
-import org.junit.Test;
 
 import org.hibernate.HibernateException;
 import org.hibernate.bytecode.buildtime.spi.BasicClassFilter;
 import org.hibernate.bytecode.buildtime.spi.FieldFilter;
 import org.hibernate.bytecode.spi.BytecodeProvider;
 import org.hibernate.bytecode.spi.InstrumentedClassLoader;
+import org.hibernate.dialect.AbstractHANADialect;
 import org.hibernate.dialect.MySQLDialect;
+
+import org.hibernate.testing.FailureExpected;
 import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseUnitTestCase;
 import org.hibernate.testing.junit4.ClassLoadingIsolater;
+import org.junit.Rule;
+import org.junit.Test;
 
 /**
  * @author Steve Ebersole
@@ -90,25 +76,31 @@ public abstract class AbstractTransformingClassLoaderInstrumentTestCase extends 
 	}
 
 	@Test
-    @SkipForDialect( value = MySQLDialect.class, comment = "wrong sql in mapping, mysql needs double type, but it is float type in mapping")
+	@TestForIssue( jiraKey = "HHH-9476" )
+	public void testEagerFetchLazyToOne() {
+		executeExecutable( "org.hibernate.test.instrument.cases.TestFetchingLazyToOneExecutable" );
+	}
+
+	@Test
+    @SkipForDialect( value = { MySQLDialect.class, AbstractHANADialect.class }, comment = "wrong sql in mapping, mysql/hana need double type, but it is float type in mapping")
 	public void testFetchAll() throws Exception {
 		executeExecutable( "org.hibernate.test.instrument.cases.TestFetchAllExecutable" );
 	}
 
 	@Test
-    @SkipForDialect( value = MySQLDialect.class, comment = "wrong sql in mapping, mysql needs double type, but it is float type in mapping")
+    @SkipForDialect( value = { MySQLDialect.class, AbstractHANADialect.class }, comment = "wrong sql in mapping, mysql/hana need double type, but it is float type in mapping")
 	public void testLazy() {
 		executeExecutable( "org.hibernate.test.instrument.cases.TestLazyExecutable" );
 	}
 
 	@Test
-    @SkipForDialect( value = MySQLDialect.class, comment = "wrong sql in mapping, mysql needs double type, but it is float type in mapping")
+    @SkipForDialect( value = { MySQLDialect.class, AbstractHANADialect.class }, comment = "wrong sql in mapping, mysql/hana need double type, but it is float type in mapping")
 	public void testLazyManyToOne() {
 		executeExecutable( "org.hibernate.test.instrument.cases.TestLazyManyToOneExecutable" );
 	}
 
 	@Test
-    @SkipForDialect( value = MySQLDialect.class, comment = "wrong sql in mapping, mysql needs double type, but it is float type in mapping")
+    @SkipForDialect( value = { MySQLDialect.class, AbstractHANADialect.class }, comment = "wrong sql in mapping, mysql/hana need double type, but it is float type in mapping")
 	public void testPropertyInitialized() {
 		executeExecutable( "org.hibernate.test.instrument.cases.TestIsPropertyInitializedExecutable" );
 	}
@@ -124,15 +116,28 @@ public abstract class AbstractTransformingClassLoaderInstrumentTestCase extends 
 	}
 
 	@Test
+	@FailureExpected( jiraKey = "HHH-9984")
+	@TestForIssue( jiraKey = "HHH-9984")
+	public void testLazyBasicFieldAccess() {
+		executeExecutable( "org.hibernate.test.instrument.cases.TestLazyBasicFieldAccessExecutable" );
+	}
+
+	@Test
+	@TestForIssue( jiraKey = "HHH-5255")
+	public void testLazyBasicPropertyAccess() {
+		executeExecutable( "org.hibernate.test.instrument.cases.TestLazyBasicPropertyAccessExecutable" );
+	}
+
+	@Test
 	public void testSharedPKOneToOne() {
 		executeExecutable( "org.hibernate.test.instrument.cases.TestSharedPKOneToOneExecutable" );
 	}
 
 	@Test
-    @SkipForDialect( value = MySQLDialect.class, comment = "wrong sql in mapping, mysql needs double type, but it is float type in mapping")
+    @SkipForDialect( value = { MySQLDialect.class, AbstractHANADialect.class }, comment = "wrong sql in mapping, mysql/hana need double type, but it is float type in mapping")
 	public void testCustomColumnReadAndWrite() {
 		executeExecutable( "org.hibernate.test.instrument.cases.TestCustomColumnReadAndWrite" );
-	}	
+	}
 
 	// reflection code to ensure isolation into the created classloader ~~~~~~~
 

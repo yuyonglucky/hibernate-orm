@@ -1,38 +1,20 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
 
 import java.io.Serializable;
-
-import org.jboss.logging.Logger;
+import java.util.concurrent.TimeUnit;
 
 import org.hibernate.HibernateException;
 import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
-import org.hibernate.engine.spi.CachedNaturalIdValueSource;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.event.spi.ResolveNaturalIdEvent;
 import org.hibernate.event.spi.ResolveNaturalIdEventListener;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
@@ -51,10 +33,7 @@ public class DefaultResolveNaturalIdEventListener
 	public static final Object REMOVED_ENTITY_MARKER = new Object();
 	public static final Object INCONSISTENT_RTN_CLASS_MARKER = new Object();
 
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger(
-			CoreMessageLogger.class,
-			DefaultResolveNaturalIdEventListener.class.getName()
-	);
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( DefaultResolveNaturalIdEventListener.class );
 
 	@Override
 	public void onResolveNaturalId(ResolveNaturalIdEvent event) throws HibernateException {
@@ -76,21 +55,30 @@ public class DefaultResolveNaturalIdEventListener
 		final EntityPersister persister = event.getEntityPersister();
 
 		final boolean traceEnabled = LOG.isTraceEnabled();
-		if ( traceEnabled )
-			LOG.tracev( "Attempting to resolve: {0}",
-					MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() ) );
+		if ( traceEnabled ) {
+			LOG.tracev(
+					"Attempting to resolve: {0}",
+					MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() )
+			);
+		}
 
 		Serializable entityId = resolveFromCache( event );
 		if ( entityId != null ) {
-			if ( traceEnabled )
-				LOG.tracev( "Resolved object in cache: {0}",
-						MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() ) );
+			if ( traceEnabled ) {
+				LOG.tracev(
+						"Resolved object in cache: {0}",
+						MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() )
+				);
+			}
 			return entityId;
 		}
 
-		if ( traceEnabled )
-			LOG.tracev( "Object not resolved in any cache: {0}",
-					MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() ) );
+		if ( traceEnabled ) {
+			LOG.tracev(
+					"Object not resolved in any cache: {0}",
+					MessageHelper.infoString( persister, event.getNaturalIdValues(), event.getSession().getFactory() )
+			);
+		}
 
 		return loadFromDatasource( event );
 	}
@@ -122,7 +110,7 @@ public class DefaultResolveNaturalIdEventListener
 		final boolean stats = factory.getStatistics().isStatisticsEnabled();
 		long startTime = 0;
 		if ( stats ) {
-			startTime = System.currentTimeMillis();
+			startTime = System.nanoTime();
 		}
 		
 		final Serializable pk = event.getEntityPersister().loadEntityIdByNaturalId(
@@ -134,10 +122,11 @@ public class DefaultResolveNaturalIdEventListener
 		if ( stats ) {
 			final NaturalIdRegionAccessStrategy naturalIdCacheAccessStrategy = event.getEntityPersister().getNaturalIdCacheAccessStrategy();
 			final String regionName = naturalIdCacheAccessStrategy == null ? null : naturalIdCacheAccessStrategy.getRegion().getName();
-			
+			final long endTime = System.nanoTime();
+			final long milliseconds = TimeUnit.MILLISECONDS.convert( endTime - startTime, TimeUnit.NANOSECONDS );
 			factory.getStatisticsImplementor().naturalIdQueryExecuted(
 					regionName,
-					System.currentTimeMillis() - startTime );
+					milliseconds );
 		}
 		
 		//PK can be null if the entity doesn't exist

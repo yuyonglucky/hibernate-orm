@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.service.internal;
 
@@ -55,6 +38,7 @@ import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventType;
 
 import static org.hibernate.event.spi.EventType.AUTO_FLUSH;
+import static org.hibernate.event.spi.EventType.CLEAR;
 import static org.hibernate.event.spi.EventType.DELETE;
 import static org.hibernate.event.spi.EventType.DIRTY_CHECK;
 import static org.hibernate.event.spi.EventType.EVICT;
@@ -223,6 +207,11 @@ public class EventListenerRegistryImpl implements EventListenerRegistry {
 		prepareListeners(
 				EVICT,
 				new DefaultEvictEventListener(),
+				workMap
+		);
+
+		prepareListeners(
+				CLEAR,
 				workMap
 		);
 
@@ -422,11 +411,20 @@ public class EventListenerRegistryImpl implements EventListenerRegistry {
 	}
 
 	private static <T> void prepareListeners(EventType<T> type, T defaultListener, Map<EventType,EventListenerGroupImpl> map) {
-		final EventListenerGroupImpl<T> listeners = new EventListenerGroupImpl<T>( type );
-		if ( defaultListener != null ) {
-			listeners.appendListener( defaultListener );
+		final EventListenerGroupImpl<T> listenerGroup;
+		if ( type == EventType.POST_COMMIT_DELETE
+				|| type == EventType.POST_COMMIT_INSERT
+				|| type == EventType.POST_COMMIT_UPDATE ) {
+			listenerGroup = new PostCommitEventListenerGroupImpl<T>( type );
 		}
-		map.put( type, listeners  );
+		else {
+			listenerGroup = new EventListenerGroupImpl<T>( type );
+		}
+
+		if ( defaultListener != null ) {
+			listenerGroup.appendListener( defaultListener );
+		}
+		map.put( type, listenerGroup  );
 	}
 
 }

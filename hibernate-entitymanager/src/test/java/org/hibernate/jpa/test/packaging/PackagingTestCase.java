@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.packaging;
 
@@ -45,7 +28,6 @@ import org.hibernate.jpa.test.Cat;
 import org.hibernate.jpa.test.Distributor;
 import org.hibernate.jpa.test.Item;
 import org.hibernate.jpa.test.Kitten;
-import org.hibernate.jpa.test.TestHelper;
 import org.hibernate.jpa.test.pack.cfgxmlpar.Morito;
 import org.hibernate.jpa.test.pack.defaultpar.ApplicationServer;
 import org.hibernate.jpa.test.pack.defaultpar.IncrementListener;
@@ -86,17 +68,28 @@ public abstract class PackagingTestCase extends BaseCoreFunctionalTestCase {
 		URL myUrl = originalClassLoader.getResource(
 				PackagingTestCase.class.getName().replace( '.', '/' ) + ".class"
 		);
-		int index;
-		if (myUrl.getFile().contains( "target" )) {
+
+		if ( myUrl == null ) {
+			fail( "Unable to setup packaging test : could not resolve 'known class' url" );
+		}
+
+		int index = -1;
+		if ( myUrl.getFile().contains( "target" ) ) {
 			// assume there's normally a /target
 			index = myUrl.getFile().lastIndexOf( "target" );
-		} else {
+		}
+		else if ( myUrl.getFile().contains( "bin" ) ) {
 			// if running in some IDEs, may be in /bin instead
 			index = myUrl.getFile().lastIndexOf( "bin" );
 		}
-		
-		if ( index == -1 ) {
-			fail( "Unable to setup packaging test" );
+		else if ( myUrl.getFile().contains( "out/test" ) ) {
+			// intellij... intellij sets up project outputs little different
+			int outIndex = myUrl.getFile().lastIndexOf( "out/test" );
+			index = myUrl.getFile().lastIndexOf( '/', outIndex+1 );
+		}
+
+		if ( index < 0 ) {
+			fail( "Unable to setup packaging test : could not interpret url" );
 		}
 
 		String baseDirPath = myUrl.getFile().substring( 0, index );

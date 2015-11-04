@@ -1,27 +1,9 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011 by Red Hat Inc and/or its affiliates or by
- * third-party contributors as indicated by either @author tags or express
- * copyright attribution statements applied by the authors.  All
- * third-party contributions are distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
-
 package org.hibernate.cfg.annotations.reflection;
 
 import java.beans.Introspector;
@@ -35,6 +17,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.persistence.Access;
@@ -49,6 +32,9 @@ import javax.persistence.CascadeType;
 import javax.persistence.CollectionTable;
 import javax.persistence.Column;
 import javax.persistence.ColumnResult;
+import javax.persistence.ConstructorResult;
+import javax.persistence.Convert;
+import javax.persistence.Converts;
 import javax.persistence.DiscriminatorColumn;
 import javax.persistence.DiscriminatorType;
 import javax.persistence.DiscriminatorValue;
@@ -127,21 +113,23 @@ import javax.persistence.Transient;
 import javax.persistence.UniqueConstraint;
 import javax.persistence.Version;
 
-import org.dom4j.Attribute;
-import org.dom4j.Element;
-import org.jboss.logging.Logger;
-
 import org.hibernate.AnnotationException;
+import org.hibernate.annotations.Any;
 import org.hibernate.annotations.Cascade;
 import org.hibernate.annotations.Columns;
+import org.hibernate.annotations.ManyToAny;
 import org.hibernate.annotations.common.annotationfactory.AnnotationDescriptor;
 import org.hibernate.annotations.common.annotationfactory.AnnotationFactory;
 import org.hibernate.annotations.common.reflection.AnnotationReader;
-import org.hibernate.annotations.common.reflection.Filter;
 import org.hibernate.annotations.common.reflection.ReflectionUtil;
+import org.hibernate.boot.registry.classloading.spi.ClassLoadingException;
+import org.hibernate.boot.spi.ClassLoaderAccess;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
-import org.hibernate.internal.util.ReflectHelper;
 import org.hibernate.internal.util.StringHelper;
+
+import org.dom4j.Attribute;
+import org.dom4j.Element;
 
 /**
  * Encapsulates the overriding of Java annotations from an EJB 3.0 descriptor.
@@ -153,20 +141,18 @@ import org.hibernate.internal.util.StringHelper;
  */
 @SuppressWarnings("unchecked")
 public class JPAOverriddenAnnotationReader implements AnnotationReader {
+    private static final CoreMessageLogger LOG = CoreLogging.messageLogger( JPAOverriddenAnnotationReader.class );
 
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class,
-                                                                       JPAOverriddenAnnotationReader.class.getName());
-	private static final Map<Class, String> annotationToXml;
 	private static final String SCHEMA_VALIDATION = "Activate schema validation for more information";
-	private static final Filter FILTER = new Filter() {
-		public boolean returnStatic() {
-			return false;
-		}
+	private static final String WORD_SEPARATOR = "-";
 
-		public boolean returnTransient() {
-			return false;
-		}
-	};
+	private static enum PropertyType {
+		PROPERTY,
+		FIELD,
+		METHOD
+	}
+
+	private static final Map<Class, String> annotationToXml;
 
 	static {
 		annotationToXml = new HashMap<Class, String>();
@@ -219,6 +205,8 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		annotationToXml.put( OneToOne.class, "one-to-one" );
 		annotationToXml.put( OneToMany.class, "one-to-many" );
 		annotationToXml.put( ManyToMany.class, "many-to-many" );
+		annotationToXml.put( Any.class, "any" );
+		annotationToXml.put( ManyToAny.class, "many-to-any" );
 		annotationToXml.put( JoinTable.class, "join-table" );
 		annotationToXml.put( JoinColumn.class, "join-column" );
 		annotationToXml.put( JoinColumns.class, "join-column" );
@@ -243,28 +231,27 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		annotationToXml.put( Cacheable.class, "cacheable" );
 		annotationToXml.put( Index.class, "index" );
 		annotationToXml.put( ForeignKey.class, "foreign-key" );
+		annotationToXml.put( Convert.class, "convert" );
+		annotationToXml.put( Converts.class, "convert" );
+		annotationToXml.put( ConstructorResult.class, "constructor-result" );
 	}
 
 	private XMLContext xmlContext;
+	private final ClassLoaderAccess classLoaderAccess;
+	private final AnnotatedElement element;
 	private String className;
 	private String propertyName;
 	private PropertyType propertyType;
 	private transient Annotation[] annotations;
 	private transient Map<Class, Annotation> annotationsMap;
-	private static final String WORD_SEPARATOR = "-";
 	private transient List<Element> elementsForProperty;
 	private AccessibleObject mirroredAttribute;
-	private final AnnotatedElement element;
 
-	private enum PropertyType {
-		PROPERTY,
-		FIELD,
-		METHOD
-	}
-
-	public JPAOverriddenAnnotationReader(AnnotatedElement el, XMLContext xmlContext) {
+	public JPAOverriddenAnnotationReader(AnnotatedElement el, XMLContext xmlContext, ClassLoaderAccess classLoaderAccess) {
 		this.element = el;
 		this.xmlContext = xmlContext;
+		this.classLoaderAccess = classLoaderAccess;
+
 		if ( el instanceof Class ) {
 			Class clazz = (Class) el;
 			className = clazz.getName();
@@ -288,11 +275,9 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			Method method = (Method) el;
 			className = method.getDeclaringClass().getName();
 			propertyName = method.getName();
-			if ( ReflectionUtil.isProperty(
-					method,
-					null, //this is yukky!! we'd rather get the TypeEnvironment()
-					FILTER
-			) ) {
+
+			// YUCK!  The null here is the 'boundType', we'd rather get the TypeEnvironment()
+			if ( ReflectionUtil.isProperty( method, null, PersistentAttributeFilter.INSTANCE ) ) {
 				if ( propertyName.startsWith( "get" ) ) {
 					propertyName = Introspector.decapitalize( propertyName.substring( "get".length() ) );
 				}
@@ -337,7 +322,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 
 	/*
 	 * The idea is to create annotation proxies for the xml configuration elements. Using this proxy annotations together
-	 * with the {@code JPAMetadataprovider} allows to handle xml configuration the same way as annotation configuration.
+	 * with the {@link JPAMetadataProvider} allows to handle xml configuration the same way as annotation configuration.
 	 */
 	private void initAnnotations() {
 		if ( annotations == null ) {
@@ -345,7 +330,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			if ( className != null && propertyName == null ) {
 				//is a class
 				Element tree = xmlContext.getXMLTree( className );
-				Annotation[] annotations = getJavaAnnotations();
+				Annotation[] annotations = getPhysicalAnnotations();
 				List<Annotation> annotationList = new ArrayList<Annotation>( annotations.length + 5 );
 				annotationsMap = new HashMap<Class, Annotation>( annotations.length + 5 );
 				for ( Annotation annotation : annotations ) {
@@ -378,6 +363,8 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				addIfNotNull( annotationList, getAttributeOverrides( tree, defaults, true ) );
 				addIfNotNull( annotationList, getAssociationOverrides( tree, defaults, true ) );
 				addIfNotNull( annotationList, getEntityListeners( tree, defaults ) );
+				addIfNotNull( annotationList, getConverts( tree, defaults ) );
+
 				this.annotations = annotationList.toArray( new Annotation[annotationList.size()] );
 				for ( Annotation ann : this.annotations ) {
 					annotationsMap.put( ann.annotationType(), ann );
@@ -386,7 +373,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 			else if ( className != null ) { //&& propertyName != null ) { //always true but less confusing
 				Element tree = xmlContext.getXMLTree( className );
-				Annotation[] annotations = getJavaAnnotations();
+				Annotation[] annotations = getPhysicalAnnotations();
 				List<Annotation> annotationList = new ArrayList<Annotation>( annotations.length + 5 );
 				annotationsMap = new HashMap<Class, Annotation>( annotations.length + 5 );
 				for ( Annotation annotation : annotations ) {
@@ -402,7 +389,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				}
 				else {
 					if ( defaults.canUseJavaAnnotations() ) {
-						Annotation annotation = getJavaAnnotation( Access.class );
+						Annotation annotation = getPhysicalAnnotation( Access.class );
 						addIfNotNull( annotationList, annotation );
 					}
 					getId( annotationList, defaults );
@@ -414,9 +401,12 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 					getAssociation( OneToOne.class, annotationList, defaults );
 					getAssociation( OneToMany.class, annotationList, defaults );
 					getAssociation( ManyToMany.class, annotationList, defaults );
+					getAssociation( Any.class, annotationList, defaults );
+					getAssociation( ManyToAny.class, annotationList, defaults );
 					getElementCollection( annotationList, defaults );
 					addIfNotNull( annotationList, getSequenceGenerator( elementsForProperty, defaults ) );
 					addIfNotNull( annotationList, getTableGenerator( elementsForProperty, defaults ) );
+					addIfNotNull( annotationList, getConvertsForAttribute( elementsForProperty, defaults ) );
 				}
 				processEventAnnotations( annotationList, defaults );
 				//FIXME use annotationsMap rather than annotationList this will be faster since the annotation type is usually known at put() time
@@ -426,7 +416,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				}
 			}
 			else {
-				this.annotations = getJavaAnnotations();
+				this.annotations = getPhysicalAnnotations();
 				annotationsMap = new HashMap<Class, Annotation>( annotations.length + 5 );
 				for ( Annotation ann : this.annotations ) {
 					annotationsMap.put( ann.annotationType(), ann );
@@ -435,12 +425,152 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		}
 	}
 
+	private Annotation getConvertsForAttribute(List<Element> elementsForProperty, XMLContext.Default defaults) {
+		// NOTE : we use a map here to make sure that an xml and annotation referring to the same attribute
+		// properly overrides.  Very sparse map, yes, but easy setup.
+		// todo : revisit this
+		// although bear in mind that this code is no longer used in 5.0...
+
+		final Map<String,Convert> convertAnnotationsMap = new HashMap<String, Convert>();
+
+		for ( Element element : elementsForProperty ) {
+			final boolean isBasic = "basic".equals( element.getName() );
+			final boolean isEmbedded = "embedded".equals( element.getName() );
+
+			// todo : can be collections too
+
+			final boolean canHaveConverts = isBasic || isEmbedded;
+
+			if ( !canHaveConverts ) {
+				continue;
+			}
+
+			final String attributeNamePrefix = isBasic ? null : propertyName;
+			applyXmlDefinedConverts( element, defaults, attributeNamePrefix, convertAnnotationsMap );
+		}
+
+		// NOTE : per section 12.2.3.16 of the spec <convert/> is additive, although only if "metadata-complete" is not
+		// specified in the XML
+
+		if ( defaults.canUseJavaAnnotations() ) {
+			// todo : note sure how to best handle attributeNamePrefix here
+			applyPhysicalConvertAnnotations( propertyName, convertAnnotationsMap );
+		}
+
+		if ( !convertAnnotationsMap.isEmpty() ) {
+			final AnnotationDescriptor groupingDescriptor = new AnnotationDescriptor( Converts.class );
+			groupingDescriptor.setValue( "value", convertAnnotationsMap.values().toArray( new Convert[convertAnnotationsMap.size()]) );
+			return AnnotationFactory.create( groupingDescriptor );
+		}
+
+		return null;
+	}
+
+	private Converts getConverts(Element tree, XMLContext.Default defaults) {
+		// NOTE : we use a map here to make sure that an xml and annotation referring to the same attribute
+		// properly overrides.  Bit sparse, but easy...
+		final Map<String,Convert> convertAnnotationsMap = new HashMap<String, Convert>();
+
+		if ( tree != null ) {
+			applyXmlDefinedConverts( tree, defaults, null, convertAnnotationsMap );
+		}
+
+		// NOTE : per section 12.2.3.16 of the spec <convert/> is additive, although only if "metadata-complete" is not
+		// specified in the XML
+
+		if ( defaults.canUseJavaAnnotations() ) {
+			applyPhysicalConvertAnnotations( null, convertAnnotationsMap );
+		}
+
+		if ( !convertAnnotationsMap.isEmpty() ) {
+			final AnnotationDescriptor groupingDescriptor = new AnnotationDescriptor( Converts.class );
+			groupingDescriptor.setValue( "value", convertAnnotationsMap.values().toArray( new Convert[convertAnnotationsMap.size()]) );
+			return AnnotationFactory.create( groupingDescriptor );
+		}
+
+		return null;
+	}
+
+	private void applyXmlDefinedConverts(
+			Element containingElement,
+			XMLContext.Default defaults,
+			String attributeNamePrefix,
+			Map<String,Convert> convertAnnotationsMap) {
+		final List<Element> convertElements = containingElement.elements( "convert" );
+		for ( Element convertElement : convertElements ) {
+			final AnnotationDescriptor convertAnnotationDescriptor = new AnnotationDescriptor( Convert.class );
+			copyStringAttribute( convertAnnotationDescriptor, convertElement, "attribute-name", false );
+			copyBooleanAttribute( convertAnnotationDescriptor, convertElement, "disable-conversion" );
+
+			final Attribute converterClassAttr = convertElement.attribute( "converter" );
+			if ( converterClassAttr != null ) {
+				final String converterClassName = XMLContext.buildSafeClassName(
+						converterClassAttr.getValue(),
+						defaults
+				);
+				try {
+					final Class converterClass = classLoaderAccess.classForName( converterClassName );
+					convertAnnotationDescriptor.setValue( "converter", converterClass );
+				}
+				catch (ClassLoadingException e) {
+					throw new AnnotationException( "Unable to find specified converter class id-class: " + converterClassName, e );
+				}
+			}
+			final Convert convertAnnotation = AnnotationFactory.create( convertAnnotationDescriptor );
+			final String qualifiedAttributeName = qualifyConverterAttributeName(
+					attributeNamePrefix,
+					convertAnnotation.attributeName()
+			);
+			convertAnnotationsMap.put( qualifiedAttributeName, convertAnnotation );
+		}
+
+	}
+
+	private String qualifyConverterAttributeName(String attributeNamePrefix, String specifiedAttributeName) {
+		String qualifiedAttributeName;
+		if ( StringHelper.isNotEmpty( specifiedAttributeName ) ) {
+			if ( StringHelper.isNotEmpty( attributeNamePrefix ) ) {
+				qualifiedAttributeName = attributeNamePrefix + '.' + specifiedAttributeName;
+			}
+			else {
+				qualifiedAttributeName = specifiedAttributeName;
+			}
+		}
+		else {
+			qualifiedAttributeName = "";
+		}
+		return qualifiedAttributeName;
+	}
+
+	private void applyPhysicalConvertAnnotations(
+			String attributeNamePrefix,
+			Map<String, Convert> convertAnnotationsMap) {
+		final Convert physicalAnnotation = getPhysicalAnnotation( Convert.class );
+		if ( physicalAnnotation != null ) {
+			// only add if no XML element named a converter for this attribute
+			final String qualifiedAttributeName = qualifyConverterAttributeName( attributeNamePrefix, physicalAnnotation.attributeName() );
+			if ( ! convertAnnotationsMap.containsKey( qualifiedAttributeName ) ) {
+				convertAnnotationsMap.put( qualifiedAttributeName, physicalAnnotation );
+			}
+		}
+		final Converts physicalGroupingAnnotation = getPhysicalAnnotation( Converts.class );
+		if ( physicalGroupingAnnotation != null ) {
+			for ( Convert convertAnnotation : physicalGroupingAnnotation.value() ) {
+				// again, only add if no XML element named a converter for this attribute
+				final String qualifiedAttributeName = qualifyConverterAttributeName( attributeNamePrefix, convertAnnotation.attributeName() );
+				if ( ! convertAnnotationsMap.containsKey( qualifiedAttributeName ) ) {
+					convertAnnotationsMap.put( qualifiedAttributeName, convertAnnotation );
+				}
+			}
+		}
+	}
+
 	private void checkForOrphanProperties(Element tree) {
 		Class clazz;
 		try {
-			clazz = ReflectHelper.classForName( className, this.getClass() );
+			clazz = classLoaderAccess.classForName( className );
 		}
-		catch ( ClassNotFoundException e ) {
+		catch ( ClassLoadingException e ) {
 			return; //a primitive type most likely
 		}
 		Element element = tree != null ? tree.element( "attributes" ) : null;
@@ -494,7 +624,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( TableGenerator.class );
+			return getPhysicalAnnotation( TableGenerator.class );
 		}
 		else {
 			return null;
@@ -509,7 +639,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( SequenceGenerator.class );
+			return getPhysicalAnnotation( SequenceGenerator.class );
 		}
 		else {
 			return null;
@@ -557,19 +687,19 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( !eventElement && defaults.canUseJavaAnnotations() ) {
-			Annotation ann = getJavaAnnotation( PrePersist.class );
+			Annotation ann = getPhysicalAnnotation( PrePersist.class );
 			addIfNotNull( annotationList, ann );
-			ann = getJavaAnnotation( PreRemove.class );
+			ann = getPhysicalAnnotation( PreRemove.class );
 			addIfNotNull( annotationList, ann );
-			ann = getJavaAnnotation( PreUpdate.class );
+			ann = getPhysicalAnnotation( PreUpdate.class );
 			addIfNotNull( annotationList, ann );
-			ann = getJavaAnnotation( PostPersist.class );
+			ann = getPhysicalAnnotation( PostPersist.class );
 			addIfNotNull( annotationList, ann );
-			ann = getJavaAnnotation( PostRemove.class );
+			ann = getPhysicalAnnotation( PostRemove.class );
 			addIfNotNull( annotationList, ann );
-			ann = getJavaAnnotation( PostUpdate.class );
+			ann = getPhysicalAnnotation( PostUpdate.class );
 			addIfNotNull( annotationList, ann );
-			ann = getJavaAnnotation( PostLoad.class );
+			ann = getPhysicalAnnotation( PostLoad.class );
 			addIfNotNull( annotationList, ann );
 		}
 	}
@@ -582,13 +712,12 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				String className = subelement.attributeValue( "class" );
 				try {
 					entityListenerClasses.add(
-							ReflectHelper.classForName(
-									XMLContext.buildSafeClassName( className, defaults ),
-									this.getClass()
+							classLoaderAccess.classForName(
+									XMLContext.buildSafeClassName( className, defaults )
 							)
 					);
 				}
-				catch ( ClassNotFoundException e ) {
+				catch ( ClassLoadingException e ) {
 					throw new AnnotationException(
 							"Unable to find " + element.getPath() + ".class: " + className, e
 					);
@@ -599,7 +728,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			return AnnotationFactory.create( ad );
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( EntityListeners.class );
+			return getPhysicalAnnotation( EntityListeners.class );
 		}
 		else {
 			return null;
@@ -608,8 +737,8 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 
 	private JoinTable overridesDefaultsInJoinTable(Annotation annotation, XMLContext.Default defaults) {
 		//no element but might have some default or some annotation
-		boolean defaultToJoinTable = !( isJavaAnnotationPresent( JoinColumn.class )
-				|| isJavaAnnotationPresent( JoinColumns.class ) );
+		boolean defaultToJoinTable = !( isPhysicalAnnotationPresent( JoinColumn.class )
+				|| isPhysicalAnnotationPresent( JoinColumns.class ) );
 		final Class<? extends Annotation> annotationClass = annotation.annotationType();
 		defaultToJoinTable = defaultToJoinTable &&
 				( ( annotationClass == ManyToMany.class && StringHelper.isEmpty( ( (ManyToMany) annotation ).mappedBy() ) )
@@ -622,7 +751,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				|| StringHelper.isNotEmpty( defaults.getSchema() ) ) ) {
 			AnnotationDescriptor ad = new AnnotationDescriptor( annotationType );
 			if ( defaults.canUseJavaAnnotations() ) {
-				JoinTable table = getJavaAnnotation( annotationType );
+				JoinTable table = getPhysicalAnnotation( annotationType );
 				if ( table != null ) {
 					ad.setValue( "name", table.name() );
 					ad.setValue( "schema", table.schema() );
@@ -643,7 +772,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			return AnnotationFactory.create( ad );
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( annotationType );
+			return getPhysicalAnnotation( annotationType );
 		}
 		else {
 			return null;
@@ -726,96 +855,96 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			Annotation annotation = getJavaAnnotation( annotationType );
+			Annotation annotation = getPhysicalAnnotation( annotationType );
 			if ( annotation != null ) {
 				annotationList.add( annotation );
 				annotation = overridesDefaultsInJoinTable( annotation, defaults );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( JoinColumn.class );
+				annotation = getPhysicalAnnotation( JoinColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( JoinColumns.class );
+				annotation = getPhysicalAnnotation( JoinColumns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( PrimaryKeyJoinColumn.class );
+				annotation = getPhysicalAnnotation( PrimaryKeyJoinColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( PrimaryKeyJoinColumns.class );
+				annotation = getPhysicalAnnotation( PrimaryKeyJoinColumns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKey.class );
+				annotation = getPhysicalAnnotation( MapKey.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( OrderBy.class );
+				annotation = getPhysicalAnnotation( OrderBy.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverride.class );
+				annotation = getPhysicalAnnotation( AttributeOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverrides.class );
+				annotation = getPhysicalAnnotation( AttributeOverrides.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverride.class );
+				annotation = getPhysicalAnnotation( AssociationOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverrides.class );
+				annotation = getPhysicalAnnotation( AssociationOverrides.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Lob.class );
+				annotation = getPhysicalAnnotation( Lob.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Enumerated.class );
+				annotation = getPhysicalAnnotation( Enumerated.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Temporal.class );
+				annotation = getPhysicalAnnotation( Temporal.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Column.class );
+				annotation = getPhysicalAnnotation( Column.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Columns.class );
+				annotation = getPhysicalAnnotation( Columns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyClass.class );
+				annotation = getPhysicalAnnotation( MapKeyClass.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyTemporal.class );
+				annotation = getPhysicalAnnotation( MapKeyTemporal.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyEnumerated.class );
+				annotation = getPhysicalAnnotation( MapKeyEnumerated.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyColumn.class );
+				annotation = getPhysicalAnnotation( MapKeyColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyJoinColumn.class );
+				annotation = getPhysicalAnnotation( MapKeyJoinColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyJoinColumns.class );
+				annotation = getPhysicalAnnotation( MapKeyJoinColumns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( OrderColumn.class );
+				annotation = getPhysicalAnnotation( OrderColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Cascade.class );
+				annotation = getPhysicalAnnotation( Cascade.class );
 				addIfNotNull( annotationList, annotation );
 			}
-			else if ( isJavaAnnotationPresent( ElementCollection.class ) ) { //JPA2
-				annotation = overridesDefaultsInJoinTable( getJavaAnnotation( ElementCollection.class ), defaults );
+			else if ( isPhysicalAnnotationPresent( ElementCollection.class ) ) { //JPA2
+				annotation = overridesDefaultsInJoinTable( getPhysicalAnnotation( ElementCollection.class ), defaults );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKey.class );
+				annotation = getPhysicalAnnotation( MapKey.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( OrderBy.class );
+				annotation = getPhysicalAnnotation( OrderBy.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverride.class );
+				annotation = getPhysicalAnnotation( AttributeOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverrides.class );
+				annotation = getPhysicalAnnotation( AttributeOverrides.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverride.class );
+				annotation = getPhysicalAnnotation( AssociationOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverrides.class );
+				annotation = getPhysicalAnnotation( AssociationOverrides.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Lob.class );
+				annotation = getPhysicalAnnotation( Lob.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Enumerated.class );
+				annotation = getPhysicalAnnotation( Enumerated.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Temporal.class );
+				annotation = getPhysicalAnnotation( Temporal.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Column.class );
+				annotation = getPhysicalAnnotation( Column.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( OrderColumn.class );
+				annotation = getPhysicalAnnotation( OrderColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyClass.class );
+				annotation = getPhysicalAnnotation( MapKeyClass.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyTemporal.class );
+				annotation = getPhysicalAnnotation( MapKeyTemporal.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyEnumerated.class );
+				annotation = getPhysicalAnnotation( MapKeyEnumerated.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyColumn.class );
+				annotation = getPhysicalAnnotation( MapKeyColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyJoinColumn.class );
+				annotation = getPhysicalAnnotation( MapKeyJoinColumn.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( MapKeyJoinColumns.class );
+				annotation = getPhysicalAnnotation( MapKeyJoinColumns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( CollectionTable.class );
+				annotation = getPhysicalAnnotation( CollectionTable.class );
 				addIfNotNull( annotationList, annotation );
 			}
 		}
@@ -865,7 +994,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( Cacheable.class );
+			return getPhysicalAnnotation( Cacheable.class );
 		}
 		else {
 			return null;
@@ -951,11 +1080,9 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		if ( className != null ) {
 			Class clazz;
 			try {
-				clazz = ReflectHelper.classForName(
-						XMLContext.buildSafeClassName( className, defaults ), this.getClass()
-				);
+				clazz = classLoaderAccess.classForName( XMLContext.buildSafeClassName( className, defaults ) );
 			}
-			catch ( ClassNotFoundException e ) {
+			catch ( ClassLoadingException e ) {
 				throw new AnnotationException(
 						"Unable to find " + element.getPath() + " " + nodeName + ": " + className, e
 				);
@@ -1052,12 +1179,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			if ( StringHelper.isNotEmpty( mapKeyClassName ) ) {
 				Class clazz;
 				try {
-					clazz = ReflectHelper.classForName(
-							XMLContext.buildSafeClassName( mapKeyClassName, defaults ),
-							this.getClass()
+					clazz = classLoaderAccess.classForName(
+							XMLContext.buildSafeClassName( mapKeyClassName, defaults )
 					);
 				}
-				catch ( ClassNotFoundException e ) {
+				catch ( ClassLoadingException e ) {
 					throw new AnnotationException(
 							"Unable to find " + element.getPath() + " " + nodeName + ": " + mapKeyClassName, e
 					);
@@ -1147,16 +1273,16 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			Annotation annotation = getJavaAnnotation( Embedded.class );
+			Annotation annotation = getPhysicalAnnotation( Embedded.class );
 			if ( annotation != null ) {
 				annotationList.add( annotation );
-				annotation = getJavaAnnotation( AttributeOverride.class );
+				annotation = getPhysicalAnnotation( AttributeOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverrides.class );
+				annotation = getPhysicalAnnotation( AttributeOverrides.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverride.class );
+				annotation = getPhysicalAnnotation( AssociationOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverrides.class );
+				annotation = getPhysicalAnnotation( AssociationOverrides.class );
 				addIfNotNull( annotationList, annotation );
 			}
 		}
@@ -1170,7 +1296,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( Transient.class );
+			return getPhysicalAnnotation( Transient.class );
 		}
 		else {
 			return null;
@@ -1190,14 +1316,14 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
 			//we have nothing, so Java annotations might occurs
-			Annotation annotation = getJavaAnnotation( Version.class );
+			Annotation annotation = getPhysicalAnnotation( Version.class );
 			if ( annotation != null ) {
 				annotationList.add( annotation );
-				annotation = getJavaAnnotation( Column.class );
+				annotation = getPhysicalAnnotation( Column.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Columns.class );
+				annotation = getPhysicalAnnotation( Columns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Temporal.class );
+				annotation = getPhysicalAnnotation( Temporal.class );
 				addIfNotNull( annotationList, annotation );
 			}
 		}
@@ -1220,25 +1346,25 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
 			//no annotation presence constraint, basic is the default
-			Annotation annotation = getJavaAnnotation( Basic.class );
+			Annotation annotation = getPhysicalAnnotation( Basic.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( Lob.class );
+			annotation = getPhysicalAnnotation( Lob.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( Enumerated.class );
+			annotation = getPhysicalAnnotation( Enumerated.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( Temporal.class );
+			annotation = getPhysicalAnnotation( Temporal.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( Column.class );
+			annotation = getPhysicalAnnotation( Column.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( Columns.class );
+			annotation = getPhysicalAnnotation( Columns.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( AttributeOverride.class );
+			annotation = getPhysicalAnnotation( AttributeOverride.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( AttributeOverrides.class );
+			annotation = getPhysicalAnnotation( AttributeOverrides.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( AssociationOverride.class );
+			annotation = getPhysicalAnnotation( AssociationOverride.class );
 			addIfNotNull( annotationList, annotation );
-			annotation = getJavaAnnotation( AssociationOverrides.class );
+			annotation = getPhysicalAnnotation( AssociationOverrides.class );
 			addIfNotNull( annotationList, annotation );
 		}
 	}
@@ -1295,28 +1421,28 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			Annotation annotation = getJavaAnnotation( EmbeddedId.class );
+			Annotation annotation = getPhysicalAnnotation( EmbeddedId.class );
 			if ( annotation != null ) {
 				annotationList.add( annotation );
-				annotation = getJavaAnnotation( Column.class );
+				annotation = getPhysicalAnnotation( Column.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Columns.class );
+				annotation = getPhysicalAnnotation( Columns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( GeneratedValue.class );
+				annotation = getPhysicalAnnotation( GeneratedValue.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Temporal.class );
+				annotation = getPhysicalAnnotation( Temporal.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( TableGenerator.class );
+				annotation = getPhysicalAnnotation( TableGenerator.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( SequenceGenerator.class );
+				annotation = getPhysicalAnnotation( SequenceGenerator.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverride.class );
+				annotation = getPhysicalAnnotation( AttributeOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverrides.class );
+				annotation = getPhysicalAnnotation( AttributeOverrides.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverride.class );
+				annotation = getPhysicalAnnotation( AssociationOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverrides.class );
+				annotation = getPhysicalAnnotation( AssociationOverrides.class );
 				addIfNotNull( annotationList, annotation );
 			}
 		}
@@ -1365,28 +1491,28 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		if ( elementsForProperty.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			Annotation annotation = getJavaAnnotation( Id.class );
+			Annotation annotation = getPhysicalAnnotation( Id.class );
 			if ( annotation != null ) {
 				annotationList.add( annotation );
-				annotation = getJavaAnnotation( Column.class );
+				annotation = getPhysicalAnnotation( Column.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Columns.class );
+				annotation = getPhysicalAnnotation( Columns.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( GeneratedValue.class );
+				annotation = getPhysicalAnnotation( GeneratedValue.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( Temporal.class );
+				annotation = getPhysicalAnnotation( Temporal.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( TableGenerator.class );
+				annotation = getPhysicalAnnotation( TableGenerator.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( SequenceGenerator.class );
+				annotation = getPhysicalAnnotation( SequenceGenerator.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverride.class );
+				annotation = getPhysicalAnnotation( AttributeOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AttributeOverrides.class );
+				annotation = getPhysicalAnnotation( AttributeOverrides.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverride.class );
+				annotation = getPhysicalAnnotation( AssociationOverride.class );
 				addIfNotNull( annotationList, annotation );
-				annotation = getJavaAnnotation( AssociationOverrides.class );
+				annotation = getPhysicalAnnotation( AssociationOverrides.class );
 				addIfNotNull( annotationList, annotation );
 			}
 		}
@@ -1399,7 +1525,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 						|| ( PropertyType.FIELD.equals( propertyType ) && AccessType.FIELD
 						.equals( defaults.getAccess() ) );
 		boolean hasId = defaults.canUseJavaAnnotations()
-				&& ( isJavaAnnotationPresent( Id.class ) || isJavaAnnotationPresent( EmbeddedId.class ) );
+				&& ( isPhysicalAnnotationPresent( Id.class ) || isPhysicalAnnotationPresent( EmbeddedId.class ) );
 		//if ( properAccessOnMetadataComplete || properOverridingOnMetadataNonComplete ) {
 		boolean mirrorAttributeIsId = defaults.canUseJavaAnnotations() &&
 				( mirroredAttribute != null &&
@@ -1509,9 +1635,9 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 	private AssociationOverrides getAssociationOverrides(Element tree, XMLContext.Default defaults, boolean mergeWithAnnotations) {
 		List<AssociationOverride> attributes = buildAssociationOverrides( tree, defaults );
 		if ( mergeWithAnnotations && defaults.canUseJavaAnnotations() ) {
-			AssociationOverride annotation = getJavaAnnotation( AssociationOverride.class );
+			AssociationOverride annotation = getPhysicalAnnotation( AssociationOverride.class );
 			addAssociationOverrideIfNeeded( annotation, attributes );
-			AssociationOverrides annotations = getJavaAnnotation( AssociationOverrides.class );
+			AssociationOverrides annotations = getPhysicalAnnotation( AssociationOverrides.class );
 			if ( annotations != null ) {
 				for ( AssociationOverride current : annotations.value() ) {
 					addAssociationOverrideIfNeeded( current, attributes );
@@ -1603,9 +1729,9 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 	 */
 	private AttributeOverrides mergeAttributeOverrides(XMLContext.Default defaults, List<AttributeOverride> attributes, boolean mergeWithAnnotations) {
 		if ( mergeWithAnnotations && defaults.canUseJavaAnnotations() ) {
-			AttributeOverride annotation = getJavaAnnotation( AttributeOverride.class );
+			AttributeOverride annotation = getPhysicalAnnotation( AttributeOverride.class );
 			addAttributeOverrideIfNeeded( annotation, attributes );
-			AttributeOverrides annotations = getJavaAnnotation( AttributeOverrides.class );
+			AttributeOverrides annotations = getPhysicalAnnotation( AttributeOverrides.class );
 			if ( annotations != null ) {
 				for ( AttributeOverride current : annotations.value() ) {
 					addAttributeOverrideIfNeeded( current, attributes );
@@ -1698,8 +1824,8 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			ad.setValue( "value", type );
 			return AnnotationFactory.create( ad );
 		}
-		else if ( defaults.canUseJavaAnnotations() && isJavaAnnotationPresent( Access.class ) ) {
-			return getJavaAnnotation( Access.class );
+		else if ( defaults.canUseJavaAnnotations() && isPhysicalAnnotationPresent( Access.class ) ) {
+			return getPhysicalAnnotation( Access.class );
 		}
 		else if ( defaults.getAccess() != null ) {
 			AnnotationDescriptor ad = new AnnotationDescriptor( Access.class );
@@ -1728,7 +1854,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
 			//TODO wonder whether it should be excluded so that user can undone it
-			return getJavaAnnotation( clazz );
+			return getPhysicalAnnotation( clazz );
 		}
 		else {
 			return null;
@@ -1736,11 +1862,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 	}
 
 	private SqlResultSetMappings getSqlResultSetMappings(Element tree, XMLContext.Default defaults) {
-		List<SqlResultSetMapping> results = buildSqlResultsetMappings( tree, defaults );
+		List<SqlResultSetMapping> results = buildSqlResultsetMappings( tree, defaults, classLoaderAccess );
 		if ( defaults.canUseJavaAnnotations() ) {
-			SqlResultSetMapping annotation = getJavaAnnotation( SqlResultSetMapping.class );
+			SqlResultSetMapping annotation = getPhysicalAnnotation( SqlResultSetMapping.class );
 			addSqlResultsetMappingIfNeeded( annotation, results );
-			SqlResultSetMappings annotations = getJavaAnnotation( SqlResultSetMappings.class );
+			SqlResultSetMappings annotations = getPhysicalAnnotation( SqlResultSetMappings.class );
 			if ( annotations != null ) {
 				for ( SqlResultSetMapping current : annotations.value() ) {
 					addSqlResultsetMappingIfNeeded( current, results );
@@ -1757,7 +1883,10 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		}
 	}
 
-	public static List<NamedEntityGraph> buildNamedEntityGraph(Element element, XMLContext.Default defaults) {
+	public static List<NamedEntityGraph> buildNamedEntityGraph(
+			Element element,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
 		if ( element == null ) {
 			return new ArrayList<NamedEntityGraph>();
 		}
@@ -1770,16 +1899,20 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			bindNamedAttributeNodes( subElement, ann );
 
 			List<Element> subgraphNodes = subElement.elements( "subgraph" );
-			bindNamedSubgraph( defaults, ann, subgraphNodes );
+			bindNamedSubgraph( defaults, ann, subgraphNodes, classLoaderAccess );
 			List<Element> subclassSubgraphNodes = subElement.elements( "subclass-subgraph" );
-			bindNamedSubgraph( defaults, ann, subclassSubgraphNodes );
+			bindNamedSubgraph( defaults, ann, subclassSubgraphNodes, classLoaderAccess );
 			namedEntityGraphList.add( (NamedEntityGraph) AnnotationFactory.create( ann ) );
 		}
 		//TODO
 		return namedEntityGraphList;
 	}
 
-	private static void bindNamedSubgraph(XMLContext.Default defaults, AnnotationDescriptor ann, List<Element> subgraphNodes) {
+	private static void bindNamedSubgraph(
+			XMLContext.Default defaults,
+			AnnotationDescriptor ann,
+			List<Element> subgraphNodes,
+			ClassLoaderAccess classLoaderAccess) {
 		List<NamedSubgraph> annSubgraphNodes = new ArrayList<NamedSubgraph>(  );
 		for(Element subgraphNode : subgraphNodes){
 			AnnotationDescriptor annSubgraphNode = new AnnotationDescriptor( NamedSubgraph.class );
@@ -1787,12 +1920,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			String clazzName = subgraphNode.attributeValue( "class" );
 			Class clazz;
 			try {
-				clazz = ReflectHelper.classForName(
-						XMLContext.buildSafeClassName( clazzName, defaults ),
-						JPAOverriddenAnnotationReader.class
+				clazz = classLoaderAccess.classForName(
+						XMLContext.buildSafeClassName( clazzName, defaults )
 				);
 			}
-			catch ( ClassNotFoundException e ) {
+			catch ( ClassLoadingException e ) {
 				throw new AnnotationException( "Unable to find entity-class: " + clazzName, e );
 			}
 			annSubgraphNode.setValue( "type", clazz );
@@ -1807,7 +1939,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		List<NamedAttributeNode> annNamedAttributeNodes = new ArrayList<NamedAttributeNode>(  );
 		for(Element namedAttributeNode : namedAttributeNodes){
 			AnnotationDescriptor annNamedAttributeNode = new AnnotationDescriptor( NamedAttributeNode.class );
-			copyStringAttribute( annNamedAttributeNode, namedAttributeNode, "value", true );
+			copyStringAttribute( annNamedAttributeNode, namedAttributeNode, "value", "name", true );
 			copyStringAttribute( annNamedAttributeNode, namedAttributeNode, "subgraph", false );
 			copyStringAttribute( annNamedAttributeNode, namedAttributeNode, "key-subgraph", false );
 			annNamedAttributeNodes.add( (NamedAttributeNode) AnnotationFactory.create( annNamedAttributeNode ) );
@@ -1815,7 +1947,10 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		ann.setValue( "attributeNodes", annNamedAttributeNodes.toArray( new NamedAttributeNode[annNamedAttributeNodes.size()] ) );
 	}
 
-	public static List<NamedStoredProcedureQuery> buildNamedStoreProcedureQueries(Element element, XMLContext.Default defaults) {
+	public static List<NamedStoredProcedureQuery> buildNamedStoreProcedureQueries(
+			Element element,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
 		if ( element == null ) {
 			return new ArrayList<NamedStoredProcedureQuery>();
 		}
@@ -1838,17 +1973,16 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 					parameterDescriptor.setValue( "mode", ParameterMode.IN );
 				}
 				else {
-					parameterDescriptor.setValue( "mode", ParameterMode.valueOf( modeValue.toUpperCase() ) );
+					parameterDescriptor.setValue( "mode", ParameterMode.valueOf( modeValue.toUpperCase(Locale.ROOT) ) );
 				}
 				String clazzName = parameterElement.attributeValue( "class" );
 				Class clazz;
 				try {
-					clazz = ReflectHelper.classForName(
-							XMLContext.buildSafeClassName( clazzName, defaults ),
-							JPAOverriddenAnnotationReader.class
+					clazz = classLoaderAccess.classForName(
+							XMLContext.buildSafeClassName( clazzName, defaults )
 					);
 				}
-				catch ( ClassNotFoundException e ) {
+				catch ( ClassLoadingException e ) {
 					throw new AnnotationException( "Unable to find entity-class: " + clazzName, e );
 				}
 				parameterDescriptor.setValue( "type", clazz );
@@ -1866,12 +2000,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				String clazzName = classElement.getTextTrim();
 				Class clazz;
 				try {
-					clazz = ReflectHelper.classForName(
-							XMLContext.buildSafeClassName( clazzName, defaults ),
-							JPAOverriddenAnnotationReader.class
+					clazz = classLoaderAccess.classForName(
+							XMLContext.buildSafeClassName( clazzName, defaults )
 					);
 				}
-				catch ( ClassNotFoundException e ) {
+				catch ( ClassLoadingException e ) {
 					throw new AnnotationException( "Unable to find entity-class: " + clazzName, e );
 				}
 				returnClasses.add( clazz );
@@ -1893,78 +2026,182 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 
 	}
 
-	public static List<SqlResultSetMapping> buildSqlResultsetMappings(Element element, XMLContext.Default defaults) {
+	public static List<SqlResultSetMapping> buildSqlResultsetMappings(
+			Element element,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
+		final List<SqlResultSetMapping> builtResultSetMappings = new ArrayList<SqlResultSetMapping>();
 		if ( element == null ) {
-			return new ArrayList<SqlResultSetMapping>();
+			return builtResultSetMappings;
 		}
-		List resultsetElementList = element.elements( "sql-result-set-mapping" );
-		List<SqlResultSetMapping> resultsets = new ArrayList<SqlResultSetMapping>();
-		Iterator it = resultsetElementList.listIterator();
-		while ( it.hasNext() ) {
-			Element subelement = (Element) it.next();
-			AnnotationDescriptor ann = new AnnotationDescriptor( SqlResultSetMapping.class );
-			copyStringAttribute( ann, subelement, "name", true );
-			List<Element> elements = subelement.elements( "entity-result" );
-			List<EntityResult> entityResults = new ArrayList<EntityResult>( elements.size() );
-			for ( Element entityResult : elements ) {
-				AnnotationDescriptor entityResultDescriptor = new AnnotationDescriptor( EntityResult.class );
-				String clazzName = entityResult.attributeValue( "entity-class" );
-				if ( clazzName == null ) {
-					throw new AnnotationException( "<entity-result> without entity-class. " + SCHEMA_VALIDATION );
-				}
-				Class clazz;
-				try {
-					clazz = ReflectHelper.classForName(
-							XMLContext.buildSafeClassName( clazzName, defaults ),
-							JPAOverriddenAnnotationReader.class
-					);
-				}
-				catch ( ClassNotFoundException e ) {
-					throw new AnnotationException( "Unable to find entity-class: " + clazzName, e );
-				}
-				entityResultDescriptor.setValue( "entityClass", clazz );
-				copyStringAttribute( entityResultDescriptor, entityResult, "discriminator-column", false );
-				List<FieldResult> fieldResults = new ArrayList<FieldResult>();
-				for ( Element fieldResult : (List<Element>) entityResult.elements( "field-result" ) ) {
-					AnnotationDescriptor fieldResultDescriptor = new AnnotationDescriptor( FieldResult.class );
-					copyStringAttribute( fieldResultDescriptor, fieldResult, "name", true );
-					copyStringAttribute( fieldResultDescriptor, fieldResult, "column", true );
-					fieldResults.add( (FieldResult) AnnotationFactory.create( fieldResultDescriptor ) );
-				}
-				entityResultDescriptor.setValue(
-						"fields", fieldResults.toArray( new FieldResult[fieldResults.size()] )
-				);
-				entityResults.add( (EntityResult) AnnotationFactory.create( entityResultDescriptor ) );
-			}
-			ann.setValue( "entities", entityResults.toArray( new EntityResult[entityResults.size()] ) );
 
-			elements = subelement.elements( "column-result" );
-			List<ColumnResult> columnResults = new ArrayList<ColumnResult>( elements.size() );
-			for ( Element columnResult : elements ) {
-				AnnotationDescriptor columnResultDescriptor = new AnnotationDescriptor( ColumnResult.class );
-				copyStringAttribute( columnResultDescriptor, columnResult, "name", true );
-				columnResults.add( (ColumnResult) AnnotationFactory.create( columnResultDescriptor ) );
-			}
-			ann.setValue( "columns", columnResults.toArray( new ColumnResult[columnResults.size()] ) );
-			//FIXME there is never such a result-class, get rid of it?
-			String clazzName = subelement.attributeValue( "result-class" );
-			if ( StringHelper.isNotEmpty( clazzName ) ) {
-				Class clazz;
-				try {
-					clazz = ReflectHelper.classForName(
-							XMLContext.buildSafeClassName( clazzName, defaults ),
-							JPAOverriddenAnnotationReader.class
-					);
+		// iterate over each <sql-result-set-mapping/> element
+		for ( Object resultSetMappingElementObject : element.elements( "sql-result-set-mapping" ) ) {
+			final Element resultSetMappingElement = (Element) resultSetMappingElementObject;
+
+			final AnnotationDescriptor resultSetMappingAnnotation = new AnnotationDescriptor( SqlResultSetMapping.class );
+			copyStringAttribute( resultSetMappingAnnotation, resultSetMappingElement, "name", true );
+
+			// iterate over the <sql-result-set-mapping/> sub-elements, which should include:
+			//		* <entity-result/>
+			//		* <column-result/>
+			//		* <constructor-result/>
+
+			List<EntityResult> entityResultAnnotations = null;
+			List<ColumnResult> columnResultAnnotations = null;
+			List<ConstructorResult> constructorResultAnnotations = null;
+
+			for ( Object resultElementObject : resultSetMappingElement.elements() ) {
+				final Element resultElement = (Element) resultElementObject;
+
+				if ( "entity-result".equals( resultElement.getName() ) ) {
+					if ( entityResultAnnotations == null ) {
+						entityResultAnnotations = new ArrayList<EntityResult>();
+					}
+					// process the <entity-result/>
+					entityResultAnnotations.add( buildEntityResult( resultElement, defaults, classLoaderAccess ) );
 				}
-				catch ( ClassNotFoundException e ) {
-					throw new AnnotationException( "Unable to find entity-class: " + clazzName, e );
+				else if ( "column-result".equals( resultElement.getName() ) ) {
+					if ( columnResultAnnotations == null ) {
+						columnResultAnnotations = new ArrayList<ColumnResult>();
+					}
+					columnResultAnnotations.add( buildColumnResult( resultElement, defaults, classLoaderAccess ) );
 				}
-				ann.setValue( "resultClass", clazz );
+				else if ( "constructor-result".equals( resultElement.getName() ) ) {
+					if ( constructorResultAnnotations == null ) {
+						constructorResultAnnotations = new ArrayList<ConstructorResult>();
+					}
+					constructorResultAnnotations.add( buildConstructorResult( resultElement, defaults, classLoaderAccess ) );
+				}
+				else {
+					// most likely the <result-class/> this code used to handle.  I have left the code here,
+					// but commented it out for now.  I'll just log a warning for now.
+					LOG.debug( "Encountered unrecognized sql-result-set-mapping sub-element : " + resultElement.getName() );
+
+//					String clazzName = subelement.attributeValue( "result-class" );
+//					if ( StringHelper.isNotEmpty( clazzName ) ) {
+//						Class clazz;
+//						try {
+//							clazz = ReflectHelper.classForName(
+//									XMLContext.buildSafeClassName( clazzName, defaults ),
+//									JPAOverriddenAnnotationReader.class
+//							);
+//						}
+//						catch ( ClassNotFoundException e ) {
+//							throw new AnnotationException( "Unable to find entity-class: " + clazzName, e );
+//						}
+//						ann.setValue( "resultClass", clazz );
+//					}
+				}
 			}
-			copyStringAttribute( ann, subelement, "result-set-mapping", false );
-			resultsets.add( (SqlResultSetMapping) AnnotationFactory.create( ann ) );
+
+			if ( entityResultAnnotations != null && !entityResultAnnotations.isEmpty() ) {
+				resultSetMappingAnnotation.setValue(
+						"entities",
+						entityResultAnnotations.toArray( new EntityResult[entityResultAnnotations.size()] )
+				);
+			}
+			if ( columnResultAnnotations != null && !columnResultAnnotations.isEmpty() ) {
+				resultSetMappingAnnotation.setValue(
+						"columns",
+						columnResultAnnotations.toArray( new ColumnResult[columnResultAnnotations.size()] )
+				);
+			}
+			if ( constructorResultAnnotations != null && !constructorResultAnnotations.isEmpty() ) {
+				resultSetMappingAnnotation.setValue(
+						"classes",
+						constructorResultAnnotations.toArray( new ConstructorResult[constructorResultAnnotations.size()] )
+				);
+			}
+
+
+			// this was part of the old code too, but could never figure out what it is supposed to do...
+			// copyStringAttribute( ann, subelement, "result-set-mapping", false );
+
+			builtResultSetMappings.add( (SqlResultSetMapping) AnnotationFactory.create( resultSetMappingAnnotation ) );
 		}
-		return resultsets;
+
+		return builtResultSetMappings;
+	}
+
+	private static EntityResult buildEntityResult(
+			Element entityResultElement,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
+		final AnnotationDescriptor entityResultDescriptor = new AnnotationDescriptor( EntityResult.class );
+
+		final Class entityClass = resolveClassReference( entityResultElement.attributeValue( "entity-class" ), defaults, classLoaderAccess );
+		entityResultDescriptor.setValue( "entityClass", entityClass );
+
+		copyStringAttribute( entityResultDescriptor, entityResultElement, "discriminator-column", false );
+
+		// process the <field-result/> sub-elements
+		List<FieldResult> fieldResultAnnotations = new ArrayList<FieldResult>();
+		for ( Element fieldResult : (List<Element>) entityResultElement.elements( "field-result" ) ) {
+			AnnotationDescriptor fieldResultDescriptor = new AnnotationDescriptor( FieldResult.class );
+			copyStringAttribute( fieldResultDescriptor, fieldResult, "name", true );
+			copyStringAttribute( fieldResultDescriptor, fieldResult, "column", true );
+			fieldResultAnnotations.add( (FieldResult) AnnotationFactory.create( fieldResultDescriptor ) );
+		}
+		entityResultDescriptor.setValue(
+				"fields", fieldResultAnnotations.toArray( new FieldResult[fieldResultAnnotations.size()] )
+		);
+		return AnnotationFactory.create( entityResultDescriptor );
+	}
+
+	private static Class resolveClassReference(
+			String className,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
+		if ( className == null ) {
+			throw new AnnotationException( "<entity-result> without entity-class. " + SCHEMA_VALIDATION );
+		}
+		try {
+			return classLoaderAccess.classForName(
+					XMLContext.buildSafeClassName( className, defaults )
+			);
+		}
+		catch ( ClassLoadingException e ) {
+			throw new AnnotationException( "Unable to find specified class: " + className, e );
+		}
+	}
+
+	private static ColumnResult buildColumnResult(
+			Element columnResultElement,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
+//		AnnotationDescriptor columnResultDescriptor = new AnnotationDescriptor( ColumnResult.class );
+//		copyStringAttribute( columnResultDescriptor, columnResultElement, "name", true );
+//		return AnnotationFactory.create( columnResultDescriptor );
+
+		AnnotationDescriptor columnResultDescriptor = new AnnotationDescriptor( ColumnResult.class );
+		copyStringAttribute( columnResultDescriptor, columnResultElement, "name", true );
+		final String columnTypeName = columnResultElement.attributeValue( "class" );
+		if ( StringHelper.isNotEmpty( columnTypeName ) ) {
+			columnResultDescriptor.setValue( "type", resolveClassReference( columnTypeName, defaults, classLoaderAccess ) );
+		}
+		return AnnotationFactory.create( columnResultDescriptor );
+	}
+
+	private static ConstructorResult buildConstructorResult(
+			Element constructorResultElement,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
+		AnnotationDescriptor constructorResultDescriptor = new AnnotationDescriptor( ConstructorResult.class );
+
+		final Class entityClass = resolveClassReference( constructorResultElement.attributeValue( "target-class" ), defaults, classLoaderAccess );
+		constructorResultDescriptor.setValue( "targetClass", entityClass );
+
+		List<ColumnResult> columnResultAnnotations = new ArrayList<ColumnResult>();
+		for ( Element columnResultElement : (List<Element>) constructorResultElement.elements( "column" ) ) {
+			columnResultAnnotations.add( buildColumnResult( columnResultElement, defaults, classLoaderAccess ) );
+		}
+		constructorResultDescriptor.setValue(
+				"columns",
+				columnResultAnnotations.toArray( new ColumnResult[ columnResultAnnotations.size() ] )
+		);
+
+		return AnnotationFactory.create( constructorResultDescriptor );
 	}
 
 	private void addSqlResultsetMappingIfNeeded(SqlResultSetMapping annotation, List<SqlResultSetMapping> resultsets) {
@@ -1985,11 +2222,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 
 	private NamedQueries getNamedQueries(Element tree, XMLContext.Default defaults) {
 		//TODO avoid the Proxy Creation (@NamedQueries) when possible
-		List<NamedQuery> queries = (List<NamedQuery>) buildNamedQueries( tree, false, defaults );
+		List<NamedQuery> queries = (List<NamedQuery>) buildNamedQueries( tree, false, defaults, classLoaderAccess );
 		if ( defaults.canUseJavaAnnotations() ) {
-			NamedQuery annotation = getJavaAnnotation( NamedQuery.class );
+			NamedQuery annotation = getPhysicalAnnotation( NamedQuery.class );
 			addNamedQueryIfNeeded( annotation, queries );
-			NamedQueries annotations = getJavaAnnotation( NamedQueries.class );
+			NamedQueries annotations = getPhysicalAnnotation( NamedQueries.class );
 			if ( annotations != null ) {
 				for ( NamedQuery current : annotations.value() ) {
 					addNamedQueryIfNeeded( current, queries );
@@ -2023,11 +2260,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 	}
 
 	private NamedEntityGraphs getNamedEntityGraphs(Element tree, XMLContext.Default defaults) {
-		List<NamedEntityGraph> queries = buildNamedEntityGraph( tree, defaults );
+		List<NamedEntityGraph> queries = buildNamedEntityGraph( tree, defaults, classLoaderAccess );
 		if ( defaults.canUseJavaAnnotations() ) {
-			NamedEntityGraph annotation = getJavaAnnotation( NamedEntityGraph.class );
+			NamedEntityGraph annotation = getPhysicalAnnotation( NamedEntityGraph.class );
 			addNamedEntityGraphIfNeeded( annotation, queries );
-			NamedEntityGraphs annotations = getJavaAnnotation( NamedEntityGraphs.class );
+			NamedEntityGraphs annotations = getPhysicalAnnotation( NamedEntityGraphs.class );
 			if ( annotations != null ) {
 				for ( NamedEntityGraph current : annotations.value() ) {
 					addNamedEntityGraphIfNeeded( current, queries );
@@ -2062,11 +2299,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 	}
 
 	private NamedStoredProcedureQueries getNamedStoredProcedureQueries(Element tree, XMLContext.Default defaults) {
-		List<NamedStoredProcedureQuery> queries = buildNamedStoreProcedureQueries( tree, defaults );
+		List<NamedStoredProcedureQuery> queries = buildNamedStoreProcedureQueries( tree, defaults, classLoaderAccess );
 		if ( defaults.canUseJavaAnnotations() ) {
-			NamedStoredProcedureQuery annotation = getJavaAnnotation( NamedStoredProcedureQuery.class );
+			NamedStoredProcedureQuery annotation = getPhysicalAnnotation( NamedStoredProcedureQuery.class );
 			addNamedStoredProcedureQueryIfNeeded( annotation, queries );
-			NamedStoredProcedureQueries annotations = getJavaAnnotation( NamedStoredProcedureQueries.class );
+			NamedStoredProcedureQueries annotations = getPhysicalAnnotation( NamedStoredProcedureQueries.class );
 			if ( annotations != null ) {
 				for ( NamedStoredProcedureQuery current : annotations.value() ) {
 					addNamedStoredProcedureQueryIfNeeded( current, queries );
@@ -2100,12 +2337,14 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 	}
 
 
-	private NamedNativeQueries getNamedNativeQueries(Element tree, XMLContext.Default defaults) {
-		List<NamedNativeQuery> queries = (List<NamedNativeQuery>) buildNamedQueries( tree, true, defaults );
+	private NamedNativeQueries getNamedNativeQueries(
+			Element tree,
+			XMLContext.Default defaults) {
+		List<NamedNativeQuery> queries = (List<NamedNativeQuery>) buildNamedQueries( tree, true, defaults, classLoaderAccess );
 		if ( defaults.canUseJavaAnnotations() ) {
-			NamedNativeQuery annotation = getJavaAnnotation( NamedNativeQuery.class );
+			NamedNativeQuery annotation = getPhysicalAnnotation( NamedNativeQuery.class );
 			addNamedNativeQueryIfNeeded( annotation, queries );
-			NamedNativeQueries annotations = getJavaAnnotation( NamedNativeQueries.class );
+			NamedNativeQueries annotations = getPhysicalAnnotation( NamedNativeQueries.class );
 			if ( annotations != null ) {
 				for ( NamedNativeQuery current : annotations.value() ) {
 					addNamedNativeQueryIfNeeded( current, queries );
@@ -2157,7 +2396,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		ann.setValue( "hints", queryHints.toArray( new QueryHint[queryHints.size()] ) );
 	}
 
-	public static List buildNamedQueries(Element element, boolean isNative, XMLContext.Default defaults) {
+	public static List buildNamedQueries(
+			Element element,
+			boolean isNative,
+			XMLContext.Default defaults,
+			ClassLoaderAccess classLoaderAccess) {
 		if ( element == null ) {
 			return new ArrayList();
 		}
@@ -2165,9 +2408,8 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				element.elements( "named-native-query" ) :
 				element.elements( "named-query" );
 		List namedQueries = new ArrayList();
-		Iterator it = namedQueryElementList.listIterator();
-		while ( it.hasNext() ) {
-			Element subelement = (Element) it.next();
+		for ( Object aNamedQueryElementList : namedQueryElementList ) {
+			Element subelement = (Element) aNamedQueryElementList;
 			AnnotationDescriptor ann = new AnnotationDescriptor(
 					isNative ? NamedNativeQuery.class : NamedQuery.class
 			);
@@ -2183,12 +2425,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			if ( StringHelper.isNotEmpty( clazzName ) ) {
 				Class clazz;
 				try {
-					clazz = ReflectHelper.classForName(
-							XMLContext.buildSafeClassName( clazzName, defaults ),
-							JPAOverriddenAnnotationReader.class
+					clazz = classLoaderAccess.classForName(
+							XMLContext.buildSafeClassName( clazzName, defaults )
 					);
 				}
-				catch ( ClassNotFoundException e ) {
+				catch (ClassLoadingException e) {
 					throw new AnnotationException( "Unable to find entity-class: " + clazzName, e );
 				}
 				ann.setValue( "resultClass", clazz );
@@ -2204,8 +2445,8 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		if ( element != null ) {
 			return buildTableGeneratorAnnotation( element, defaults );
 		}
-		else if ( defaults.canUseJavaAnnotations() && isJavaAnnotationPresent( TableGenerator.class ) ) {
-			TableGenerator tableAnn = getJavaAnnotation( TableGenerator.class );
+		else if ( defaults.canUseJavaAnnotations() && isPhysicalAnnotationPresent( TableGenerator.class ) ) {
+			TableGenerator tableAnn = getPhysicalAnnotation( TableGenerator.class );
 			if ( StringHelper.isNotEmpty( defaults.getSchema() )
 					|| StringHelper.isNotEmpty( defaults.getCatalog() ) ) {
 				AnnotationDescriptor annotation = new AnnotationDescriptor( TableGenerator.class );
@@ -2267,7 +2508,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			return buildSequenceGeneratorAnnotation( element );
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( SequenceGenerator.class );
+			return getPhysicalAnnotation( SequenceGenerator.class );
 		}
 		else {
 			return null;
@@ -2317,7 +2558,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			return AnnotationFactory.create( ad );
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( DiscriminatorColumn.class );
+			return getPhysicalAnnotation( DiscriminatorColumn.class );
 		}
 		else {
 			return null;
@@ -2332,7 +2573,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			return AnnotationFactory.create( ad );
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( DiscriminatorValue.class );
+			return getPhysicalAnnotation( DiscriminatorValue.class );
 		}
 		else {
 			return null;
@@ -2366,7 +2607,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			return AnnotationFactory.create( ad );
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( Inheritance.class );
+			return getPhysicalAnnotation( Inheritance.class );
 		}
 		else {
 			return null;
@@ -2381,12 +2622,11 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				AnnotationDescriptor ad = new AnnotationDescriptor( IdClass.class );
 				Class clazz;
 				try {
-					clazz = ReflectHelper.classForName(
-							XMLContext.buildSafeClassName( attr.getValue(), defaults ),
-							this.getClass()
+					clazz = classLoaderAccess.classForName(
+							XMLContext.buildSafeClassName( attr.getValue(), defaults )
 					);
 				}
-				catch ( ClassNotFoundException e ) {
+				catch ( ClassLoadingException e ) {
 					throw new AnnotationException( "Unable to find id-class: " + attr.getValue(), e );
 				}
 				ad.setValue( "value", clazz );
@@ -2397,7 +2637,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 			}
 		}
 		else if ( defaults.canUseJavaAnnotations() ) {
-			return getJavaAnnotation( IdClass.class );
+			return getPhysicalAnnotation( IdClass.class );
 		}
 		else {
 			return null;
@@ -2414,12 +2654,12 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		PrimaryKeyJoinColumn[] columns = buildPrimaryKeyJoinColumns( element );
 		if ( mergeWithAnnotations ) {
 			if ( columns.length == 0 && defaults.canUseJavaAnnotations() ) {
-				PrimaryKeyJoinColumn annotation = getJavaAnnotation( PrimaryKeyJoinColumn.class );
+				PrimaryKeyJoinColumn annotation = getPhysicalAnnotation( PrimaryKeyJoinColumn.class );
 				if ( annotation != null ) {
 					columns = new PrimaryKeyJoinColumn[] { annotation };
 				}
 				else {
-					PrimaryKeyJoinColumns annotations = getJavaAnnotation( PrimaryKeyJoinColumns.class );
+					PrimaryKeyJoinColumns annotations = getPhysicalAnnotation( PrimaryKeyJoinColumns.class );
 					columns = annotations != null ? annotations.value() : columns;
 				}
 			}
@@ -2436,7 +2676,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 
 	private Entity getEntity(Element tree, XMLContext.Default defaults) {
 		if ( tree == null ) {
-			return defaults.canUseJavaAnnotations() ? getJavaAnnotation( Entity.class ) : null;
+			return defaults.canUseJavaAnnotations() ? getPhysicalAnnotation( Entity.class ) : null;
 		}
 		else {
 			if ( "entity".equals( tree.getName() ) ) {
@@ -2444,7 +2684,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				copyStringAttribute( entity, tree, "name", false );
 				if ( defaults.canUseJavaAnnotations()
 						&& StringHelper.isEmpty( (String) entity.valueOf( "name" ) ) ) {
-					Entity javaAnn = getJavaAnnotation( Entity.class );
+					Entity javaAnn = getPhysicalAnnotation( Entity.class );
 					if ( javaAnn != null ) {
 						entity.setValue( "name", javaAnn.name() );
 					}
@@ -2459,7 +2699,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 
 	private MappedSuperclass getMappedSuperclass(Element tree, XMLContext.Default defaults) {
 		if ( tree == null ) {
-			return defaults.canUseJavaAnnotations() ? getJavaAnnotation( MappedSuperclass.class ) : null;
+			return defaults.canUseJavaAnnotations() ? getPhysicalAnnotation( MappedSuperclass.class ) : null;
 		}
 		else {
 			if ( "mapped-superclass".equals( tree.getName() ) ) {
@@ -2474,7 +2714,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 
 	private Embeddable getEmbeddable(Element tree, XMLContext.Default defaults) {
 		if ( tree == null ) {
-			return defaults.canUseJavaAnnotations() ? getJavaAnnotation( Embeddable.class ) : null;
+			return defaults.canUseJavaAnnotations() ? getPhysicalAnnotation( Embeddable.class ) : null;
 		}
 		else {
 			if ( "embeddable".equals( tree.getName() ) ) {
@@ -2495,7 +2735,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 					|| StringHelper.isNotEmpty( defaults.getSchema() ) ) {
 				AnnotationDescriptor annotation = new AnnotationDescriptor( Table.class );
 				if ( defaults.canUseJavaAnnotations() ) {
-					Table table = getJavaAnnotation( Table.class );
+					Table table = getPhysicalAnnotation( Table.class );
 					if ( table != null ) {
 						annotation.setValue( "name", table.name() );
 						annotation.setValue( "schema", table.schema() );
@@ -2515,7 +2755,7 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 				return AnnotationFactory.create( annotation );
 			}
 			else if ( defaults.canUseJavaAnnotations() ) {
-				return getJavaAnnotation( Table.class );
+				return getPhysicalAnnotation( Table.class );
 			}
 			else {
 				return null;
@@ -2569,9 +2809,9 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		 * since there would be no way to "remove" a secondary table
 		 */
 		if ( secondaryTables.size() == 0 && defaults.canUseJavaAnnotations() ) {
-			SecondaryTable secTableAnn = getJavaAnnotation( SecondaryTable.class );
+			SecondaryTable secTableAnn = getPhysicalAnnotation( SecondaryTable.class );
 			overridesDefaultInSecondaryTable( secTableAnn, defaults, secondaryTables );
-			SecondaryTables secTablesAnn = getJavaAnnotation( SecondaryTables.class );
+			SecondaryTables secTablesAnn = getPhysicalAnnotation( SecondaryTables.class );
 			if ( secTablesAnn != null ) {
 				for ( SecondaryTable table : secTablesAnn.value() ) {
 					overridesDefaultInSecondaryTable( table, defaults, secondaryTables );
@@ -2671,12 +2911,42 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		return pkJoinColumns;
 	}
 
+	/**
+	 * Copy a string attribute from an XML element to an annotation descriptor. The name of the annotation attribute is
+	 * computed from the name of the XML attribute by {@link #getJavaAttributeNameFromXMLOne(String)}.
+	 *
+	 * @param annotation annotation descriptor where to copy to the attribute.
+	 * @param element XML element from where to copy the attribute.
+	 * @param attributeName name of the XML attribute to copy.
+	 * @param mandatory whether the attribute is mandatory.
+	 */
 	private static void copyStringAttribute(
-			AnnotationDescriptor annotation, Element element, String attributeName, boolean mandatory
-	) {
+			final AnnotationDescriptor annotation, final Element element,
+			final String attributeName, final boolean mandatory) {
+		copyStringAttribute(
+				annotation,
+				element,
+				getJavaAttributeNameFromXMLOne( attributeName ),
+				attributeName,
+				mandatory
+		);
+	}
+
+	/**
+	 * Copy a string attribute from an XML element to an annotation descriptor. The name of the annotation attribute is
+	 * explicitely given.
+	 *
+	 * @param annotation annotation where to copy to the attribute.
+	 * @param element XML element from where to copy the attribute.
+	 * @param annotationAttributeName name of the annotation attribute where to copy.
+	 * @param attributeName name of the XML attribute to copy.
+	 * @param mandatory whether the attribute is mandatory.
+	 */
+	private static void copyStringAttribute(
+			final AnnotationDescriptor annotation, final Element element,
+			final String annotationAttributeName, final String attributeName, boolean mandatory) {
 		String attribute = element.attributeValue( attributeName );
 		if ( attribute != null ) {
-			String annotationAttributeName = getJavaAttributeNameFromXMLOne( attributeName );
 			annotation.setValue( annotationAttributeName, attribute );
 		}
 		else {
@@ -2731,15 +3001,15 @@ public class JPAOverriddenAnnotationReader implements AnnotationReader {
 		}
 	}
 
-	private <T extends Annotation> T getJavaAnnotation(Class<T> annotationType) {
+	private <T extends Annotation> T getPhysicalAnnotation(Class<T> annotationType) {
 		return element.getAnnotation( annotationType );
 	}
 
-	private <T extends Annotation> boolean isJavaAnnotationPresent(Class<T> annotationType) {
+	private <T extends Annotation> boolean isPhysicalAnnotationPresent(Class<T> annotationType) {
 		return element.isAnnotationPresent( annotationType );
 	}
 
-	private Annotation[] getJavaAnnotations() {
+	private Annotation[] getPhysicalAnnotations() {
 		return element.getAnnotations();
 	}
 }

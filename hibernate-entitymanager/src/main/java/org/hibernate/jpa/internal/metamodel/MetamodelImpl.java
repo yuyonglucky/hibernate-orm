@@ -1,37 +1,29 @@
 /*
- * Copyright (c) 2009, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
+ * Hibernate, Relational Persistence for Idiomatic Java
  *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.internal.metamodel;
 
-import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.internal.util.collections.CollectionHelper;
-import org.hibernate.mapping.MappedSuperclass;
-import org.hibernate.mapping.PersistentClass;
-
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import javax.persistence.metamodel.*;
+import javax.persistence.metamodel.EmbeddableType;
+import javax.persistence.metamodel.EntityType;
+import javax.persistence.metamodel.ManagedType;
+import javax.persistence.metamodel.MappedSuperclassType;
+import javax.persistence.metamodel.Metamodel;
+
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.internal.util.collections.CollectionHelper;
+import org.hibernate.jpa.internal.EntityManagerMessageLogger;
+import org.hibernate.jpa.internal.HEMLogging;
+import org.hibernate.mapping.MappedSuperclass;
+import org.hibernate.mapping.PersistentClass;
 
 /**
  * Hibernate implementation of the JPA {@link Metamodel} contract.
@@ -40,27 +32,12 @@ import javax.persistence.metamodel.*;
  * @author Emmanuel Bernard
  */
 public class MetamodelImpl implements Metamodel, Serializable {
-	private final Map<Class<?>,EntityTypeImpl<?>> entities;
+	private static final EntityManagerMessageLogger log = HEMLogging.messageLogger( MetamodelImpl.class );
+
+	private final Map<Class<?>, EntityTypeImpl<?>> entities;
 	private final Map<Class<?>, EmbeddableTypeImpl<?>> embeddables;
 	private final Map<Class<?>, MappedSuperclassType<?>> mappedSuperclassTypeMap;
-    private final Map<String, EntityTypeImpl<?>> entityTypesByEntityName;
-
-    /**
-   	 * Build the metamodel using the information from the collection of Hibernate
-   	 * {@link PersistentClass} models as well as the Hibernate {@link org.hibernate.SessionFactory}.
-   	 *
-   	 * @param persistentClasses Iterator over the Hibernate (config-time) metamodel
-   	 * @param sessionFactory The Hibernate session factory.
-   	 * @return The built metamodel
-	 * 
-	 * @deprecated use {@link #buildMetamodel(java.util.Iterator,org.hibernate.engine.spi.SessionFactoryImplementor,boolean)} instead
-   	 */
-	@Deprecated
-   	public static MetamodelImpl buildMetamodel(
-   			Iterator<PersistentClass> persistentClasses,
-   			SessionFactoryImplementor sessionFactory) {
-        return buildMetamodel(persistentClasses, sessionFactory, false);
-   	}
+	private final Map<String, EntityTypeImpl<?>> entityTypesByEntityName;
 
 	/**
 	 * Build the metamodel using the information from the collection of Hibernate
@@ -68,20 +45,57 @@ public class MetamodelImpl implements Metamodel, Serializable {
 	 *
 	 * @param persistentClasses Iterator over the Hibernate (config-time) metamodel
 	 * @param sessionFactory The Hibernate session factory.
-     * @param ignoreUnsupported ignore unsupported/unknown annotations (like @Any)
+	 *
+	 * @return The built metamodel
+	 *
+	 * @deprecated use {@link #buildMetamodel(Iterator, Set, SessionFactoryImplementor, boolean)} instead
+	 */
+	@Deprecated
+	public static MetamodelImpl buildMetamodel(
+			Iterator<PersistentClass> persistentClasses,
+			SessionFactoryImplementor sessionFactory) {
+		return buildMetamodel( persistentClasses, Collections.<MappedSuperclass>emptySet(), sessionFactory, false );
+	}
+
+	/**
+	 * Build the metamodel using the information from the collection of Hibernate
+	 * {@link PersistentClass} models as well as the Hibernate {@link org.hibernate.SessionFactory}.
+	 *
+	 * @param persistentClasses Iterator over the Hibernate (config-time) metamodel
+	 * @param mappedSuperclasses All known MappedSuperclasses
+	 * @param sessionFactory The Hibernate session factory.
+	 * @param ignoreUnsupported ignore unsupported/unknown annotations (like @Any)
+	 *
 	 * @return The built metamodel
 	 */
 	public static MetamodelImpl buildMetamodel(
 			Iterator<PersistentClass> persistentClasses,
+			Set<MappedSuperclass> mappedSuperclasses,
 			SessionFactoryImplementor sessionFactory,
-            boolean ignoreUnsupported) {
-		MetadataContext context = new MetadataContext( sessionFactory, ignoreUnsupported );
+			boolean ignoreUnsupported) {
+		MetadataContext context = new MetadataContext( sessionFactory, mappedSuperclasses, ignoreUnsupported );
 		while ( persistentClasses.hasNext() ) {
 			PersistentClass pc = persistentClasses.next();
 			locateOrBuildEntityType( pc, context );
 		}
+		handleUnusedMappedSuperclasses( context );
 		context.wrapUp();
-		return new MetamodelImpl( context.getEntityTypeMap(), context.getEmbeddableTypeMap(), context.getMappedSuperclassTypeMap(), context.getEntityTypesByEntityName() );
+		return new MetamodelImpl(
+				context.getEntityTypeMap(),
+				context.getEmbeddableTypeMap(),
+				context.getMappedSuperclassTypeMap(),
+				context.getEntityTypesByEntityName()
+		);
+	}
+
+	private static void handleUnusedMappedSuperclasses(MetadataContext context) {
+		final Set<MappedSuperclass> unusedMappedSuperclasses = context.getUnusedMappedSuperclasses();
+		if ( !unusedMappedSuperclasses.isEmpty() ) {
+			for ( MappedSuperclass mappedSuperclass : unusedMappedSuperclasses ) {
+				log.unusedMappedSuperclass( mappedSuperclass.getMappedClass().getName() );
+				locateOrBuildMappedsuperclassType( mappedSuperclass, context );
+			}
+		}
 	}
 
 	private static EntityTypeImpl<?> locateOrBuildEntityType(PersistentClass persistentClass, MetadataContext context) {
@@ -93,16 +107,16 @@ public class MetamodelImpl implements Metamodel, Serializable {
 	}
 
 	//TODO remove / reduce @SW scope
-	@SuppressWarnings( "unchecked" )
+	@SuppressWarnings("unchecked")
 	private static EntityTypeImpl<?> buildEntityType(PersistentClass persistentClass, MetadataContext context) {
 		final Class javaType = persistentClass.getMappedClass();
-		context.pushEntityWorkedOn(persistentClass);
+		context.pushEntityWorkedOn( persistentClass );
 		final MappedSuperclass superMappedSuperclass = persistentClass.getSuperMappedSuperclass();
 		AbstractIdentifiableType<?> superType = superMappedSuperclass == null
 				? null
 				: locateOrBuildMappedsuperclassType( superMappedSuperclass, context );
 		//no mappedSuperclass, check for a super entity
-		if (superType == null) {
+		if ( superType == null ) {
 			final PersistentClass superPersistentClass = persistentClass.getSuperclass();
 			superType = superPersistentClass == null
 					? null
@@ -114,22 +128,22 @@ public class MetamodelImpl implements Metamodel, Serializable {
 				persistentClass
 		);
 
-        context.registerEntityType( persistentClass, entityType );
-		context.popEntityWorkedOn(persistentClass);
+		context.registerEntityType( persistentClass, entityType );
+		context.popEntityWorkedOn( persistentClass );
 		return entityType;
 	}
-	
+
 	private static MappedSuperclassTypeImpl<?> locateOrBuildMappedsuperclassType(
 			MappedSuperclass mappedSuperclass, MetadataContext context) {
 		MappedSuperclassTypeImpl<?> mappedSuperclassType = context.locateMappedSuperclassType( mappedSuperclass );
 		if ( mappedSuperclassType == null ) {
-			mappedSuperclassType = buildMappedSuperclassType(mappedSuperclass, context);
+			mappedSuperclassType = buildMappedSuperclassType( mappedSuperclass, context );
 		}
 		return mappedSuperclassType;
 	}
 
 	//TODO remove / reduce @SW scope
-	@SuppressWarnings( "unchecked" )
+	@SuppressWarnings("unchecked")
 	private static MappedSuperclassTypeImpl<?> buildMappedSuperclassType(
 			MappedSuperclass mappedSuperclass,
 			MetadataContext context) {
@@ -138,7 +152,7 @@ public class MetamodelImpl implements Metamodel, Serializable {
 				? null
 				: locateOrBuildMappedsuperclassType( superMappedSuperclass, context );
 		//no mappedSuperclass, check for a super entity
-		if (superType == null) {
+		if ( superType == null ) {
 			final PersistentClass superPersistentClass = mappedSuperclass.getSuperPersistentClass();
 			superType = superPersistentClass == null
 					? null
@@ -164,16 +178,16 @@ public class MetamodelImpl implements Metamodel, Serializable {
 	private MetamodelImpl(
 			Map<Class<?>, EntityTypeImpl<?>> entities,
 			Map<Class<?>, EmbeddableTypeImpl<?>> embeddables,
-            Map<Class<?>, MappedSuperclassType<?>> mappedSuperclassTypeMap,
-            Map<String, EntityTypeImpl<?>> entityTypesByEntityName) {
+			Map<Class<?>, MappedSuperclassType<?>> mappedSuperclassTypeMap,
+			Map<String, EntityTypeImpl<?>> entityTypesByEntityName) {
 		this.entities = entities;
 		this.embeddables = embeddables;
 		this.mappedSuperclassTypeMap = mappedSuperclassTypeMap;
-        this.entityTypesByEntityName = entityTypesByEntityName;
+		this.entityTypesByEntityName = entityTypesByEntityName;
 	}
 
 	@Override
-	@SuppressWarnings({ "unchecked" })
+	@SuppressWarnings({"unchecked"})
 	public <X> EntityType<X> entity(Class<X> cls) {
 		final EntityType<?> entityType = entities.get( cls );
 		if ( entityType == null ) {
@@ -183,7 +197,7 @@ public class MetamodelImpl implements Metamodel, Serializable {
 	}
 
 	@Override
-	@SuppressWarnings({ "unchecked" })
+	@SuppressWarnings({"unchecked"})
 	public <X> ManagedType<X> managedType(Class<X> cls) {
 		ManagedType<?> type = entities.get( cls );
 		if ( type == null ) {
@@ -199,7 +213,7 @@ public class MetamodelImpl implements Metamodel, Serializable {
 	}
 
 	@Override
-	@SuppressWarnings({ "unchecked" })
+	@SuppressWarnings({"unchecked"})
 	public <X> EmbeddableType<X> embeddable(Class<X> cls) {
 		final EmbeddableType<?> embeddableType = embeddables.get( cls );
 		if ( embeddableType == null ) {

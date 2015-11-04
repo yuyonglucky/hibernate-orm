@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type.descriptor.java;
 import org.hibernate.HibernateException;
@@ -36,20 +19,20 @@ public class CharacterTypeDescriptor extends AbstractTypeDescriptor<Character> {
 	public CharacterTypeDescriptor() {
 		super( Character.class );
 	}
-
+	@Override
 	public String toString(Character value) {
 		return value.toString();
 	}
-
-	@SuppressWarnings({ "UnnecessaryBoxing" })
+	@Override
 	public Character fromString(String string) {
 		if ( string.length() != 1 ) {
 			throw new HibernateException( "multiple or zero characters found parsing string" );
 		}
-		return Character.valueOf( string.charAt( 0 ) );
+		return string.charAt( 0 );
 	}
 
 	@SuppressWarnings({ "unchecked" })
+	@Override
 	public <X> X unwrap(Character value, Class<X> type, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -65,8 +48,7 @@ public class CharacterTypeDescriptor extends AbstractTypeDescriptor<Character> {
 		}
 		throw unknownUnwrap( type );
 	}
-
-	@SuppressWarnings({ "UnnecessaryBoxing" })
+	@Override
 	public <X> Character wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -76,11 +58,11 @@ public class CharacterTypeDescriptor extends AbstractTypeDescriptor<Character> {
 		}
 		if ( String.class.isInstance( value ) ) {
 			final String str = (String) value;
-			return Character.valueOf( str.charAt(0) );
+			return str.charAt( 0 );
 		}
 		if ( Number.class.isInstance( value ) ) {
 			final Number nbr = (Number) value;
-			return Character.valueOf( (char)nbr.shortValue() );
+			return (char) nbr.shortValue();
 		}
 		throw unknownWrap( value.getClass() );
 	}

@@ -1,7 +1,14 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
+
 //$Id: PointyTooth.java 14761 2008-06-11 13:51:06Z hardy.ferentschik $
 package org.hibernate.test.annotations.id.sequences.entities;
 import java.io.Serializable;
-import java.math.BigInteger;
+import java.math.BigDecimal;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
@@ -26,7 +33,7 @@ public class PointyTooth implements Serializable {
 	@GeneratedValue(strategy = GenerationType.IDENTITY, generator = "java5_uuid")
 	@GenericGenerator(name = "java5_uuid", strategy = "org.hibernate.test.annotations.id.UUIDGenerator")
 	@Column(name = "id", precision = 128, scale = 0)
-	private BigInteger id;
+	private BigDecimal id;
 
 	@ManyToOne
     @JoinColumn(name = "bunny_id")
@@ -36,7 +43,7 @@ public class PointyTooth implements Serializable {
 		this.bunny = bunny;
 	}
 
-	public BigInteger getId() {
+	public BigDecimal getId() {
 		return id;
 	}
 }

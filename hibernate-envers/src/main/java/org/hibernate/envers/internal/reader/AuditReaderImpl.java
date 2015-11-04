@@ -1,35 +1,18 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.reader;
 
-import javax.persistence.NoResultException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.persistence.NoResultException;
 
 import org.hibernate.Criteria;
 import org.hibernate.HibernateException;
@@ -37,7 +20,7 @@ import org.hibernate.NonUniqueResultException;
 import org.hibernate.Session;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.CrossTypeRevisionChangesReader;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.exception.AuditException;
 import org.hibernate.envers.exception.NotAuditedException;
 import org.hibernate.envers.exception.RevisionDoesNotExistException;
@@ -57,21 +40,22 @@ import static org.hibernate.envers.internal.tools.EntityTools.getTargetClassIfPr
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
  */
 public class AuditReaderImpl implements AuditReaderImplementor {
-	private final AuditConfiguration verCfg;
+	private final EnversService enversService;
 	private final SessionImplementor sessionImplementor;
 	private final Session session;
 	private final FirstLevelCache firstLevelCache;
 	private final CrossTypeRevisionChangesReader crossTypeRevisionChangesReader;
 
 	public AuditReaderImpl(
-			AuditConfiguration verCfg, Session session,
+			EnversService enversService,
+			Session session,
 			SessionImplementor sessionImplementor) {
-		this.verCfg = verCfg;
+		this.enversService = enversService;
 		this.sessionImplementor = sessionImplementor;
 		this.session = session;
 
 		firstLevelCache = new FirstLevelCache();
-		crossTypeRevisionChangesReader = new CrossTypeRevisionChangesReaderImpl( this, verCfg );
+		crossTypeRevisionChangesReader = new CrossTypeRevisionChangesReaderImpl( this, enversService );
 	}
 
 	private void checkSession() {
@@ -124,7 +108,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 		checkPositive( revision, "Entity revision" );
 		checkSession();
 
-		if ( !verCfg.getEntCfg().isVersioned( entityName ) ) {
+		if ( !enversService.getEntitiesConfigurations().isVersioned( entityName ) ) {
 			throw new NotAuditedException( entityName, entityName + " is not versioned!" );
 		}
 
@@ -166,7 +150,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 		checkNotNull( primaryKey, "Primary key" );
 		checkSession();
 
-		if ( !verCfg.getEntCfg().isVersioned( entityName ) ) {
+		if ( !enversService.getEntitiesConfigurations().isVersioned( entityName ) ) {
 			throw new NotAuditedException( entityName, entityName + " is not versioned!" );
 		}
 
@@ -184,7 +168,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 		checkPositive( revision, "Entity revision" );
 		checkSession();
 
-		final Criteria query = verCfg.getRevisionInfoQueryCreator().getRevisionDateQuery( session, revision );
+		final Criteria query = enversService.getRevisionInfoQueryCreator().getRevisionDateQuery( session, revision );
 
 		try {
 			final Object timestampObject = query.uniqueResult();
@@ -205,7 +189,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 		checkNotNull( date, "Date of revision" );
 		checkSession();
 
-		final Criteria query = verCfg.getRevisionInfoQueryCreator().getRevisionNumberForDateQuery( session, date );
+		final Criteria query = enversService.getRevisionInfoQueryCreator().getRevisionNumberForDateQuery( session, date );
 
 		try {
 			final Number res = (Number) query.uniqueResult();
@@ -231,7 +215,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 
 		final Set<Number> revisions = new HashSet<Number>( 1 );
 		revisions.add( revision );
-		final Criteria query = verCfg.getRevisionInfoQueryCreator().getRevisionsQuery( session, revisions );
+		final Criteria query = enversService.getRevisionInfoQueryCreator().getRevisionsQuery( session, revisions );
 
 		try {
 			final T revisionData = (T) query.uniqueResult();
@@ -261,12 +245,12 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 		}
 		checkSession();
 
-		final Criteria query = verCfg.getRevisionInfoQueryCreator().getRevisionsQuery( session, revisions );
+		final Criteria query = enversService.getRevisionInfoQueryCreator().getRevisionsQuery( session, revisions );
 
 		try {
 			final List<T> revisionList = query.list();
 			for ( T revision : revisionList ) {
-				final Number revNo = verCfg.getRevisionInfoNumberReader().getRevisionNumber( revision );
+				final Number revNo = enversService.getRevisionInfoNumberReader().getRevisionNumber( revision );
 				result.put( revNo, revision );
 			}
 
@@ -279,7 +263,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 
 	@Override
 	public CrossTypeRevisionChangesReader getCrossTypeRevisionChangesReader() throws AuditException {
-		if ( !verCfg.getGlobalCfg().isTrackEntitiesChangedInRevision() ) {
+		if ( !enversService.getGlobalConfiguration().isTrackEntitiesChangedInRevision() ) {
 			throw new AuditException(
 					"This API is designed for Envers default mechanism of tracking entities modified in a given revision."
 							+ " Extend DefaultTrackingModifiedEntitiesRevisionEntity, utilize @ModifiedEntityNames annotation or set "
@@ -298,7 +282,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 		}
 
 		// Obtaining the current audit sync
-		final AuditProcess auditProcess = verCfg.getSyncManager().get( (EventSource) session );
+		final AuditProcess auditProcess = enversService.getAuditProcessManager().get( (EventSource) session );
 
 		// And getting the current revision data
 		return (T) auditProcess.getCurrentRevisionData( session, persist );
@@ -306,7 +290,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 
 	@Override
 	public AuditQueryCreator createQuery() {
-		return new AuditQueryCreator( verCfg, this );
+		return new AuditQueryCreator( enversService, this );
 	}
 
 	@Override
@@ -320,7 +304,7 @@ public class AuditReaderImpl implements AuditReaderImplementor {
 	public boolean isEntityNameAudited(String entityName) {
 		checkNotNull( entityName, "Entity name" );
 		checkSession();
-		return (verCfg.getEntCfg().isVersioned( entityName ));
+		return enversService.getEntitiesConfigurations().isVersioned( entityName );
 	}
 
 	@Override

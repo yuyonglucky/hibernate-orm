@@ -1,38 +1,33 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.infinispan.query;
 
 import javax.transaction.Transaction;
-
-import org.infinispan.AdvancedCache;
-import org.infinispan.context.Flag;
+import javax.transaction.TransactionManager;
 
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.infinispan.impl.BaseTransactionalDataRegion;
 import org.hibernate.cache.infinispan.util.Caches;
+import org.hibernate.cache.infinispan.util.InvocationAfterCompletion;
 import org.hibernate.cache.spi.QueryResultsRegion;
 import org.hibernate.cache.spi.RegionFactory;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.resource.transaction.TransactionCoordinator;
+import org.infinispan.AdvancedCache;
+import org.infinispan.configuration.cache.TransactionConfiguration;
+import org.infinispan.context.Flag;
+import org.infinispan.transaction.TransactionMode;
+import org.infinispan.util.logging.Log;
+import org.infinispan.util.logging.LogFactory;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Region for caching query results.
@@ -42,10 +37,13 @@ import org.hibernate.cache.spi.RegionFactory;
  * @since 3.5
  */
 public class QueryResultsRegionImpl extends BaseTransactionalDataRegion implements QueryResultsRegion {
+	private static final Log log = LogFactory.getLog( QueryResultsRegionImpl.class );
 
 	private final AdvancedCache evictCache;
 	private final AdvancedCache putCache;
 	private final AdvancedCache getCache;
+	private final ConcurrentMap<SessionImplementor, Map> transactionContext = new ConcurrentHashMap<SessionImplementor, Map>();
+	private final boolean putCacheRequiresTransaction;
 
    /**
     * Query region constructor
@@ -54,8 +52,8 @@ public class QueryResultsRegionImpl extends BaseTransactionalDataRegion implemen
     * @param name of the query region
     * @param factory for the query region
     */
-	public QueryResultsRegionImpl(AdvancedCache cache, String name, RegionFactory factory) {
-		super( cache, name, null, factory );
+	public QueryResultsRegionImpl(AdvancedCache cache, String name, TransactionManager transactionManager, RegionFactory factory) {
+		super( cache, name, transactionManager, null, factory, null );
 		// If Infinispan is using INVALIDATION for query cache, we don't want to propagate changes.
 		// We use the Timestamps cache to manage invalidation
 		final boolean localOnly = Caches.isInvalidationCache( cache );
@@ -67,15 +65,34 @@ public class QueryResultsRegionImpl extends BaseTransactionalDataRegion implemen
 				Caches.failSilentWriteCache( cache );
 
 		this.getCache = Caches.failSilentReadCache( cache );
+
+		TransactionConfiguration transactionConfiguration = putCache.getCacheConfiguration().transaction();
+		boolean transactional = transactionConfiguration.transactionMode() != TransactionMode.NON_TRANSACTIONAL;
+		this.putCacheRequiresTransaction = transactional && !transactionConfiguration.autoCommit();
+		// Since we execute the query update explicitly form transaction synchronization, the putCache does not need
+		// to be transactional anymore (it had to be in the past to prevent revealing uncommitted changes).
+		if (transactional) {
+			log.warn("Use non-transactional query caches for best performance!");
+		}
+
+	}
+
+	@Override
+	protected boolean isRegionAccessStrategyEnabled() {
+		return false;
 	}
 
 	@Override
 	public void evict(Object key) throws CacheException {
+		for (Map map : transactionContext.values()) {
+			map.remove(key);
+		}
 		evictCache.remove( key );
 	}
 
 	@Override
 	public void evictAll() throws CacheException {
+		transactionContext.clear();
 		final Transaction tx = suspend();
 		try {
 			// Invalidate the local region and then go remote
@@ -88,15 +105,7 @@ public class QueryResultsRegionImpl extends BaseTransactionalDataRegion implemen
 	}
 
 	@Override
-	public Object get(Object key) throws CacheException {
-		// If the region is not valid, skip cache store to avoid going remote to retrieve the query.
-		// The aim of this is to maintain same logic/semantics as when state transfer was configured.
-		// TODO: Once https://issues.jboss.org/browse/ISPN-835 has been resolved, revert to state transfer and remove workaround
-		boolean skipCacheStore = false;
-		if ( !isValid() ) {
-			skipCacheStore = true;
-		}
-
+	public Object get(SessionImplementor session, Object key) throws CacheException {
 		if ( !checkValid() ) {
 			return null;
 		}
@@ -106,18 +115,37 @@ public class QueryResultsRegionImpl extends BaseTransactionalDataRegion implemen
 		// to avoid holding locks that would prevent updates.
 		// Add a zero (or low) timeout option so we don't block
 		// waiting for tx's that did a put to commit
-		if ( skipCacheStore ) {
-			return getCache.withFlags( Flag.SKIP_CACHE_STORE ).get( key );
+		Object result = null;
+		Map map = transactionContext.get(session);
+		if (map != null) {
+			result = map.get(key);
 		}
-		else {
-			return getCache.get( key );
+		if (result == null) {
+			result = getCache.get( key );
 		}
+		return result;
 	}
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public void put(Object key, Object value) throws CacheException {
+	public void put(SessionImplementor session, Object key, Object value) throws CacheException {
 		if ( checkValid() ) {
+			// See HHH-7898: Even with FAIL_SILENTLY flag, failure to write in transaction
+			// fails the whole transaction. It is an Infinispan quirk that cannot be fixed
+			// ISPN-5356 tracks that. This is because if the transaction continued the
+			// value could be committed on backup owners, including the failed operation,
+			// and the result would not be consistent.
+			TransactionCoordinator tc = session.getTransactionCoordinator();
+			if (tc != null && tc.isJoined()) {
+				tc.getLocalSynchronizations().registerSynchronization(new PostTransactionQueryUpdate(tc, session, key, value));
+				// no need to synchronize as the transaction will be accessed by only one thread
+				Map map = transactionContext.get(session);
+				if (map == null) {
+					transactionContext.put(session, map = new HashMap());
+				}
+				map.put(key, value);
+				return;
+			}
 			// Here we don't want to suspend the tx. If we do:
 			// 1) We might be caching query results that reflect uncommitted
 			// changes. No tx == no WL on cache node, so other threads
@@ -137,4 +165,29 @@ public class QueryResultsRegionImpl extends BaseTransactionalDataRegion implemen
 		}
 	}
 
+	private class PostTransactionQueryUpdate extends InvocationAfterCompletion {
+		private final SessionImplementor session;
+		private final Object key;
+		private final Object value;
+
+		public PostTransactionQueryUpdate(TransactionCoordinator tc, SessionImplementor session, Object key, Object value) {
+			super(tc, putCache, putCacheRequiresTransaction);
+			this.session = session;
+			this.key = key;
+			this.value = value;
+		}
+
+		@Override
+		public void afterCompletion(int status) {
+			transactionContext.remove(session);
+			super.afterCompletion(status);
+		}
+
+		@Override
+		protected void invoke(boolean success, AdvancedCache cache) {
+			if (success) {
+				cache.put(key, value);
+			}
+		}
+	}
 }

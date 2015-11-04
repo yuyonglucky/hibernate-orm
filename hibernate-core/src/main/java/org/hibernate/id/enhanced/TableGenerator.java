@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.id.enhanced;
 
@@ -33,20 +16,25 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.MappingException;
+import org.hibernate.boot.model.naming.Identifier;
+import org.hibernate.boot.model.relational.Database;
+import org.hibernate.boot.model.relational.Namespace;
+import org.hibernate.boot.model.relational.QualifiedName;
+import org.hibernate.boot.model.relational.QualifiedNameParser;
 import org.hibernate.cfg.Environment;
-import org.hibernate.cfg.ObjectNameNormalizer;
 import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.engine.jdbc.internal.FormatStyle;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.jdbc.spi.SqlStatementLogger;
+import org.hibernate.engine.spi.SessionEventListenerManager;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.id.Configurable;
+import org.hibernate.id.ExportableColumn;
 import org.hibernate.id.IdentifierGeneratorHelper;
 import org.hibernate.id.IntegralDataTypeHolder;
 import org.hibernate.id.PersistentIdentifierGenerator;
@@ -54,8 +42,15 @@ import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.internal.util.config.ConfigurationHelper;
 import org.hibernate.jdbc.AbstractReturningWork;
+import org.hibernate.mapping.Column;
+import org.hibernate.mapping.PrimaryKey;
 import org.hibernate.mapping.Table;
+import org.hibernate.service.ServiceRegistry;
+import org.hibernate.type.LongType;
+import org.hibernate.type.StringType;
 import org.hibernate.type.Type;
+
+import org.jboss.logging.Logger;
 
 /**
  * An enhanced version of table-based id generation.
@@ -225,7 +220,8 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 
 	private Type identifierType;
 
-	private String tableName;
+	private QualifiedName qualifiedTableName;
+	private String renderedTableName;
 
 	private String segmentColumnName;
 	private String segmentValue;
@@ -244,7 +240,7 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 
 	@Override
 	public Object generatorKey() {
-		return tableName;
+		return qualifiedTableName.render();
 	}
 
 	/**
@@ -262,7 +258,7 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	 * @return The table name.
 	 */
 	public final String getTableName() {
-		return tableName;
+		return qualifiedTableName.render();
 	}
 
 	/**
@@ -295,6 +291,7 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	 *
 	 * @return the column size.
 	 */
+	@SuppressWarnings("UnusedDeclaration")
 	public final int getSegmentValueLength() {
 		return segmentValueLength;
 	}
@@ -348,22 +345,20 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	}
 
 	@Override
-	public void configure(Type type, Properties params, Dialect dialect) throws MappingException {
+	public void configure(Type type, Properties params, ServiceRegistry serviceRegistry) throws MappingException {
 		identifierType = type;
 
-		tableName = determineGeneratorTableName( params, dialect );
-		segmentColumnName = determineSegmentColumnName( params, dialect );
-		valueColumnName = determineValueColumnName( params, dialect );
+		final JdbcEnvironment jdbcEnvironment = serviceRegistry.getService( JdbcEnvironment.class );
+
+		qualifiedTableName = determineGeneratorTableName( params, jdbcEnvironment );
+		segmentColumnName = determineSegmentColumnName( params, jdbcEnvironment );
+		valueColumnName = determineValueColumnName( params, jdbcEnvironment );
 
 		segmentValue = determineSegmentValue( params );
 
 		segmentValueLength = determineSegmentColumnSize( params );
 		initialValue = determineInitialValue( params );
 		incrementSize = determineIncrementSize( params );
-
-		this.selectQuery = buildSelectQuery( dialect );
-		this.updateQuery = buildUpdateQuery();
-		this.insertQuery = buildInsertQuery();
 
 		// if the increment size is greater than one, we prefer pooled optimization; but we
 		// need to see if the user prefers POOL or POOL_LO...
@@ -389,28 +384,30 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	 *
 	 * @see #getTableName()
 	 * @param params The params supplied in the generator config (plus some standard useful extras).
-	 * @param dialect The dialect in effect
+	 * @param jdbcEnvironment The JDBC environment
 	 * @return The table name to use.
 	 */
-	protected String determineGeneratorTableName(Properties params, Dialect dialect) {
-		String name = ConfigurationHelper.getString( TABLE_PARAM, params, DEF_TABLE );
-		final boolean isGivenNameUnqualified = name.indexOf( '.' ) < 0;
-		if ( isGivenNameUnqualified ) {
-			final ObjectNameNormalizer normalizer = (ObjectNameNormalizer) params.get( IDENTIFIER_NORMALIZER );
-			name = normalizer.normalizeIdentifierQuoting( name );
-			// if the given name is un-qualified we may neen to qualify it
-			final String schemaName = normalizer.normalizeIdentifierQuoting( params.getProperty( SCHEMA ) );
-			final String catalogName = normalizer.normalizeIdentifierQuoting( params.getProperty( CATALOG ) );
-			name = Table.qualify(
-					dialect.quote( catalogName ),
-					dialect.quote( schemaName ),
-					dialect.quote( name)
+	@SuppressWarnings("UnusedParameters")
+	protected QualifiedName determineGeneratorTableName(Properties params, JdbcEnvironment jdbcEnvironment) {
+		final String tableName = ConfigurationHelper.getString( TABLE_PARAM, params, DEF_TABLE );
+
+		if ( tableName.contains( "." ) ) {
+			return QualifiedNameParser.INSTANCE.parse( tableName );
+		}
+		else {
+			// todo : need to incorporate implicit catalog and schema names
+			final Identifier catalog = jdbcEnvironment.getIdentifierHelper().toIdentifier(
+					ConfigurationHelper.getString( CATALOG, params )
+			);
+			final Identifier schema = jdbcEnvironment.getIdentifierHelper().toIdentifier(
+					ConfigurationHelper.getString( SCHEMA, params )
+			);
+			return new QualifiedNameParser.NameParts(
+					catalog,
+					schema,
+					jdbcEnvironment.getIdentifierHelper().toIdentifier( tableName )
 			);
 		}
-		// if already qualified there is not much we can do in a portable manner so we pass it
-		// through and assume the user has set up the name correctly.
-
-		return name;
 	}
 
 	/**
@@ -421,13 +418,13 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	 *
 	 * @see #getSegmentColumnName()
 	 * @param params The params supplied in the generator config (plus some standard useful extras).
-	 * @param dialect The dialect in effect
+	 * @param jdbcEnvironment The JDBC environment
 	 * @return The name of the segment column
 	 */
-	protected String determineSegmentColumnName(Properties params, Dialect dialect) {
-		final ObjectNameNormalizer normalizer = (ObjectNameNormalizer) params.get( IDENTIFIER_NORMALIZER );
+	@SuppressWarnings("UnusedParameters")
+	protected String determineSegmentColumnName(Properties params, JdbcEnvironment jdbcEnvironment) {
 		final String name = ConfigurationHelper.getString( SEGMENT_COLUMN_PARAM, params, DEF_SEGMENT_COLUMN );
-		return dialect.quote( normalizer.normalizeIdentifierQuoting( name ) );
+		return jdbcEnvironment.getIdentifierHelper().toIdentifier( name ).render( jdbcEnvironment.getDialect() );
 	}
 
 	/**
@@ -437,13 +434,13 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	 *
 	 * @see #getValueColumnName()
 	 * @param params The params supplied in the generator config (plus some standard useful extras).
-	 * @param dialect The dialect in effect
+	 * @param jdbcEnvironment The JDBC environment
 	 * @return The name of the value column
 	 */
-	protected String determineValueColumnName(Properties params, Dialect dialect) {
-		final ObjectNameNormalizer normalizer = (ObjectNameNormalizer) params.get( IDENTIFIER_NORMALIZER );
+	@SuppressWarnings("UnusedParameters")
+	protected String determineValueColumnName(Properties params, JdbcEnvironment jdbcEnvironment) {
 		final String name = ConfigurationHelper.getString( VALUE_COLUMN_PARAM, params, DEF_VALUE_COLUMN );
-		return dialect.quote( normalizer.normalizeIdentifierQuoting( name ) );
+		return jdbcEnvironment.getIdentifierHelper().toIdentifier( name ).render( jdbcEnvironment.getDialect() );
 	}
 
 	/**
@@ -473,7 +470,7 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	protected String determineDefaultSegmentValue(Properties params) {
 		final boolean preferSegmentPerEntity = ConfigurationHelper.getBoolean( CONFIG_PREFER_SEGMENT_PER_ENTITY, params, false );
 		final String defaultToUse = preferSegmentPerEntity ? params.getProperty( TABLE ) : DEF_SEGMENT_VALUE;
-		LOG.usingDefaultIdGeneratorSegmentValue( tableName, segmentColumnName, defaultToUse );
+		LOG.usingDefaultIdGeneratorSegmentValue( qualifiedTableName.render(), segmentColumnName, defaultToUse );
 		return defaultToUse;
 	}
 
@@ -498,10 +495,11 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 		return ConfigurationHelper.getInt( INCREMENT_PARAM, params, DEFAULT_INCREMENT_SIZE );
 	}
 
+	@SuppressWarnings("unchecked")
 	protected String buildSelectQuery(Dialect dialect) {
 		final String alias = "tbl";
 		final String query = "select " + StringHelper.qualify( alias, valueColumnName ) +
-				" from " + tableName + ' ' + alias +
+				" from " + renderedTableName + ' ' + alias +
 				" where " + StringHelper.qualify( alias, segmentColumnName ) + "=?";
 		final LockOptions lockOptions = new LockOptions( LockMode.PESSIMISTIC_WRITE );
 		lockOptions.setAliasSpecificLockMode( alias, LockMode.PESSIMISTIC_WRITE );
@@ -510,60 +508,53 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 	}
 
 	protected String buildUpdateQuery() {
-		return "update " + tableName +
+		return "update " + renderedTableName +
 				" set " + valueColumnName + "=? " +
 				" where " + valueColumnName + "=? and " + segmentColumnName + "=?";
 	}
 
 	protected String buildInsertQuery() {
-		return "insert into " + tableName + " (" + segmentColumnName + ", " + valueColumnName + ") " + " values (?,?)";
+		return "insert into " + renderedTableName + " (" + segmentColumnName + ", " + valueColumnName + ") " + " values (?,?)";
+	}
+
+	private IntegralDataTypeHolder makeValue() {
+		return IdentifierGeneratorHelper.getIntegralDataTypeHolder( identifierType.getReturnedClass() );
 	}
 
 	@Override
-	public synchronized Serializable generate(final SessionImplementor session, Object obj) {
-		final SqlStatementLogger statementLogger = session
-				.getFactory()
-				.getServiceRegistry()
+	public Serializable generate(final SessionImplementor session, final Object obj) {
+		final SqlStatementLogger statementLogger = session.getFactory().getServiceRegistry()
 				.getService( JdbcServices.class )
 				.getSqlStatementLogger();
+		final SessionEventListenerManager statsCollector = session.getEventListenerManager();
+
 		return optimizer.generate(
 				new AccessCallback() {
 					@Override
 					public IntegralDataTypeHolder getNextValue() {
-						return session.getTransactionCoordinator().getTransaction().createIsolationDelegate().delegateWork(
+						return session.getTransactionCoordinator().createIsolationDelegate().delegateWork(
 								new AbstractReturningWork<IntegralDataTypeHolder>() {
 									@Override
 									public IntegralDataTypeHolder execute(Connection connection) throws SQLException {
-										final IntegralDataTypeHolder value = IdentifierGeneratorHelper.getIntegralDataTypeHolder(
-												identifierType.getReturnedClass()
-										);
+										final IntegralDataTypeHolder value = makeValue();
 										int rows;
 										do {
-											statementLogger.logStatement(
-													selectQuery,
-													FormatStyle.BASIC.getFormatter()
-											);
-											PreparedStatement selectPS = connection.prepareStatement( selectQuery );
+											final PreparedStatement selectPS = prepareStatement( connection, selectQuery, statementLogger, statsCollector );
+
 											try {
 												selectPS.setString( 1, segmentValue );
-												final ResultSet selectRS = selectPS.executeQuery();
+												final ResultSet selectRS = executeQuery( selectPS, statsCollector );
 												if ( !selectRS.next() ) {
 													value.initialize( initialValue );
-													PreparedStatement insertPS = null;
+
+													final PreparedStatement insertPS = prepareStatement( connection, insertQuery, statementLogger, statsCollector );
 													try {
-														statementLogger.logStatement(
-																insertQuery,
-																FormatStyle.BASIC.getFormatter()
-														);
-														insertPS = connection.prepareStatement( insertQuery );
 														insertPS.setString( 1, segmentValue );
 														value.bind( insertPS, 2 );
-														insertPS.execute();
+														executeUpdate( insertPS, statsCollector );
 													}
 													finally {
-														if ( insertPS != null ) {
-															insertPS.close();
-														}
+														insertPS.close();
 													}
 												}
 												else {
@@ -579,11 +570,8 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 												selectPS.close();
 											}
 
-											statementLogger.logStatement(
-													updateQuery,
-													FormatStyle.BASIC.getFormatter()
-											);
-											final PreparedStatement updatePS = connection.prepareStatement( updateQuery );
+
+											final PreparedStatement updatePS = prepareStatement( connection, updateQuery, statementLogger, statsCollector );
 											try {
 												final IntegralDataTypeHolder updateValue = value.copy();
 												if ( optimizer.applyIncrementSizeToSourceValues() ) {
@@ -595,10 +583,10 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 												updateValue.bind( updatePS, 1 );
 												value.bind( updatePS, 2 );
 												updatePS.setString( 3, segmentValue );
-												rows = updatePS.executeUpdate();
+												rows = executeUpdate( updatePS, statsCollector );
 											}
 											catch (SQLException e) {
-												LOG.unableToUpdateQueryHiValue( tableName, e );
+												LOG.unableToUpdateQueryHiValue( renderedTableName, e );
 												throw e;
 											}
 											finally {
@@ -624,18 +612,104 @@ public class TableGenerator implements PersistentIdentifierGenerator, Configurab
 		);
 	}
 
+	private PreparedStatement prepareStatement(
+			Connection connection,
+			String sql,
+			SqlStatementLogger statementLogger,
+			SessionEventListenerManager statsCollector) throws SQLException {
+		statementLogger.logStatement( sql, FormatStyle.BASIC.getFormatter() );
+		try {
+			statsCollector.jdbcPrepareStatementStart();
+			return connection.prepareStatement( sql );
+		}
+		finally {
+			statsCollector.jdbcPrepareStatementEnd();
+		}
+	}
+
+	private int executeUpdate(PreparedStatement ps, SessionEventListenerManager statsCollector) throws SQLException {
+		try {
+			statsCollector.jdbcExecuteStatementStart();
+			return ps.executeUpdate();
+		}
+		finally {
+			statsCollector.jdbcExecuteStatementEnd();
+		}
+
+	}
+
+	private ResultSet executeQuery(PreparedStatement ps, SessionEventListenerManager statsCollector) throws SQLException {
+		try {
+			statsCollector.jdbcExecuteStatementStart();
+			return ps.executeQuery();
+		}
+		finally {
+			statsCollector.jdbcExecuteStatementEnd();
+		}
+	}
+
 	@Override
 	public String[] sqlCreateStrings(Dialect dialect) throws HibernateException {
 		return new String[] {
-				dialect.getCreateTableString() + ' ' + tableName + " ( "
+				dialect.getCreateTableString() + ' ' + renderedTableName + " ( "
 						+ segmentColumnName + ' ' + dialect.getTypeName( Types.VARCHAR, segmentValueLength, 0, 0 ) + " not null "
 						+ ", " + valueColumnName + ' ' + dialect.getTypeName( Types.BIGINT )
-						+ ", primary key ( " + segmentColumnName + " ) ) "
+						+ ", primary key ( " + segmentColumnName + " ) )" + dialect.getTableTypeString()
 		};
 	}
 
 	@Override
 	public String[] sqlDropStrings(Dialect dialect) throws HibernateException {
-		return new String[] { dialect.getDropTableString( tableName ) };
+		return new String[] { dialect.getDropTableString( renderedTableName ) };
+	}
+
+	@Override
+	public void registerExportables(Database database) {
+		final Dialect dialect = database.getJdbcEnvironment().getDialect();
+
+		final Namespace namespace = database.locateNamespace(
+				qualifiedTableName.getCatalogName(),
+				qualifiedTableName.getSchemaName()
+		);
+
+		Table table = namespace.locateTable( qualifiedTableName.getObjectName() );
+		if ( table == null ) {
+			table = namespace.createTable( qualifiedTableName.getObjectName(), false );
+
+			// todo : note sure the best solution here.  do we add the columns if missing?  other?
+			final Column segmentColumn = new ExportableColumn(
+					database,
+					table,
+					segmentColumnName,
+					StringType.INSTANCE,
+					dialect.getTypeName( Types.VARCHAR, segmentValueLength, 0, 0 )
+			);
+			segmentColumn.setNullable( false );
+			table.addColumn( segmentColumn );
+
+			// lol
+			table.setPrimaryKey( new PrimaryKey() );
+			table.getPrimaryKey().setTable( table );
+			table.getPrimaryKey().addColumn( segmentColumn );
+
+			final Column valueColumn = new ExportableColumn(
+					database,
+					table,
+					valueColumnName,
+					LongType.INSTANCE
+			);
+			table.addColumn( valueColumn );
+		}
+
+		// allow physical naming strategies a chance to kick in
+		this.renderedTableName = database.getJdbcEnvironment().getQualifiedObjectNameFormatter().format(
+				table.getQualifiedTableName(),
+				dialect
+		);
+
+		this.selectQuery = buildSelectQuery( dialect );
+		this.updateQuery = buildUpdateQuery();
+		this.insertQuery = buildInsertQuery();
+
 	}
 }

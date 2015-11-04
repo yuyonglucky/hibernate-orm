@@ -1,30 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.internal;
 
 import java.util.Hashtable;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.naming.Context;
 import javax.naming.Name;
@@ -34,25 +16,22 @@ import javax.naming.event.NamingEvent;
 import javax.naming.event.NamingExceptionEvent;
 import javax.naming.spi.ObjectFactory;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.SessionFactory;
+import org.hibernate.annotations.common.util.StringHelper;
 import org.hibernate.engine.jndi.JndiException;
 import org.hibernate.engine.jndi.JndiNameException;
 import org.hibernate.engine.jndi.spi.JndiService;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
 
 /**
  * A registry of all {@link SessionFactory} instances for the same classloader as this class.
- *
+ * <p/>
  * This registry is used for serialization/deserialization as well as JNDI binding.
  *
  * @author Steve Ebersole
  */
 public class SessionFactoryRegistry {
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger(
-			CoreMessageLogger.class,
-			SessionFactoryRegistry.class.getName()
-	);
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( SessionFactoryRegistry.class );
 
 	/**
 	 * Singleton access
@@ -67,7 +46,7 @@ public class SessionFactoryRegistry {
 	/**
 	 * A cross-reference for mapping a SessionFactory name to its UUID.  Not all SessionFactories get named,
 	 */
-	private final ConcurrentHashMap<String,String> nameUuidXref = new ConcurrentHashMap<String, String>();
+	private final ConcurrentHashMap<String, String> nameUuidXref = new ConcurrentHashMap<String, String>();
 
 	private SessionFactoryRegistry() {
 		LOG.debugf( "Initializing SessionFactoryRegistry : %s", this );
@@ -98,7 +77,7 @@ public class SessionFactoryRegistry {
 			nameUuidXref.put( name, uuid );
 		}
 
-		if ( name == null || ! isNameAlsoJndiName ) {
+		if ( name == null || !isNameAlsoJndiName ) {
 			LOG.debug( "Not binding SessionFactory to JNDI, no JNDI name configured" );
 			return;
 		}
@@ -109,7 +88,7 @@ public class SessionFactoryRegistry {
 			jndiService.bind( name, instance );
 			LOG.factoryBoundToJndiName( name );
 			try {
-				jndiService.addListener( name, LISTENER );
+				jndiService.addListener( name, listener );
 			}
 			catch (Exception e) {
 				LOG.couldNotBindJndiListener();
@@ -145,10 +124,10 @@ public class SessionFactoryRegistry {
 					jndiService.unbind( name );
 					LOG.factoryUnboundFromJndiName( name );
 				}
-				catch ( JndiNameException e ) {
+				catch (JndiNameException e) {
 					LOG.invalidJndiName( name, e );
 				}
-				catch ( JndiException e ) {
+				catch (JndiException e) {
 					LOG.unableToUnbindFactoryFromJndi( e );
 				}
 			}
@@ -167,7 +146,8 @@ public class SessionFactoryRegistry {
 	public SessionFactory getNamedSessionFactory(String name) {
 		LOG.debugf( "Lookup: name=%s", name );
 		final String uuid = nameUuidXref.get( name );
-		return getSessionFactory( uuid );
+		// protect against NPE -- see HHH-8428
+		return uuid == null ? null : getSessionFactory( uuid );
 	}
 
 	public SessionFactory getSessionFactory(String uuid) {
@@ -180,13 +160,21 @@ public class SessionFactoryRegistry {
 		return sessionFactory;
 	}
 
+	public SessionFactory findSessionFactory(String uuid, String name) {
+		SessionFactory sessionFactory = getSessionFactory( uuid );
+		if ( sessionFactory == null && StringHelper.isNotEmpty( name ) ) {
+			sessionFactory = getNamedSessionFactory( name );
+		}
+		return sessionFactory;
+	}
+
 	/**
 	 * Does this registry currently contain registrations?
 	 *
 	 * @return true/false
 	 */
 	public boolean hasRegistrations() {
-		return ! sessionFactoryMap.isEmpty();
+		return !sessionFactoryMap.isEmpty();
 	}
 
 	public void clearRegistrations() {
@@ -205,16 +193,16 @@ public class SessionFactoryRegistry {
 	 * Implementation of {@literal JNDI} {@link javax.naming.event.NamespaceChangeListener} contract to listener for context events
 	 * and react accordingly if necessary
 	 */
-	private final NamespaceChangeListener LISTENER = new NamespaceChangeListener() {
+	private final NamespaceChangeListener listener = new NamespaceChangeListener() {
 		@Override
 		public void objectAdded(NamingEvent evt) {
-			LOG.debugf("A factory was successfully bound to name: %s", evt.getNewBinding().getName());
+			LOG.debugf( "A factory was successfully bound to name: %s", evt.getNewBinding().getName() );
 		}
 
 		@Override
 		public void objectRemoved(NamingEvent evt) {
 			final String jndiName = evt.getOldBinding().getName();
-            LOG.factoryUnboundFromName( jndiName );
+			LOG.factoryUnboundFromName( jndiName );
 
 			final String uuid = nameUuidXref.remove( jndiName );
 			if ( uuid == null ) {
@@ -237,7 +225,7 @@ public class SessionFactoryRegistry {
 		@Override
 		public void namingExceptionThrown(NamingExceptionEvent evt) {
 			//noinspection ThrowableResultOfMethodCallIgnored
-            LOG.namingExceptionAccessingFactory(evt.getException());
+			LOG.namingExceptionAccessingFactory( evt.getException() );
 		}
 	};
 

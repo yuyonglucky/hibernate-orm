@@ -1,9 +1,15 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.collection.norevision;
 
 import java.util.List;
+import java.util.Map;
 
 import org.hibernate.Session;
-import org.hibernate.cfg.Configuration;
 import org.hibernate.envers.configuration.EnversSettings;
 import org.hibernate.envers.test.BaseEnversFunctionalTestCase;
 import org.hibernate.envers.test.Priority;
@@ -14,8 +20,10 @@ public abstract class AbstractCollectionChangeTest extends BaseEnversFunctionalT
 	protected Integer personId;
 
 	@Override
-	protected void configure(Configuration configuration) {
-		configuration.setProperty( EnversSettings.REVISION_ON_COLLECTION_CHANGE, getCollectionChangeValue() );
+	protected void addSettings(Map settings) {
+		super.addSettings( settings );
+
+		settings.put( EnversSettings.REVISION_ON_COLLECTION_CHANGE, getCollectionChangeValue() );
 	}
 
 	@Override
@@ -55,6 +63,8 @@ public abstract class AbstractCollectionChangeTest extends BaseEnversFunctionalT
 		session.getTransaction().commit();
 
 		personId = p.getId();
+
+		session.close();
 	}
 
 	@Test

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.entities.mapper;
 
@@ -30,17 +13,18 @@ import java.util.Map;
 
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.exception.AuditException;
 import org.hibernate.envers.internal.entities.PropertyData;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
 import org.hibernate.envers.internal.tools.ReflectionTools;
 import org.hibernate.internal.util.ReflectHelper;
-import org.hibernate.property.Setter;
+import org.hibernate.property.access.spi.Setter;
 
 /**
  * @author Adam Warski (adam at warski dot org)
  * @author Michal Skowronek (mskowr at o2 dot pl)
+ * @author Lukasz Zuchowski (author at zuchos dot com)
  */
 public class ComponentPropertyMapper implements PropertyMapper, CompositeMapperBuilder {
 	private final PropertyData propertyData;
@@ -49,8 +33,15 @@ public class ComponentPropertyMapper implements PropertyMapper, CompositeMapperB
 
 	public ComponentPropertyMapper(PropertyData propertyData, Class componentClass) {
 		this.propertyData = propertyData;
-		this.delegate = new MultiPropertyMapper();
-		this.componentClass = componentClass;
+		//if class is a map it means that this is dynamic component
+		if ( Map.class.isAssignableFrom( componentClass ) ) {
+			this.delegate = new MultiDynamicComponentMapper( propertyData );
+			this.componentClass = HashMap.class;
+		}
+		else {
+			this.delegate = new MultiPropertyMapper();
+			this.componentClass = componentClass;
+		}
 	}
 
 	@Override
@@ -107,7 +98,7 @@ public class ComponentPropertyMapper implements PropertyMapper, CompositeMapperB
 
 	@Override
 	public void mapToEntityFromMap(
-			AuditConfiguration verCfg,
+			EnversService enversService,
 			Object obj,
 			Map data,
 			Object primaryKey,
@@ -120,11 +111,11 @@ public class ComponentPropertyMapper implements PropertyMapper, CompositeMapperB
 		if ( propertyData.getBeanName() == null ) {
 			// If properties are not encapsulated in a component but placed directly in a class
 			// (e.g. by applying <properties> tag).
-			delegate.mapToEntityFromMap( verCfg, obj, data, primaryKey, versionsReader, revision );
+			delegate.mapToEntityFromMap( enversService, obj, data, primaryKey, versionsReader, revision );
 			return;
 		}
 
-		final Setter setter = ReflectionTools.getSetter( obj.getClass(), propertyData );
+		final Setter setter = ReflectionTools.getSetter( obj.getClass(), propertyData, enversService.getServiceRegistry() );
 
 		// If all properties are null and single, then the component has to be null also.
 		boolean allNullAndSingle = true;
@@ -132,14 +123,14 @@ public class ComponentPropertyMapper implements PropertyMapper, CompositeMapperB
 			if ( data.get(
 					property.getKey()
 							.getName()
-			) != null || !(property.getValue() instanceof SinglePropertyMapper) ) {
+			) != null || !( property.getValue() instanceof SinglePropertyMapper ) ) {
 				allNullAndSingle = false;
 				break;
 			}
 		}
 
 		if ( allNullAndSingle ) {
-			// single property, but default value need not be null, so we'll set it to null anyway 
+			// single property, but default value need not be null, so we'll set it to null anyway
 			setter.set( obj, null, null );
 		}
 		else {
@@ -147,9 +138,9 @@ public class ComponentPropertyMapper implements PropertyMapper, CompositeMapperB
 			try {
 				final Object subObj = ReflectHelper.getDefaultConstructor( componentClass ).newInstance();
 				setter.set( obj, subObj, null );
-				delegate.mapToEntityFromMap( verCfg, subObj, data, primaryKey, versionsReader, revision );
+				delegate.mapToEntityFromMap( enversService, subObj, data, primaryKey, versionsReader, revision );
 			}
-			catch (Exception e) {
+			catch ( Exception e ) {
 				throw new AuditException( e );
 			}
 		}

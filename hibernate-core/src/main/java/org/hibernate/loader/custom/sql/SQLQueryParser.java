@@ -1,28 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.loader.custom.sql;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,9 +34,9 @@ public class SQLQueryParser {
 	private final ParserContext context;
 
 	private final Map namedParameters = new HashMap();
-	private long aliasesFound = 0;
+	private long aliasesFound;
 
-	static interface ParserContext {
+	interface ParserContext {
 		boolean isEntityAlias(String aliasName);
 		SQLLoadable getEntityPersisterByAlias(String alias);
 		String getEntitySuffixByAlias(String alias);
@@ -233,9 +216,7 @@ public class SQLQueryParser {
 		
 		}
 	}
-	private String resolveProperties(
-			String aliasName,
-	        String propertyName) {
+	private String resolveProperties(String aliasName, String propertyName) {
 		Map fieldResults = context.getPropertyResultsMapByAlias( aliasName );
 		SQLLoadable persister = context.getEntityPersisterByAlias( aliasName );
 		String suffix = context.getEntitySuffixByAlias( aliasName );
@@ -297,25 +278,30 @@ public class SQLQueryParser {
 	public static class ParameterSubstitutionRecognizer implements ParameterParser.Recognizer {
 		StringBuilder result = new StringBuilder();
 		Map namedParameterBindPoints = new HashMap();
-		int parameterCount = 0;
+		int parameterCount;
 
+		@Override
 		public void outParameter(int position) {
 			result.append( '?' );
 		}
 
+		@Override
 		public void ordinalParameter(int position) {
 			result.append( '?' );
 		}
 
+		@Override
 		public void namedParameter(String name, int position) {
 			addNamedParameter( name );
 			result.append( '?' );
 		}
 
+		@Override
 		public void jpaPositionalParameter(String name, int position) {
 			namedParameter( name, position );
 		}
 
+		@Override
 		public void other(char character) {
 			result.append( character );
 		}

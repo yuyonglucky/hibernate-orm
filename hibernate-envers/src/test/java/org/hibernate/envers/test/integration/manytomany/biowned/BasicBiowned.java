@@ -1,30 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.test.integration.manytomany.biowned;
 
-import javax.persistence.EntityManager;
 import java.util.Arrays;
+import javax.persistence.EntityManager;
 
 import org.hibernate.envers.test.BaseEnversJPAFunctionalTestCase;
 import org.hibernate.envers.test.Priority;
@@ -163,11 +146,11 @@ public class BasicBiowned extends BaseEnversJPAFunctionalTestCase {
 		ListBiowning1Entity rev4 = getAuditReader().find( ListBiowning1Entity.class, o1_1_id, 4 );
 		ListBiowning1Entity rev5 = getAuditReader().find( ListBiowning1Entity.class, o1_1_id, 5 );
 
-		assert TestTools.checkList( rev1.getReferences() );
-		assert TestTools.checkList( rev2.getReferences(), o2_1 );
-		assert TestTools.checkList( rev3.getReferences(), o2_1, o2_2 );
-		assert TestTools.checkList( rev4.getReferences() );
-		assert TestTools.checkList( rev5.getReferences(), o2_2 );
+		assert TestTools.checkCollection( rev1.getReferences() );
+		assert TestTools.checkCollection( rev2.getReferences(), o2_1 );
+		assert TestTools.checkCollection( rev3.getReferences(), o2_1, o2_2 );
+		assert TestTools.checkCollection( rev4.getReferences() );
+		assert TestTools.checkCollection( rev5.getReferences(), o2_2 );
 	}
 
 	@Test
@@ -181,12 +164,11 @@ public class BasicBiowned extends BaseEnversJPAFunctionalTestCase {
 		ListBiowning1Entity rev4 = getAuditReader().find( ListBiowning1Entity.class, o1_2_id, 4 );
 		ListBiowning1Entity rev5 = getAuditReader().find( ListBiowning1Entity.class, o1_2_id, 5 );
 
-		assert TestTools.checkList( rev1.getReferences() );
-		assert TestTools.checkList( rev2.getReferences(), o2_2 );
-		assert TestTools.checkList( rev3.getReferences(), o2_2 );
-		assert TestTools.checkList( rev4.getReferences(), o2_1, o2_2 );
-		System.out.println( "rev5.getReferences() = " + rev5.getReferences() );
-		assert TestTools.checkList( rev5.getReferences(), o2_2 );
+		assert TestTools.checkCollection( rev1.getReferences() );
+		assert TestTools.checkCollection( rev2.getReferences(), o2_2 );
+		assert TestTools.checkCollection( rev3.getReferences(), o2_2 );
+		assert TestTools.checkCollection( rev4.getReferences(), o2_1, o2_2 );
+		assert TestTools.checkCollection( rev5.getReferences(), o2_2 );
 	}
 
 	@Test
@@ -200,11 +182,11 @@ public class BasicBiowned extends BaseEnversJPAFunctionalTestCase {
 		ListBiowning2Entity rev4 = getAuditReader().find( ListBiowning2Entity.class, o2_1_id, 4 );
 		ListBiowning2Entity rev5 = getAuditReader().find( ListBiowning2Entity.class, o2_1_id, 5 );
 
-		assert TestTools.checkList( rev1.getReferences() );
-		assert TestTools.checkList( rev2.getReferences(), o1_1 );
-		assert TestTools.checkList( rev3.getReferences(), o1_1 );
-		assert TestTools.checkList( rev4.getReferences(), o1_2 );
-		assert TestTools.checkList( rev5.getReferences() );
+		assert TestTools.checkCollection( rev1.getReferences() );
+		assert TestTools.checkCollection( rev2.getReferences(), o1_1 );
+		assert TestTools.checkCollection( rev3.getReferences(), o1_1 );
+		assert TestTools.checkCollection( rev4.getReferences(), o1_2 );
+		assert TestTools.checkCollection( rev5.getReferences() );
 	}
 
 	@Test
@@ -218,10 +200,10 @@ public class BasicBiowned extends BaseEnversJPAFunctionalTestCase {
 		ListBiowning2Entity rev4 = getAuditReader().find( ListBiowning2Entity.class, o2_2_id, 4 );
 		ListBiowning2Entity rev5 = getAuditReader().find( ListBiowning2Entity.class, o2_2_id, 5 );
 
-		assert TestTools.checkList( rev1.getReferences() );
-		assert TestTools.checkList( rev2.getReferences(), o1_2 );
-		assert TestTools.checkList( rev3.getReferences(), o1_1, o1_2 );
-		assert TestTools.checkList( rev4.getReferences(), o1_2 );
-		assert TestTools.checkList( rev5.getReferences(), o1_1, o1_2 );
+		assert TestTools.checkCollection( rev1.getReferences() );
+		assert TestTools.checkCollection( rev2.getReferences(), o1_2 );
+		assert TestTools.checkCollection( rev3.getReferences(), o1_1, o1_2 );
+		assert TestTools.checkCollection( rev4.getReferences(), o1_2 );
+		assert TestTools.checkCollection( rev5.getReferences(), o1_1, o1_2 );
 	}
 }

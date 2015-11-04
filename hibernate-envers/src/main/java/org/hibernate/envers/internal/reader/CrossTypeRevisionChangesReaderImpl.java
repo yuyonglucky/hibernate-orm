@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.reader;
 
@@ -36,7 +19,7 @@ import org.hibernate.Session;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.CrossTypeRevisionChangesReader;
 import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.tools.EntityTools;
 import org.hibernate.envers.query.criteria.internal.RevisionTypeAuditExpression;
 import org.hibernate.envers.tools.Pair;
@@ -49,13 +32,13 @@ import static org.hibernate.envers.internal.tools.ArgumentsTools.checkPositive;
  */
 public class CrossTypeRevisionChangesReaderImpl implements CrossTypeRevisionChangesReader {
 	private final AuditReaderImplementor auditReaderImplementor;
-	private final AuditConfiguration verCfg;
+	private final EnversService enversService;
 
 	public CrossTypeRevisionChangesReaderImpl(
 			AuditReaderImplementor auditReaderImplementor,
-			AuditConfiguration verCfg) {
+			EnversService enversService) {
 		this.auditReaderImplementor = auditReaderImplementor;
-		this.verCfg = verCfg;
+		this.enversService = enversService;
 	}
 
 	@Override
@@ -127,12 +110,12 @@ public class CrossTypeRevisionChangesReaderImpl implements CrossTypeRevisionChan
 
 		final Set<Number> revisions = new HashSet<Number>( 1 );
 		revisions.add( revision );
-		final Criteria query = verCfg.getRevisionInfoQueryCreator().getRevisionsQuery( session, revisions );
+		final Criteria query = enversService.getRevisionInfoQueryCreator().getRevisionsQuery( session, revisions );
 		final Object revisionInfo = query.uniqueResult();
 
 		if ( revisionInfo != null ) {
 			// If revision exists.
-			final Set<String> entityNames = verCfg.getModifiedEntityNamesReader().getModifiedEntityNames( revisionInfo );
+			final Set<String> entityNames = enversService.getModifiedEntityNamesReader().getModifiedEntityNames( revisionInfo );
 			if ( entityNames != null ) {
 				// Generate result that contains entity names and corresponding Java classes.
 				final Set<Pair<String, Class>> result = new HashSet<Pair<String, Class>>();

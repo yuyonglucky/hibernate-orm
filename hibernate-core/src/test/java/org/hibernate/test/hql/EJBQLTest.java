@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.hql;
 import java.io.ByteArrayOutputStream;
@@ -260,11 +243,11 @@ public class EJBQLTest extends BaseCoreFunctionalTestCase {
 	private void assertEjbqlEqualsHql(String ejbql, String hql) {
 		QueryTranslatorFactory ast = new ASTQueryTranslatorFactory();
 
-		QueryTranslator queryTranslator = ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, sessionFactory() );
+		QueryTranslator queryTranslator = ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, sessionFactory(), null );
 		queryTranslator.compile( Collections.EMPTY_MAP, true );
 		String hqlSql = queryTranslator.getSQLString();
 
-		queryTranslator = ast.createQueryTranslator( ejbql, ejbql, Collections.EMPTY_MAP, sessionFactory() );
+		queryTranslator = ast.createQueryTranslator( ejbql, ejbql, Collections.EMPTY_MAP, sessionFactory(), null );
 		queryTranslator.compile( Collections.EMPTY_MAP, true );
 		String ejbqlSql = queryTranslator.getSQLString();
 
@@ -273,7 +256,7 @@ public class EJBQLTest extends BaseCoreFunctionalTestCase {
 
 	private QueryTranslatorImpl compile(String input) {
 		QueryTranslatorFactory ast = new ASTQueryTranslatorFactory();
-		QueryTranslator queryTranslator = ast.createQueryTranslator( input, input, Collections.EMPTY_MAP, sessionFactory() );
+		QueryTranslator queryTranslator = ast.createQueryTranslator( input, input, Collections.EMPTY_MAP, sessionFactory(), null );
 		queryTranslator.compile( Collections.EMPTY_MAP, true );
 
 		return ( QueryTranslatorImpl ) queryTranslator;
@@ -303,7 +286,7 @@ public class EJBQLTest extends BaseCoreFunctionalTestCase {
 
 	private String toSql(String hql) {
 		QueryTranslatorFactory ast = new ASTQueryTranslatorFactory();
-		QueryTranslator queryTranslator = ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, sessionFactory() );
+		QueryTranslator queryTranslator = ast.createQueryTranslator( hql, hql, Collections.EMPTY_MAP, sessionFactory(), null );
 		queryTranslator.compile( Collections.EMPTY_MAP, true );
 		return queryTranslator.getSQLString();
 	}

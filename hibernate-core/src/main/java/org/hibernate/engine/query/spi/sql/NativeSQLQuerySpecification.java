@@ -1,26 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.query.spi.sql;
 
@@ -48,8 +30,8 @@ public class NativeSQLQuerySpecification {
 
 	public NativeSQLQuerySpecification(
 			String queryString,
-	        NativeSQLQueryReturn[] queryReturns,
-	        Collection querySpaces) {
+			NativeSQLQueryReturn[] queryReturns,
+			Collection querySpaces) {
 		this.queryString = queryString;
 		this.queryReturns = queryReturns;
 		if ( querySpaces == null ) {
@@ -83,7 +65,7 @@ public class NativeSQLQuerySpecification {
 	}
 
 	@Override
-    public boolean equals(Object o) {
+	public boolean equals(Object o) {
 		if ( this == o ) {
 			return true;
 		}
@@ -91,16 +73,15 @@ public class NativeSQLQuerySpecification {
 			return false;
 		}
 
-		final NativeSQLQuerySpecification that = ( NativeSQLQuerySpecification ) o;
+		final NativeSQLQuerySpecification that = (NativeSQLQuerySpecification) o;
 
-		return querySpaces.equals( that.querySpaces ) &&
-		       queryString.equals( that.queryString ) &&
-		       Arrays.equals( queryReturns, that.queryReturns );
+		return querySpaces.equals( that.querySpaces )
+				&& queryString.equals( that.queryString )
+				&& Arrays.equals( queryReturns, that.queryReturns );
 	}
 
-
 	@Override
-    public int hashCode() {
+	public int hashCode() {
 		return hashCode;
 	}
 }

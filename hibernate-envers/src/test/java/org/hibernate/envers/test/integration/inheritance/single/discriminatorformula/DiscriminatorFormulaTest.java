@@ -1,9 +1,15 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.inheritance.single.discriminatorformula;
 
-import javax.persistence.EntityManager;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import javax.persistence.EntityManager;
 
 import org.hibernate.envers.test.BaseEnversJPAFunctionalTestCase;
 import org.hibernate.envers.test.Priority;
@@ -31,7 +37,7 @@ public class DiscriminatorFormulaTest extends BaseEnversJPAFunctionalTestCase {
 	@Test
 	@Priority(10)
 	public void initData() {
-		parentAudit = getCfg().getClassMapping(
+		parentAudit = metadata().getEntityBinding(
 				"org.hibernate.envers.test.integration.inheritance.single.discriminatorformula.ParentEntity_AUD"
 		);
 

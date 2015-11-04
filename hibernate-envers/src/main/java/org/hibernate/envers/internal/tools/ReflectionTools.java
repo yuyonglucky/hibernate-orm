@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.tools;
 
@@ -29,15 +12,14 @@ import org.hibernate.annotations.common.reflection.XClass;
 import org.hibernate.annotations.common.reflection.XProperty;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.boot.registry.classloading.spi.ClassLoadingException;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
 import org.hibernate.envers.internal.entities.PropertyData;
 import org.hibernate.envers.tools.Pair;
 import org.hibernate.internal.util.collections.ConcurrentReferenceHashMap;
-import org.hibernate.property.Getter;
-import org.hibernate.property.PropertyAccessor;
-import org.hibernate.property.PropertyAccessorFactory;
-import org.hibernate.property.Setter;
+import org.hibernate.property.access.spi.Getter;
+import org.hibernate.property.access.spi.PropertyAccessStrategy;
+import org.hibernate.property.access.spi.PropertyAccessStrategyResolver;
+import org.hibernate.property.access.spi.Setter;
+import org.hibernate.service.ServiceRegistry;
 
 /**
  * @author Adam Warski (adam at warski dot org)
@@ -55,19 +37,20 @@ public abstract class ReflectionTools {
 					ConcurrentReferenceHashMap.ReferenceType.SOFT
 	);
 
-	private static PropertyAccessor getAccessor(String accessorType) {
-		return PropertyAccessorFactory.getPropertyAccessor( accessorType );
+	private static PropertyAccessStrategy getAccessStrategy(Class<?> cls, ServiceRegistry serviceRegistry, String accessorType) {
+		return serviceRegistry.getService( PropertyAccessStrategyResolver.class )
+				.resolvePropertyAccessStrategy( cls, accessorType, null );
 	}
 
-	public static Getter getGetter(Class cls, PropertyData propertyData) {
-		return getGetter( cls, propertyData.getBeanName(), propertyData.getAccessType() );
+	public static Getter getGetter(Class cls, PropertyData propertyData, ServiceRegistry serviceRegistry) {
+		return getGetter( cls, propertyData.getBeanName(), propertyData.getAccessType(), serviceRegistry );
 	}
 
-	public static Getter getGetter(Class cls, String propertyName, String accessorType) {
+	public static Getter getGetter(Class cls, String propertyName, String accessorType, ServiceRegistry serviceRegistry) {
 		final Pair<Class, String> key = Pair.make( cls, propertyName );
 		Getter value = GETTER_CACHE.get( key );
 		if ( value == null ) {
-			value = getAccessor( accessorType ).getGetter( cls, propertyName );
+			value = getAccessStrategy( cls, serviceRegistry, accessorType ).buildPropertyAccess( cls, propertyName ).getGetter();
 			// It's ok if two getters are generated concurrently
 			GETTER_CACHE.put( key, value );
 		}
@@ -75,15 +58,15 @@ public abstract class ReflectionTools {
 		return value;
 	}
 
-	public static Setter getSetter(Class cls, PropertyData propertyData) {
-		return getSetter( cls, propertyData.getBeanName(), propertyData.getAccessType() );
+	public static Setter getSetter(Class cls, PropertyData propertyData, ServiceRegistry serviceRegistry) {
+		return getSetter( cls, propertyData.getBeanName(), propertyData.getAccessType(), serviceRegistry );
 	}
 
-	private static Setter getSetter(Class cls, String propertyName, String accessorType) {
+	public static Setter getSetter(Class cls, String propertyName, String accessorType, ServiceRegistry serviceRegistry) {
 		final Pair<Class, String> key = Pair.make( cls, propertyName );
 		Setter value = SETTER_CACHE.get( key );
 		if ( value == null ) {
-			value = getAccessor( accessorType ).getSetter( cls, propertyName );
+			value = getAccessStrategy( cls, serviceRegistry, accessorType ).buildPropertyAccess( cls, propertyName ).getSetter();
 			// It's ok if two setters are generated concurrently
 			SETTER_CACHE.put( key, value );
 		}
@@ -125,8 +108,8 @@ public abstract class ReflectionTools {
 	 * Locate class with a given name.
 	 *
 	 * @param name Fully qualified class name.
-	 * @param classLoaderService Class loading service. Passing {@code null} reference
-	 * in case of {@link AuditConfiguration#getFor(Configuration)} usage.
+	 * @param classLoaderService Class loading service. Passing {@code null} is "allowed", but will result in
+	 * TCCL usage.
 	 *
 	 * @return The cass reference.
 	 *

@@ -1,27 +1,15 @@
-/* 
+/*
  * Hibernate, Relational Persistence for Idiomatic Java
- * 
- * JBoss, Home of Professional Open Source
- * Copyright 2013 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
  *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.osgi;
 
+import org.hibernate.SessionFactory;
+import org.hibernate.jpa.HibernateEntityManagerFactory;
 import org.osgi.framework.Bundle;
-import org.osgi.framework.BundleContext;
+import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceFactory;
 import org.osgi.framework.ServiceRegistration;
 
@@ -33,29 +21,44 @@ import org.osgi.framework.ServiceRegistration;
  * @author Tim Ward
  */
 public class OsgiPersistenceProviderService implements ServiceFactory {
-	private OsgiClassLoader osgiClassLoader;
 	private OsgiJtaPlatform osgiJtaPlatform;
-	private BundleContext context;
+	private OsgiServiceUtil osgiServiceUtil;
 
 	/**
 	 * Constructs a OsgiPersistenceProviderService
 	 *
-	 * @param osgiClassLoader The OSGi-specific ClassLoader created in HibernateBundleActivator
 	 * @param osgiJtaPlatform The OSGi-specific JtaPlatform created in HibernateBundleActivator
-	 * @param context The OSGi context
 	 */
 	public OsgiPersistenceProviderService(
-			OsgiClassLoader osgiClassLoader,
 			OsgiJtaPlatform osgiJtaPlatform,
-			BundleContext context) {
-		this.osgiClassLoader = osgiClassLoader;
+			OsgiServiceUtil osgiServiceUtil) {
 		this.osgiJtaPlatform = osgiJtaPlatform;
-		this.context = context;
+		this.osgiServiceUtil = osgiServiceUtil;
 	}
 
 	@Override
 	public Object getService(Bundle requestingBundle, ServiceRegistration registration) {
-		return new OsgiPersistenceProvider(osgiClassLoader, osgiJtaPlatform, requestingBundle, context);
+		final OsgiClassLoader osgiClassLoader = new OsgiClassLoader();
+
+		// First, add the client bundle that's requesting the OSGi services.
+		osgiClassLoader.addBundle( requestingBundle );
+
+		// Then, automatically add hibernate-core and hibernate-entitymanager.  These are needed to load resources
+		// contained in those jars, such as em's persistence.xml schemas.
+		osgiClassLoader.addBundle( FrameworkUtil.getBundle( SessionFactory.class ) );
+		osgiClassLoader.addBundle( FrameworkUtil.getBundle( HibernateEntityManagerFactory.class ) );
+
+		// Some "boot time" code does still rely on TCCL.  "run time" code should all be using
+		// ClassLoaderService now.
+
+		final ClassLoader originalTccl = Thread.currentThread().getContextClassLoader();
+		Thread.currentThread().setContextClassLoader( osgiClassLoader );
+		try {
+			return new OsgiPersistenceProvider( osgiClassLoader, osgiJtaPlatform, osgiServiceUtil, requestingBundle );
+		}
+		finally {
+			Thread.currentThread().setContextClassLoader( originalTccl );
+		}
 	}
 
 	@Override

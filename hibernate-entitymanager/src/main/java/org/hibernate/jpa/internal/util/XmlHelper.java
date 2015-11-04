@@ -1,28 +1,14 @@
 /*
- * Copyright (c) 2009, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
+ * Hibernate, Relational Persistence for Idiomatic Java
  *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.internal.util;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.Locale;
 
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -48,7 +34,9 @@ public final class XmlHelper {
 	public static Iterator getChildrenByTagName(
 			Element element,
 			String tagName) {
-		if ( element == null ) return null;
+		if ( element == null ) {
+			return null;
+		}
 		// getElementsByTagName gives the corresponding elements in the whole
 		// descendance. We want only children
 
@@ -74,21 +62,18 @@ public final class XmlHelper {
 	 * @return The named child.
 	 * @throws Exception Child was not found or was not unique.
 	 */
-	public static Element getUniqueChild(Element element, String tagName)
-			throws Exception {
-		Iterator goodChildren = getChildrenByTagName( element, tagName );
+	public static Element getUniqueChild(Element element, String tagName) throws Exception {
+		final Iterator goodChildren = getChildrenByTagName( element, tagName );
 
 		if ( goodChildren != null && goodChildren.hasNext() ) {
-			Element child = (Element) goodChildren.next();
+			final Element child = (Element) goodChildren.next();
 			if ( goodChildren.hasNext() ) {
-				throw new Exception
-						( "expected only one " + tagName + " tag" );
+				throw new Exception( "expected only one " + tagName + " tag" );
 			}
 			return child;
 		}
 		else {
-			throw new Exception
-					( "expected one " + tagName + " tag" );
+			throw new Exception( "expected one " + tagName + " tag" );
 		}
 	}
 
@@ -101,8 +86,7 @@ public final class XmlHelper {
 	 * @param tagName the name of the desired child
 	 * @return either the named child or null
 	 */
-	public static Element getOptionalChild(Element element, String tagName)
-			throws Exception {
+	public static Element getOptionalChild(Element element, String tagName) throws Exception {
 		return getOptionalChild( element, tagName, null );
 	}
 
@@ -121,13 +105,12 @@ public final class XmlHelper {
 			Element element,
 			String tagName,
 			Element defaultElement) throws Exception {
-		Iterator goodChildren = getChildrenByTagName( element, tagName );
+		final Iterator goodChildren = getChildrenByTagName( element, tagName );
 
 		if ( goodChildren != null && goodChildren.hasNext() ) {
-			Element child = (Element) goodChildren.next();
+			final Element child = (Element) goodChildren.next();
 			if ( goodChildren.hasNext() ) {
-				throw new Exception
-						( "expected only one " + tagName + " tag" );
+				throw new Exception( "expected only one " + tagName + " tag" );
 			}
 			return child;
 		}
@@ -142,8 +125,7 @@ public final class XmlHelper {
 	 * @param element The element to get the content for.
 	 * @return The content of the element or null.
 	 */
-	public static String getElementContent(final Element element)
-			throws Exception {
+	public static String getElementContent(final Element element) throws Exception {
 		return getElementContent( element, null );
 	}
 
@@ -154,17 +136,16 @@ public final class XmlHelper {
 	 * @param defaultStr The default to return when there is no content.
 	 * @return The content of the element or the default.
 	 */
-	public static String getElementContent(Element element, String defaultStr)
-			throws Exception {
+	public static String getElementContent(Element element, String defaultStr) throws Exception {
 		if ( element == null ) {
 			return defaultStr;
 		}
 
-		NodeList children = element.getChildNodes();
-		StringBuilder result = new StringBuilder("");
+		final NodeList children = element.getChildNodes();
+		final StringBuilder result = new StringBuilder("");
 		for ( int i = 0; i < children.getLength() ; i++ ) {
-			if ( children.item( i ).getNodeType() == Node.TEXT_NODE ||
-					children.item( i ).getNodeType() == Node.CDATA_SECTION_NODE ) {
+			if ( children.item( i ).getNodeType() == Node.TEXT_NODE
+					|| children.item( i ).getNodeType() == Node.CDATA_SECTION_NODE ) {
 				result.append( children.item( i ).getNodeValue() );
 			}
 //			else if ( children.item( i ).getNodeType() == Node.COMMENT_NODE ) {
@@ -181,9 +162,7 @@ public final class XmlHelper {
 	 * @param tagName The name of the desired child.
 	 * @return The element content or null.
 	 */
-	public static String getUniqueChildContent(
-			Element element,
-			String tagName) throws Exception {
+	public static String getUniqueChildContent(Element element, String tagName) throws Exception {
 		return getElementContent( getUniqueChild( element, tagName ) );
 	}
 
@@ -194,23 +173,18 @@ public final class XmlHelper {
 	 * @param tagName The name of the desired child.
 	 * @return The element content or null.
 	 */
-	public static String getOptionalChildContent(
-			Element element,
-			String tagName) throws Exception {
+	public static String getOptionalChildContent(Element element, String tagName) throws Exception {
 		return getElementContent( getOptionalChild( element, tagName ) );
 	}
 
 	public static boolean getOptionalChildBooleanContent(Element element, String name) throws Exception {
 		Element child = getOptionalChild( element, name );
 		if ( child != null ) {
-			String value = getElementContent( child ).toLowerCase();
+			String value = getElementContent( child ).toLowerCase(Locale.ROOT);
 			return value.equals( "true" ) || value.equals( "yes" );
 		}
 
 		return false;
 	}
 
-
 }
-
-

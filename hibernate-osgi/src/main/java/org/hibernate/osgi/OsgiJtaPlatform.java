@@ -1,22 +1,8 @@
-/* 
+/*
  * Hibernate, Relational Persistence for Idiomatic Java
- * 
- * JBoss, Home of Professional Open Source
- * Copyright 2013 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
  *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.osgi;
 
@@ -26,9 +12,9 @@ import javax.transaction.Transaction;
 import javax.transaction.TransactionManager;
 import javax.transaction.UserTransaction;
 
+import org.hibernate.TransactionException;
+import org.hibernate.engine.transaction.internal.jta.JtaStatusHelper;
 import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
-import org.osgi.framework.BundleContext;
-import org.osgi.framework.ServiceReference;
 
 /**
  * Offers the JTA Platform provided by the OSGi container. The Enterprise
@@ -40,27 +26,45 @@ import org.osgi.framework.ServiceReference;
 public class OsgiJtaPlatform implements JtaPlatform {
 	private static final long serialVersionUID = 1L;
 	
-	private BundleContext bundleContext;
+	private OsgiServiceUtil osgiServiceUtil;
 
 	/**
 	 * Constructs a OsgiJtaPlatform
 	 *
 	 * @param bundleContext The OSGi bundle context
 	 */
-	public OsgiJtaPlatform(BundleContext bundleContext) {
-		this.bundleContext = bundleContext;
+	public OsgiJtaPlatform(OsgiServiceUtil osgiServiceUtil) {
+		this.osgiServiceUtil = osgiServiceUtil;
 	}
 
 	@Override
 	public TransactionManager retrieveTransactionManager() {
-		final ServiceReference sr = bundleContext.getServiceReference( TransactionManager.class.getName() );
-		return sr == null ? null : (TransactionManager) bundleContext.getService( sr );
+		try {
+			final TransactionManager transactionManager = osgiServiceUtil.getServiceImpl(
+					TransactionManager.class );
+			if (transactionManager == null) {
+				throw new TransactionException("Cannot retrieve the TransactionManager OSGi service!");
+			}
+			return transactionManager;
+		}
+		catch (Exception e) {
+			throw new TransactionException("Cannot retrieve the TransactionManager OSGi service!", e);
+		}
 	}
 
 	@Override
 	public UserTransaction retrieveUserTransaction() {
-		final ServiceReference sr = bundleContext.getServiceReference( UserTransaction.class.getName() );
-		return sr == null ? null : (UserTransaction) bundleContext.getService( sr );
+		try {
+			final UserTransaction userTransaction = osgiServiceUtil.getServiceImpl(
+					UserTransaction.class );
+			if (userTransaction == null) {
+				throw new TransactionException("Cannot retrieve the UserTransaction OSGi service!");
+			}
+			return userTransaction;
+		}
+		catch (Exception e) {
+			throw new TransactionException("Cannot retrieve the UserTransaction OSGi service!", e);
+		}
 	}
 
 	@Override
@@ -71,13 +75,22 @@ public class OsgiJtaPlatform implements JtaPlatform {
 
 	@Override
 	public boolean canRegisterSynchronization() {
-		// TODO
-		return false;
+		try {
+			return JtaStatusHelper.isActive( retrieveTransactionManager() );
+		}
+		catch (Exception e) {
+			return false;
+		}
 	}
 
 	@Override
 	public void registerSynchronization(Synchronization synchronization) {
-		// TODO
+		try {
+			retrieveTransactionManager().getTransaction().registerSynchronization( synchronization );
+		}
+		catch (Exception e) {
+			throw new TransactionException( "Could not obtain transaction from OSGi services!" );
+		}
 	}
 
 	@Override

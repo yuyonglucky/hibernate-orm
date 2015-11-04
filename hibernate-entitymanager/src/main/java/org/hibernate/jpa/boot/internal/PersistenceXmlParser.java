@@ -1,28 +1,19 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.boot.internal;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import javax.persistence.PersistenceException;
 import javax.persistence.spi.PersistenceUnitTransactionType;
 import javax.xml.XMLConstants;
@@ -34,16 +25,16 @@ import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLConnection;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 
-import org.jboss.logging.Logger;
+import org.hibernate.boot.archive.internal.ArchiveHelper;
+import org.hibernate.boot.registry.classloading.internal.ClassLoaderServiceImpl;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
+import org.hibernate.internal.util.StringHelper;
+import org.hibernate.internal.util.xml.XsdException;
+import org.hibernate.jpa.AvailableSettings;
+import org.hibernate.jpa.internal.EntityManagerMessageLogger;
+import org.hibernate.jpa.internal.util.ConfigurationHelper;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -53,14 +44,7 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 
-import org.hibernate.jpa.AvailableSettings;
-import org.hibernate.jpa.boot.archive.internal.ArchiveHelper;
-import org.hibernate.jpa.internal.EntityManagerMessageLogger;
-import org.hibernate.jpa.internal.util.ConfigurationHelper;
-import org.hibernate.internal.util.StringHelper;
-import org.hibernate.metamodel.source.XsdException;
-import org.hibernate.boot.registry.classloading.internal.ClassLoaderServiceImpl;
-import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
+import static org.hibernate.jpa.internal.HEMLogging.messageLogger;
 
 /**
  * Used by Hibernate to parse {@code persistence.xml} files in SE environments.
@@ -68,10 +52,7 @@ import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
  * @author Steve Ebersole
  */
 public class PersistenceXmlParser {
-    private static final EntityManagerMessageLogger LOG = Logger.getMessageLogger(
-			EntityManagerMessageLogger.class,
-			PersistenceXmlParser.class.getName()
-	);
+	private static final EntityManagerMessageLogger LOG = messageLogger( PersistenceXmlParser.class );
 
 	private final ClassLoaderService classLoaderService;
 	private final PersistenceUnitTransactionType defaultTransactionType;
@@ -108,7 +89,7 @@ public class PersistenceXmlParser {
 	}
 
 	private List<ParsedPersistenceXmlDescriptor> parsePersistenceXml(URL xmlUrl, Map integration) {
-		LOG.tracef( "Attempting to parse persistence.xml file : %s" + xmlUrl.toExternalForm() );
+		LOG.tracef( "Attempting to parse persistence.xml file : %s", xmlUrl.toExternalForm() );
 
 		final Document doc = loadUrl( xmlUrl );
 		final Element top = doc.getDocumentElement();
@@ -181,7 +162,7 @@ public class PersistenceXmlParser {
 	private void bindPersistenceUnit(ParsedPersistenceXmlDescriptor persistenceUnit, Element persistenceUnitElement) {
 		final String name = persistenceUnitElement.getAttribute( "name" );
 		if ( StringHelper.isNotEmpty( name ) ) {
-            LOG.tracef( "Persistence unit name from persistence.xml : %s", name );
+			LOG.tracef( "Persistence unit name from persistence.xml : %s", name );
 			persistenceUnit.setName( name );
 		}
 
@@ -217,7 +198,7 @@ public class PersistenceXmlParser {
 					persistenceUnit.addJarFileUrl( ArchiveHelper.getURLFromPath( extractContent( element ) ) );
 				}
 				else if ( tag.equals( "exclude-unlisted-classes" ) ) {
-					persistenceUnit.setExcludeUnlistedClasses( true );
+					persistenceUnit.setExcludeUnlistedClasses( extractBooleanContent(element, true) );
 				}
 				else if ( tag.equals( "delimited-identifiers" ) ) {
 					persistenceUnit.setUseQuotedIdentifiers( true );
@@ -268,6 +249,14 @@ public class PersistenceXmlParser {
 			}
 		}
 		return result.toString().trim();
+	}
+
+	private static boolean extractBooleanContent(Element element, boolean defaultBool) {
+		String content = extractContent( element );
+		if (content != null && content.length() > 0) {
+			return Boolean.valueOf(content);
+		}
+		return defaultBool;
 	}
 
 	private static PersistenceUnitTransactionType parseTransactionType(String value) {

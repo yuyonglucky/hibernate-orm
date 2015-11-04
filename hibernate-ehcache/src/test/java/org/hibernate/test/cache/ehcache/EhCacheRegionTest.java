@@ -1,10 +1,15 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.cache.ehcache;
 
 import java.util.Map;
 
 import org.hibernate.cache.ehcache.EhCacheRegionFactory;
 import org.hibernate.cache.ehcache.internal.strategy.ItemValueExtractor;
-import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
 
 /**
@@ -12,9 +17,12 @@ import org.hibernate.cfg.Environment;
  */
 public class EhCacheRegionTest extends EhCacheTest {
 	@Override
-	protected void configCache(final Configuration cfg) {
-		cfg.setProperty( Environment.CACHE_REGION_FACTORY, EhCacheRegionFactory.class.getName() );
-		cfg.setProperty( Environment.CACHE_PROVIDER_CONFIG, "ehcache.xml" );
+	@SuppressWarnings("unchecked")
+	protected void addSettings(Map settings) {
+		super.addSettings( settings );
+
+		settings.put( Environment.CACHE_REGION_FACTORY, EhCacheRegionFactory.class.getName() );
+		settings.put( Environment.CACHE_PROVIDER_CONFIG, "ehcache.xml" );
 	}
 
 	@Override

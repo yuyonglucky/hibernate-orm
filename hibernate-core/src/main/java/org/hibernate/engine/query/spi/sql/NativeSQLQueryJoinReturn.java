@@ -1,28 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.query.spi.sql;
+
 import java.util.Map;
 
 import org.hibernate.LockMode;
@@ -46,6 +29,7 @@ public class NativeSQLQueryJoinReturn extends NativeSQLQueryNonScalarReturn {
 	 * @param propertyResults Any user-supplied column->property mappings
 	 * @param lockMode The lock mode to apply
 	 */
+	@SuppressWarnings("unchecked")
 	public NativeSQLQueryJoinReturn(
 			String alias,
 			String ownerAlias,
@@ -56,6 +40,13 @@ public class NativeSQLQueryJoinReturn extends NativeSQLQueryNonScalarReturn {
 		this.ownerAlias = ownerAlias;
 		this.ownerProperty = ownerProperty;
 		this.hashCode = determineHashCode();
+	}
+
+	private int determineHashCode() {
+		int result = super.hashCode();
+		result = 31 * result + ( ownerAlias != null ? ownerAlias.hashCode() : 0 );
+		result = 31 * result + ( ownerProperty != null ? ownerProperty.hashCode() : 0 );
+		return result;
 	}
 
 	/**
@@ -77,6 +68,8 @@ public class NativeSQLQueryJoinReturn extends NativeSQLQueryNonScalarReturn {
 		return ownerProperty;
 	}
 
+	@Override
+	@SuppressWarnings("RedundantIfStatement")
 	public boolean equals(Object o) {
 		if ( this == o ) {
 			return true;
@@ -88,7 +81,7 @@ public class NativeSQLQueryJoinReturn extends NativeSQLQueryNonScalarReturn {
 			return false;
 		}
 
-		NativeSQLQueryJoinReturn that = ( NativeSQLQueryJoinReturn ) o;
+		final NativeSQLQueryJoinReturn that = (NativeSQLQueryJoinReturn) o;
 
 		if ( ownerAlias != null ? !ownerAlias.equals( that.ownerAlias ) : that.ownerAlias != null ) {
 			return false;
@@ -100,14 +93,8 @@ public class NativeSQLQueryJoinReturn extends NativeSQLQueryNonScalarReturn {
 		return true;
 	}
 
+	@Override
 	public int hashCode() {
 		return hashCode;
-	}
-
-	private int determineHashCode() {
-		int result = super.hashCode();
-		result = 31 * result + ( ownerAlias != null ? ownerAlias.hashCode() : 0 );
-		result = 31 * result + ( ownerProperty != null ? ownerProperty.hashCode() : 0 );
-		return result;
 	}
 }

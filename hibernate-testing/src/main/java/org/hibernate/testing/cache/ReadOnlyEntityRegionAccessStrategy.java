@@ -1,61 +1,43 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.testing.cache;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.spi.access.SoftLock;
-import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.jboss.logging.Logger;
 
 /**
  * @author Strong Liu
  */
 class ReadOnlyEntityRegionAccessStrategy extends BaseEntityRegionAccessStrategy {
-	private static final CoreMessageLogger LOG = Logger.getMessageLogger(
-			CoreMessageLogger.class, ReadOnlyEntityRegionAccessStrategy.class.getName()
-	);
+	private static final Logger LOG = Logger.getLogger( ReadOnlyEntityRegionAccessStrategy.class );
+
 
 	ReadOnlyEntityRegionAccessStrategy(EntityRegionImpl region) {
 		super( region );
 	}
+
 	/**
 	 * This cache is asynchronous hence a no-op
 	 */
 	@Override
-	public boolean insert(Object key, Object value, Object version) throws CacheException {
+	public boolean insert(SessionImplementor session, Object key, Object value, Object version) throws CacheException {
 		return false; //wait until tx complete, see afterInsert().
 	}
 
 	@Override
-	public boolean afterInsert(Object key, Object value, Object version) throws CacheException {
-		getInternalRegion().put( key, value ); //save into cache since the tx is completed
+	public boolean afterInsert(SessionImplementor session, Object key, Object value, Object version) throws CacheException {
+		getInternalRegion().put( session, key, value ); //save into cache since the tx is completed
 		return true;
 	}
 
 	@Override
-	public void unlockItem(Object key, SoftLock lock) throws CacheException {
+	public void unlockItem(SessionImplementor session, Object key, SoftLock lock) throws CacheException {
 		evict( key );
 	}
 
@@ -65,9 +47,9 @@ class ReadOnlyEntityRegionAccessStrategy extends BaseEntityRegionAccessStrategy 
 	 * @throws UnsupportedOperationException always
 	 */
 	@Override
-	public boolean update(Object key, Object value, Object currentVersion, Object previousVersion)
+	public boolean update(SessionImplementor session, Object key, Object value, Object currentVersion, Object previousVersion)
 			throws CacheException {
-		LOG.invalidEditOfReadOnlyItem( key );
+		LOG.info( "Illegal attempt to update item cached as read-only : " + key );
 		throw new UnsupportedOperationException( "Can't write to a readonly object" );
 	}
 
@@ -77,9 +59,9 @@ class ReadOnlyEntityRegionAccessStrategy extends BaseEntityRegionAccessStrategy 
 	 * @throws UnsupportedOperationException always
 	 */
 	@Override
-	public boolean afterUpdate(Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock)
+	public boolean afterUpdate(SessionImplementor session, Object key, Object value, Object currentVersion, Object previousVersion, SoftLock lock)
 			throws CacheException {
-		LOG.invalidEditOfReadOnlyItem( key );
+		LOG.info( "Illegal attempt to update item cached as read-only : " + key );
 		throw new UnsupportedOperationException( "Can't write to a readonly object" );
 	}
 

@@ -1,40 +1,26 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.lob;
-import java.sql.Blob;
 
-import junit.framework.AssertionFailedError;
-import org.junit.Assert;
-import org.junit.Test;
+import java.sql.Blob;
+import java.util.Arrays;
 
 import org.hibernate.Hibernate;
-import org.hibernate.LockMode;
+import org.hibernate.LockOptions;
 import org.hibernate.Session;
-import org.hibernate.internal.util.collections.ArrayHelper;
+import org.hibernate.dialect.TeradataDialect;
+
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Assert;
+import org.junit.Test;
+import junit.framework.AssertionFailedError;
 
 import static org.junit.Assert.assertNotNull;
 
@@ -54,6 +40,11 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(
+			value = TeradataDialect.class,
+			jiraKey = "HHH-6637",
+			comment = "Teradata requires locator to be used in same session where it was created/retrieved"
+	)
 	public void testBoundedBlobLocatorAccess() throws Throwable {
 		byte[] original = buildByteArray( BLOB_SIZE, true );
 		byte[] changed = buildByteArray( BLOB_SIZE, false );
@@ -69,7 +60,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+		entity = s.get( LobHolder.class, entity.getId() );
 		Assert.assertEquals( BLOB_SIZE, entity.getBlobLocator().length() );
 		assertEquals( original, extractData( entity.getBlobLocator() ) );
 		s.getTransaction().commit();
@@ -79,7 +70,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 		if ( getDialect().supportsLobValueChangePropogation() ) {
 			s = openSession();
 			s.beginTransaction();
-			entity = ( LobHolder ) s.get( LobHolder.class, entity.getId(), LockMode.UPGRADE );
+			entity = ( LobHolder ) s.byId( LobHolder.class ).with( LockOptions.UPGRADE ).load( entity.getId() );
 			entity.getBlobLocator().truncate( 1 );
 			entity.getBlobLocator().setBytes( 1, changed );
 			s.getTransaction().commit();
@@ -87,7 +78,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 
 			s = openSession();
 			s.beginTransaction();
-			entity = ( LobHolder ) s.get( LobHolder.class, entity.getId(), LockMode.UPGRADE );
+			entity = ( LobHolder ) s.byId( LobHolder.class ).with( LockOptions.UPGRADE ).load( entity.getId() );
 			assertNotNull( entity.getBlobLocator() );
 			Assert.assertEquals( BLOB_SIZE, entity.getBlobLocator().length() );
 			assertEquals( changed, extractData( entity.getBlobLocator() ) );
@@ -100,7 +91,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 		// test mutation via supplying a new clob locator instance...
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId(), LockMode.UPGRADE );
+		entity = ( LobHolder ) s.byId( LobHolder.class ).with( LockOptions.UPGRADE ).load( entity.getId() );
 		assertNotNull( entity.getBlobLocator() );
 		Assert.assertEquals( BLOB_SIZE, entity.getBlobLocator().length() );
 		assertEquals( original, extractData( entity.getBlobLocator() ) );
@@ -111,7 +102,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 		// test empty blob
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+		entity = s.get( LobHolder.class, entity.getId() );
 		Assert.assertEquals( BLOB_SIZE, entity.getBlobLocator().length() );
 		assertEquals( changed, extractData( entity.getBlobLocator() ) );
 		entity.setBlobLocator( s.getLobHelper().createBlob( empty ) );
@@ -120,7 +111,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+		entity = s.get( LobHolder.class, entity.getId() );
 		if ( entity.getBlobLocator() != null) {
 			Assert.assertEquals( empty.length, entity.getBlobLocator().length() );
 			assertEquals( empty, extractData( entity.getBlobLocator() ) );
@@ -155,7 +146,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 		// at that point it is unbounded...
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LobHolder ) s.get( LobHolder.class, entity.getId() );
+		entity = s.get( LobHolder.class, entity.getId() );
 		s.getTransaction().commit();
 		s.close();
 
@@ -189,7 +180,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 	}
 
 	public static void assertEquals(byte[] val1, byte[] val2) {
-		if ( !ArrayHelper.isEquals( val1, val2 ) ) {
+		if ( !Arrays.equals( val1, val2 ) ) {
 			throw new AssertionFailedError( "byte arrays did not match" );
 		}
 	}

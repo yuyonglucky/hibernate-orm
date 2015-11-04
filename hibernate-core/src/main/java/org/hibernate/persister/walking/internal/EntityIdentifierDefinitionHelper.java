@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.persister.walking.internal;
 
@@ -31,18 +14,23 @@ import org.hibernate.persister.walking.spi.EncapsulatedEntityIdentifierDefinitio
 import org.hibernate.persister.walking.spi.EntityDefinition;
 import org.hibernate.persister.walking.spi.EntityIdentifierDefinition;
 import org.hibernate.persister.walking.spi.NonEncapsulatedEntityIdentifierDefinition;
+import org.hibernate.type.CompositeType;
 import org.hibernate.type.Type;
 
 /**
  * @author Gail Badner
  */
-public class EntityIdentifierDefinitionHelper {
+public final class EntityIdentifierDefinitionHelper {
+	private EntityIdentifierDefinitionHelper() {
+	}
 
 	public static EntityIdentifierDefinition buildSimpleEncapsulatedIdentifierDefinition(final AbstractEntityPersister entityPersister) {
 		return new EncapsulatedEntityIdentifierDefinition() {
+			private final AttributeDefinitionAdapter attr = new AttributeDefinitionAdapter( entityPersister);
+
 			@Override
 			public AttributeDefinition getAttributeDefinition() {
-				return new AttributeDefinitionAdapter( entityPersister);
+				return attr;
 			}
 
 			@Override
@@ -61,9 +49,11 @@ public class EntityIdentifierDefinitionHelper {
 			final AbstractEntityPersister entityPersister) {
 
 		return new EncapsulatedEntityIdentifierDefinition() {
+			private final CompositionDefinitionAdapter compositionDefinition = new CompositionDefinitionAdapter( entityPersister );
+
 			@Override
 			public AttributeDefinition getAttributeDefinition() {
-				return new CompositionDefinitionAdapter( entityPersister );
+				return compositionDefinition;
 			}
 
 			@Override
@@ -80,9 +70,11 @@ public class EntityIdentifierDefinitionHelper {
 
 	public static EntityIdentifierDefinition buildNonEncapsulatedCompositeIdentifierDefinition(final AbstractEntityPersister entityPersister) {
 		return new NonEncapsulatedEntityIdentifierDefinition() {
+			private final CompositionDefinitionAdapter compositionDefinition = new CompositionDefinitionAdapter( entityPersister );
+
 			@Override
 			public Iterable<AttributeDefinition> getAttributes() {
-				return CompositionSingularSubAttributesHelper.getIdentifierSubAttributes( entityPersister );
+				return compositionDefinition.getAttributes();
 			}
 
 			@Override
@@ -98,6 +90,32 @@ public class EntityIdentifierDefinitionHelper {
 			@Override
 			public EntityDefinition getEntityDefinition() {
 				return entityPersister;
+			}
+
+			@Override
+			public Type getCompositeType() {
+				return entityPersister.getEntityMetamodel().getIdentifierProperty().getType();
+			}
+
+			@Override
+			public AttributeSource getSource() {
+				return compositionDefinition;
+			}
+
+			@Override
+			public String getName() {
+				// Not sure this is always kosher.   See org.hibernate.tuple.entity.EntityMetamodel.hasNonIdentifierPropertyNamedId
+				return "id";
+			}
+
+			@Override
+			public CompositeType getType() {
+				return (CompositeType) getCompositeType();
+			}
+
+			@Override
+			public boolean isNullable() {
+				return compositionDefinition.isNullable();
 			}
 		};
 	}
@@ -120,6 +138,11 @@ public class EntityIdentifierDefinitionHelper {
 		}
 
 		@Override
+		public boolean isNullable() {
+			return false;
+		}
+
+		@Override
 		public AttributeSource getSource() {
 			return entityPersister;
 		}
@@ -135,7 +158,6 @@ public class EntityIdentifierDefinitionHelper {
 	}
 
 	private static class CompositionDefinitionAdapter extends AttributeDefinitionAdapter implements CompositionDefinition {
-
 		CompositionDefinitionAdapter(AbstractEntityPersister entityPersister) {
 			super( entityPersister );
 		}
@@ -143,6 +165,11 @@ public class EntityIdentifierDefinitionHelper {
 		@Override
 		public String toString() {
 			return "<identifier-property:" + getName() + ">";
+		}
+
+		@Override
+		public CompositeType getType() {
+			return (CompositeType) super.getType();
 		}
 
 		@Override

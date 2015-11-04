@@ -1,29 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.procedure.internal;
 
-import javax.persistence.ParameterMode;
 import java.sql.CallableStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -33,29 +15,35 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.jboss.logging.Logger;
+import javax.persistence.ParameterMode;
 
 import org.hibernate.HibernateException;
 import org.hibernate.QueryException;
 import org.hibernate.cfg.NotYetImplementedException;
 import org.hibernate.engine.ResultSetMappingDefinition;
-import org.hibernate.engine.jdbc.spi.ExtractedDatabaseMetaData;
+import org.hibernate.engine.jdbc.env.spi.ExtractedDatabaseMetaData;
+import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.engine.query.spi.sql.NativeSQLQueryReturn;
 import org.hibernate.engine.spi.QueryParameters;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.internal.AbstractBasicQueryContractImpl;
+import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.persister.entity.EntityPersister;
-import org.hibernate.procedure.NamedParametersNotSupportedException;
+import org.hibernate.procedure.NoSuchParameterException;
 import org.hibernate.procedure.ParameterRegistration;
+import org.hibernate.procedure.ParameterStrategyException;
 import org.hibernate.procedure.ProcedureCall;
 import org.hibernate.procedure.ProcedureCallMemento;
-import org.hibernate.procedure.ProcedureResult;
+import org.hibernate.procedure.ProcedureOutputs;
+import org.hibernate.procedure.spi.ParameterRegistrationImplementor;
+import org.hibernate.procedure.spi.ParameterStrategy;
 import org.hibernate.result.spi.ResultContext;
 import org.hibernate.type.Type;
+
+import org.jboss.logging.Logger;
 
 /**
  * Standard implementation of {@link org.hibernate.procedure.ProcedureCall}
@@ -63,7 +51,10 @@ import org.hibernate.type.Type;
  * @author Steve Ebersole
  */
 public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements ProcedureCall, ResultContext {
-	private static final Logger log = Logger.getLogger( ProcedureCallImpl.class );
+	private static final CoreMessageLogger LOG = Logger.getMessageLogger(
+			CoreMessageLogger.class,
+			ProcedureCallImpl.class.getName()
+	);
 
 	private static final NativeSQLQueryReturn[] NO_RETURNS = new NativeSQLQueryReturn[0];
 
@@ -75,7 +66,7 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 
 	private Set<String> synchronizedQuerySpaces;
 
-	private ProcedureResultImpl outputs;
+	private ProcedureOutputsImpl outputs;
 
 	/**
 	 * The no-returns form.
@@ -192,7 +183,7 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 		final List<ProcedureCallMementoImpl.ParameterMemento> storedRegistrations = memento.getParameterDeclarations();
 		if ( storedRegistrations == null ) {
 			// most likely a problem if ParameterStrategy is not UNKNOWN...
-			log.debugf(
+			LOG.debugf(
 					"ParameterStrategy was [%s] on named copy [%s], but no parameters stored",
 					parameterStrategy,
 					procedureName
@@ -302,17 +293,16 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 		if ( parameterStrategy == ParameterStrategy.POSITIONAL ) {
 			throw new QueryException( "Cannot mix named and positional parameters" );
 		}
-		if ( parameterStrategy == null ) {
+		if ( parameterStrategy == ParameterStrategy.UNKNOWN ) {
 			// protect to only do this check once
-			final ExtractedDatabaseMetaData databaseMetaData = getSession().getTransactionCoordinator()
+			final ExtractedDatabaseMetaData databaseMetaData = getSession()
 					.getJdbcCoordinator()
-					.getLogicalConnection()
-					.getJdbcServices()
-					.getExtractedMetaDataSupport();
+					.getJdbcSessionOwner()
+					.getJdbcSessionContext()
+					.getServiceRegistry().getService( JdbcEnvironment.class )
+					.getExtractedDatabaseMetaData();
 			if ( ! databaseMetaData.supportsNamedParameters() ) {
-				throw new NamedParametersNotSupportedException(
-						"Named stored procedure parameters used, but JDBC driver does not support named parameters"
-				);
+				LOG.unsupportedNamedParameters();
 			}
 			parameterStrategy = ParameterStrategy.NAMED;
 		}
@@ -321,21 +311,22 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 	@Override
 	public ParameterRegistrationImplementor getParameterRegistration(int position) {
 		if ( parameterStrategy != ParameterStrategy.POSITIONAL ) {
-			throw new IllegalArgumentException( "Positions were not used to register parameters with this stored procedure call" );
+			throw new ParameterStrategyException(
+					"Attempt to access positional parameter [" + position + "] but ProcedureCall using named parameters"
+			);
 		}
-		try {
-			return registeredParameters.get( position );
+		for ( ParameterRegistrationImplementor parameter : registeredParameters ) {
+			if ( position == parameter.getPosition() ) {
+				return parameter;
+			}
 		}
-		catch ( Exception e ) {
-			throw new QueryException( "Could not locate parameter registered using that position [" + position + "]" );
-		}
+		throw new NoSuchParameterException( "Could not locate parameter registered using that position [" + position + "]" );
 	}
 
 	@Override
 	@SuppressWarnings("unchecked")
 	public <T> ParameterRegistration<T> registerParameter(String name, Class<T> type, ParameterMode mode) {
-		final NamedParameterRegistration parameterRegistration
-				= new NamedParameterRegistration( this, name, mode, type );
+		final NamedParameterRegistration parameterRegistration = new NamedParameterRegistration( this, name, mode, type );
 		registerParameter( parameterRegistration );
 		return parameterRegistration;
 	}
@@ -350,14 +341,14 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 	@Override
 	public ParameterRegistrationImplementor getParameterRegistration(String name) {
 		if ( parameterStrategy != ParameterStrategy.NAMED ) {
-			throw new IllegalArgumentException( "Names were not used to register parameters with this stored procedure call" );
+			throw new ParameterStrategyException( "Names were not used to register parameters with this stored procedure call" );
 		}
 		for ( ParameterRegistrationImplementor parameter : registeredParameters ) {
 			if ( name.equals( parameter.getName() ) ) {
 				return parameter;
 			}
 		}
-		throw new IllegalArgumentException( "Could not locate parameter registered under that name [" + name + "]" );
+		throw new NoSuchParameterException( "Could not locate parameter registered under that name [" + name + "]" );
 	}
 
 	@Override
@@ -367,7 +358,7 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 	}
 
 	@Override
-	public ProcedureResult getResult() {
+	public ProcedureOutputs getOutputs() {
 		if ( outputs == null ) {
 			outputs = buildOutputs();
 		}
@@ -375,7 +366,7 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 		return outputs;
 	}
 
-	private ProcedureResultImpl buildOutputs() {
+	private ProcedureOutputsImpl buildOutputs() {
 		// todo : going to need a very specialized Loader for this.
 		// or, might be a good time to look at splitting Loader up into:
 		//		1) building statement objects
@@ -385,36 +376,39 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 		// for now assume there are no resultClasses nor mappings defined..
 		// 	TOTAL PROOF-OF-CONCEPT!!!!!!
 
-		final StringBuilder buffer = new StringBuilder().append( "{call " )
-				.append( procedureName )
-				.append( "(" );
-		String sep = "";
-		for ( ParameterRegistrationImplementor parameter : registeredParameters ) {
-			for ( int i = 0; i < parameter.getSqlTypes().length; i++ ) {
-				buffer.append( sep ).append( "?" );
-				sep = ",";
-			}
-		}
-		buffer.append( ")}" );
+		// todo : how to identify calls which should be in the form `{? = call procName...}` ??? (note leading param marker)
+		// 		more than likely this will need to be a method on the native API.  I can see this as a trigger to
+		//		both: (1) add the `? = ` part and also (2) register a REFCURSOR parameter for DBs (Oracle, PGSQL) that
+		//		need it.
+
+		final String call = session().getFactory().getDialect().getCallableStatementSupport().renderCallableStatement(
+				procedureName,
+				parameterStrategy,
+				registeredParameters,
+				session()
+		);
 
 		try {
-			final CallableStatement statement = (CallableStatement) getSession().getTransactionCoordinator()
+			final CallableStatement statement = (CallableStatement) getSession()
 					.getJdbcCoordinator()
 					.getStatementPreparer()
-					.prepareStatement( buffer.toString(), true );
+					.prepareStatement( call, true );
+
 
 			// prepare parameters
 			int i = 1;
-			for ( ParameterRegistrationImplementor parameter : registeredParameters ) {
-				if ( parameter == null ) {
-					throw new QueryException( "Registered stored procedure parameters had gaps" );
-				}
 
+			for ( ParameterRegistrationImplementor parameter : registeredParameters ) {
 				parameter.prepare( statement, i );
-				i += parameter.getSqlTypes().length;
+				if ( parameter.getMode() == ParameterMode.REF_CURSOR ) {
+					i++;
+				}
+				else {
+					i += parameter.getSqlTypes().length;
+				}
 			}
 
-			return new ProcedureResultImpl( this, statement );
+			return new ProcedureOutputsImpl( this, statement );
 		}
 		catch (SQLException e) {
 			throw getSession().getFactory().getSQLExceptionHelper().convert(
@@ -424,7 +418,6 @@ public class ProcedureCallImpl extends AbstractBasicQueryContractImpl implements
 			);
 		}
 	}
-
 
 	@Override
 	public Type[] getReturnTypes() throws HibernateException {

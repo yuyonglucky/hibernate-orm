@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type;
 
@@ -27,17 +10,16 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
-
-import org.dom4j.Node;
 
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
 import org.hibernate.engine.spi.Mapping;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.metamodel.relational.Size;
+import org.hibernate.engine.jdbc.Size;
+
+import org.dom4j.Node;
 
 /**
  * @author Gavin King
@@ -45,23 +27,25 @@ import org.hibernate.metamodel.relational.Size;
 public class MetaType extends AbstractType {
 	public static final String[] REGISTRATION_KEYS = new String[0];
 
-	private final Map values;
-	private final Map keys;
 	private final Type baseType;
+	private final Map<Object,String> discriminatorValuesToEntityNameMap;
+	private final Map<String,Object> entityNameToDiscriminatorValueMap;
 
-	public MetaType(Map values, Type baseType) {
+	public MetaType(Map<Object,String> discriminatorValuesToEntityNameMap, Type baseType) {
 		this.baseType = baseType;
-		this.values = values;
-		keys = new HashMap();
-		Iterator iter = values.entrySet().iterator();
-		while ( iter.hasNext() ) {
-			Map.Entry me = (Map.Entry) iter.next();
-			keys.put( me.getValue(), me.getKey() );
+		this.discriminatorValuesToEntityNameMap = discriminatorValuesToEntityNameMap;
+		this.entityNameToDiscriminatorValueMap = new HashMap<String,Object>();
+		for ( Map.Entry<Object,String> entry : discriminatorValuesToEntityNameMap.entrySet() ) {
+			entityNameToDiscriminatorValueMap.put( entry.getValue(), entry.getKey() );
 		}
 	}
 
 	public String[] getRegistrationKeys() {
 		return REGISTRATION_KEYS;
+	}
+
+	public Map<Object, String> getDiscriminatorValuesToEntityNameMap() {
+		return discriminatorValuesToEntityNameMap;
 	}
 
 	public int[] sqlTypes(Mapping mapping) throws MappingException {
@@ -93,7 +77,7 @@ public class MetaType extends AbstractType {
 		Object owner)
 	throws HibernateException, SQLException {
 		Object key = baseType.nullSafeGet(rs, names, session, owner);
-		return key==null ? null : values.get(key);
+		return key==null ? null : discriminatorValuesToEntityNameMap.get(key);
 	}
 
 	public Object nullSafeGet(
@@ -103,12 +87,12 @@ public class MetaType extends AbstractType {
 		Object owner)
 	throws HibernateException, SQLException {
 		Object key = baseType.nullSafeGet(rs, name, session, owner);
-		return key==null ? null : values.get(key);
+		return key==null ? null : discriminatorValuesToEntityNameMap.get(key);
 	}
 
 	public void nullSafeSet(PreparedStatement st, Object value, int index, SessionImplementor session)
 	throws HibernateException, SQLException {
-		baseType.nullSafeSet(st, value==null ? null : keys.get(value), index, session);
+		baseType.nullSafeSet(st, value==null ? null : entityNameToDiscriminatorValueMap.get(value), index, session);
 	}
 	
 	public void nullSafeSet(
@@ -116,9 +100,10 @@ public class MetaType extends AbstractType {
 			Object value,
 			int index,
 			boolean[] settable, 
-			SessionImplementor session)
-	throws HibernateException, SQLException {
-		if ( settable[0] ) nullSafeSet(st, value, index, session);
+			SessionImplementor session) throws HibernateException, SQLException {
+		if ( settable[0] ) {
+			nullSafeSet(st, value, index, session);
+		}
 	}
 
 	public String toLoggableString(Object value, SessionFactoryImplementor factory) throws HibernateException {
@@ -149,21 +134,12 @@ public class MetaType extends AbstractType {
 			Object target,
 			SessionImplementor session, 
 			Object owner, 
-			Map copyCache
-	) {
+			Map copyCache) {
 		return original;
 	}
 	
 	public boolean isMutable() {
 		return false;
-	}
-
-	public Object fromXMLNode(Node xml, Mapping factory) throws HibernateException {
-		return fromXMLString( xml.getText(), factory );
-	}
-
-	public void setToXMLNode(Node node, Object value, SessionFactoryImplementor factory) throws HibernateException {
-		node.setText( toXMLString(value, factory) );
 	}
 
 	public boolean[] toColumnNullness(Object value, Mapping mapping) {

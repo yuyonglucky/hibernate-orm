@@ -1,42 +1,28 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.graph.internal;
 
-import javax.persistence.AttributeNode;
-import javax.persistence.Subgraph;
-import javax.persistence.metamodel.Attribute;
-import javax.persistence.metamodel.PluralAttribute;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import javax.persistence.AttributeNode;
+import javax.persistence.Subgraph;
+import javax.persistence.metamodel.Attribute;
+import javax.persistence.metamodel.ManagedType;
+import javax.persistence.metamodel.PluralAttribute;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.graph.spi.AttributeNodeImplementor;
 import org.hibernate.internal.util.collections.CollectionHelper;
 import org.hibernate.jpa.HibernateEntityManagerFactory;
-import org.hibernate.jpa.graph.spi.AttributeNodeImplementor;
+import org.hibernate.jpa.internal.EntityManagerFactoryImpl;
 import org.hibernate.jpa.internal.metamodel.Helper;
 import org.hibernate.jpa.internal.metamodel.PluralAttributeImpl;
+import org.hibernate.jpa.spi.HibernateEntityManagerFactoryAware;
 import org.hibernate.persister.collection.QueryableCollection;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.entity.Joinable;
@@ -48,14 +34,14 @@ import org.hibernate.type.Type;
  *
  * @author Steve Ebersole
  */
-public class AttributeNodeImpl<T> implements AttributeNode<T>, AttributeNodeImplementor<T> {
-	private final HibernateEntityManagerFactory entityManagerFactory;
+public class AttributeNodeImpl<T> implements AttributeNode<T>, AttributeNodeImplementor<T>, HibernateEntityManagerFactoryAware {
+	private final EntityManagerFactoryImpl entityManagerFactory;
 	private final Attribute<?,T> attribute;
 
 	private Map<Class, Subgraph> subgraphMap;
 	private Map<Class, Subgraph> keySubgraphMap;
 
-	public <X> AttributeNodeImpl(HibernateEntityManagerFactory entityManagerFactory, Attribute<X,T> attribute) {
+	public <X> AttributeNodeImpl(EntityManagerFactoryImpl entityManagerFactory, Attribute<X,T> attribute) {
 		this.entityManagerFactory = entityManagerFactory;
 		this.attribute = attribute;
 	}
@@ -64,7 +50,7 @@ public class AttributeNodeImpl<T> implements AttributeNode<T>, AttributeNodeImpl
 	 * Intended only for use from {@link #makeImmutableCopy()}
 	 */
 	private AttributeNodeImpl(
-			HibernateEntityManagerFactory entityManagerFactory,
+			EntityManagerFactoryImpl entityManagerFactory,
 			Attribute<?,T> attribute,
 			Map<Class, Subgraph> subgraphMap,
 			Map<Class, Subgraph> keySubgraphMap) {
@@ -75,12 +61,12 @@ public class AttributeNodeImpl<T> implements AttributeNode<T>, AttributeNodeImpl
 	}
 
 	@Override
-	public HibernateEntityManagerFactory entityManagerFactory() {
+	public HibernateEntityManagerFactory getFactory() {
 		return entityManagerFactory;
 	}
 
 	private SessionFactoryImplementor sessionFactory() {
-		return (SessionFactoryImplementor) entityManagerFactory().getSessionFactory();
+		return (SessionFactoryImplementor) getFactory().getSessionFactory();
 	}
 
 	@Override
@@ -173,8 +159,19 @@ public class AttributeNodeImpl<T> implements AttributeNode<T>, AttributeNodeImpl
 				}
 			}
 		}
+		
+		ManagedType managedType = null;
+		try {
+			managedType = entityManagerFactory.getEntityTypeByName( type.getName() );
+		}
+		catch (IllegalArgumentException e) {
+			// do nothing
+		}
+		if (managedType == null) {
+			managedType = attribute.getDeclaringType();
+		}
 
-		final SubgraphImpl subgraph = new SubgraphImpl( this.entityManagerFactory, attribute.getDeclaringType(), type );
+		final SubgraphImpl subgraph = new SubgraphImpl( this.entityManagerFactory, managedType, type );
 		subgraphMap.put( type, subgraph );
 		return subgraph;
 	}

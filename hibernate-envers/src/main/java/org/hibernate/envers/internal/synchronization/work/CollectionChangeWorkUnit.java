@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.synchronization.work;
 
@@ -29,7 +12,7 @@ import java.util.Map;
 
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 
 /**
  * @author Adam Warski (adam at warski dot org)
@@ -41,9 +24,13 @@ public class CollectionChangeWorkUnit extends AbstractAuditWorkUnit implements A
 	private final Map<String, Object> data = new HashMap<String, Object>();
 
 	public CollectionChangeWorkUnit(
-			SessionImplementor session, String entityName, String collectionPropertyName,
-			AuditConfiguration verCfg, Serializable id, Object entity) {
-		super( session, entityName, verCfg, id, RevisionType.MOD );
+			SessionImplementor session,
+			String entityName,
+			String collectionPropertyName,
+			EnversService enversService,
+			Serializable id,
+			Object entity) {
+		super( session, entityName, enversService, id, RevisionType.MOD );
 
 		this.entity = entity;
 		this.collectionPropertyName = collectionPropertyName;
@@ -58,18 +45,28 @@ public class CollectionChangeWorkUnit extends AbstractAuditWorkUnit implements A
 	public Map<String, Object> generateData(Object revisionData) {
 		fillDataWithId( data, revisionData );
 		final Map<String, Object> preGenerateData = new HashMap<String, Object>( data );
-		verCfg.getEntCfg().get( getEntityName() ).getPropertyMapper()
-				.mapToMapFromEntity( sessionImplementor, data, entity, null );
-		verCfg.getEntCfg().get( getEntityName() ).getPropertyMapper()
-				.mapModifiedFlagsToMapFromEntity( sessionImplementor, data, entity, entity );
-		verCfg.getEntCfg().get( getEntityName() ).getPropertyMapper()
-				.mapModifiedFlagsToMapForCollectionChange( collectionPropertyName, data );
+		enversService.getEntitiesConfigurations().get( getEntityName() ).getPropertyMapper().mapToMapFromEntity(
+				sessionImplementor,
+				data,
+				entity,
+				null
+		);
+		enversService.getEntitiesConfigurations().get( getEntityName() ).getPropertyMapper().mapModifiedFlagsToMapFromEntity(
+				sessionImplementor,
+				data,
+				entity,
+				entity
+		);
+		enversService.getEntitiesConfigurations().get( getEntityName() ).getPropertyMapper().mapModifiedFlagsToMapForCollectionChange(
+				collectionPropertyName,
+				data
+		);
 		data.putAll( preGenerateData );
 		return data;
 	}
 
 	public void mergeCollectionModifiedData(Map<String, Object> data) {
-		verCfg.getEntCfg().get( getEntityName() ).getPropertyMapper().mapModifiedFlagsToMapForCollectionChange(
+		enversService.getEntitiesConfigurations().get( getEntityName() ).getPropertyMapper().mapModifiedFlagsToMapForCollectionChange(
 				collectionPropertyName,
 				data
 		);

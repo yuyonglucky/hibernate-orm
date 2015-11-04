@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.idgen.enhanced.forcedtable;
 
@@ -63,10 +46,10 @@ public class PooledForcedTableSequenceTest extends BaseCoreFunctionalTestCase {
 		PooledOptimizer optimizer = (PooledOptimizer) generator.getOptimizer();
 
 		int increment = optimizer.getIncrementSize();
-		Entity[] entities = new Entity[ increment + 1 ];
+		Entity[] entities = new Entity[ increment + 2 ];
 		Session s = openSession();
 		s.beginTransaction();
-		for ( int i = 0; i < increment; i++ ) {
+		for ( int i = 0; i <= increment; i++ ) {
 			entities[i] = new Entity( "" + ( i + 1 ) );
 			s.save( entities[i] );
 			long expectedId = i + 1;
@@ -78,14 +61,14 @@ public class PooledForcedTableSequenceTest extends BaseCoreFunctionalTestCase {
 			assertEquals( increment + 1, ( (BasicHolder) optimizer.getLastSourceValue() ).getActualLongValue() );
 		}
 		// now force a "clock over"
-		entities[ increment ] = new Entity( "" + increment );
-		s.save( entities[ increment ] );
-		long expectedId = optimizer.getIncrementSize() + 1;
-		assertEquals( expectedId, entities[ optimizer.getIncrementSize() ].getId().longValue() );
+		entities[increment + 1] = new Entity( "" + increment );
+		s.save( entities[increment + 1] );
+		long expectedId =  optimizer.getIncrementSize() + 2;
+		assertEquals( expectedId, entities[ increment + 1 ].getId().longValue() );
 		// initialization (2) + clock over
 		assertEquals( 3, generator.getDatabaseStructure().getTimesAccessed() );
 		assertEquals( ( increment * 2 ) + 1, ( (BasicHolder) optimizer.getLastSourceValue() ).getActualLongValue() );
-		assertEquals( increment + 1, ( (BasicHolder) optimizer.getLastValue() ).getActualLongValue() );
+		assertEquals( increment + 2, ( (BasicHolder) optimizer.getLastValue() ).getActualLongValue() );
 		s.getTransaction().commit();
 
 		s.beginTransaction();

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.jdbc.batch.internal;
 
@@ -34,6 +17,7 @@ import org.hibernate.engine.jdbc.batch.spi.Batch;
 import org.hibernate.engine.jdbc.batch.spi.BatchKey;
 import org.hibernate.engine.jdbc.batch.spi.BatchObserver;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
+import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.jdbc.spi.SqlExceptionHelper;
 import org.hibernate.engine.jdbc.spi.SqlStatementLogger;
 import org.hibernate.internal.CoreMessageLogger;
@@ -53,6 +37,9 @@ public abstract class AbstractBatchImpl implements Batch {
 	private final BatchKey key;
 	private final JdbcCoordinator jdbcCoordinator;
 
+	private final SqlStatementLogger sqlStatementLogger;
+	private final SqlExceptionHelper sqlExceptionHelper;
+
 	private LinkedHashMap<String,PreparedStatement> statements = new LinkedHashMap<String,PreparedStatement>();
 	private LinkedHashSet<BatchObserver> observers = new LinkedHashSet<BatchObserver>();
 
@@ -65,10 +52,22 @@ public abstract class AbstractBatchImpl implements Batch {
 		}
 		this.key = key;
 		this.jdbcCoordinator = jdbcCoordinator;
+
+		final JdbcServices jdbcServices = jdbcCoordinator.getJdbcSessionOwner()
+				.getJdbcSessionContext()
+				.getServiceRegistry()
+				.getService( JdbcServices.class );
+
+		this.sqlStatementLogger = jdbcServices.getSqlStatementLogger();
+		this.sqlExceptionHelper = jdbcServices.getSqlExceptionHelper();
+	}
+
+	protected JdbcCoordinator getJdbcCoordinator(){
+		return this.jdbcCoordinator;
 	}
 
 	/**
-	 * Perform batch execution.
+	 * Perform batch execution..
 	 * <p/>
 	 * This is called from the explicit {@link #execute() execution}, but may also be called from elsewhere
 	 * depending on the exact implementation.
@@ -81,11 +80,7 @@ public abstract class AbstractBatchImpl implements Batch {
 	 * @return The underlying SQLException helper.
 	 */
 	protected SqlExceptionHelper sqlExceptionHelper() {
-		return jdbcCoordinator.getTransactionCoordinator()
-				.getTransactionContext()
-				.getTransactionEnvironment()
-				.getJdbcServices()
-				.getSqlExceptionHelper();
+		return sqlExceptionHelper;
 	}
 
 	/**
@@ -94,11 +89,11 @@ public abstract class AbstractBatchImpl implements Batch {
 	 * @return The underlying JDBC services.
 	 */
 	protected SqlStatementLogger sqlStatementLogger() {
-		return jdbcCoordinator.getTransactionCoordinator()
-				.getTransactionContext()
-				.getTransactionEnvironment()
-				.getJdbcServices()
-				.getSqlStatementLogger();
+		return sqlStatementLogger;
+	}
+
+	protected void abortBatch() {
+		jdbcCoordinator.abortBatch();
 	}
 
 	/**
@@ -144,34 +139,34 @@ public abstract class AbstractBatchImpl implements Batch {
 	@Override
 	public final void execute() {
 		notifyObserversExplicitExecution();
-		if ( statements.isEmpty() ) {
+		if ( getStatements().isEmpty() ) {
 			return;
 		}
+
 		try {
-			try {
-				doExecuteBatch();
-			}
-			finally {
-				releaseStatements();
-			}
+			doExecuteBatch();
 		}
 		finally {
-			statements.clear();
+			releaseStatements();
 		}
 	}
 
-	private void releaseStatements() {
+	protected void releaseStatements() {
 		for ( PreparedStatement statement : getStatements().values() ) {
-			try {
-				statement.clearBatch();
-				jdbcCoordinator.release( statement );
-			}
-			catch ( SQLException e ) {
-				LOG.unableToReleaseBatchStatement();
-				LOG.sqlExceptionEscapedProxy( e );
-			}
+			clearBatch( statement );
+			jdbcCoordinator.getResourceRegistry().release( statement );
+			jdbcCoordinator.afterStatementExecution();
 		}
 		getStatements().clear();
+	}
+
+	protected void clearBatch(PreparedStatement statement) {
+		try {
+			statement.clearBatch();
+		}
+		catch ( SQLException e ) {
+			LOG.unableToReleaseBatchStatement();
+		}
 	}
 
 	/**

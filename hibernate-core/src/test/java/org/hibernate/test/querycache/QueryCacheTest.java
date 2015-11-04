@@ -1,59 +1,55 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.querycache;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.hibernate.Criteria;
+import org.hibernate.EmptyInterceptor;
 import org.hibernate.Hibernate;
 import org.hibernate.Query;
+import org.hibernate.SQLQuery;
 import org.hibernate.Session;
+import org.hibernate.SessionBuilder;
 import org.hibernate.Transaction;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.cfg.Environment;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.stat.EntityStatistics;
 import org.hibernate.stat.QueryStatistics;
+import org.hibernate.transform.Transformers;
+
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
 import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.hibernate.transform.Transformers;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.hibernate.type.Type;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * @author Gavin King
  * @author Brett Meyer
  */
-public class QueryCacheTest extends BaseCoreFunctionalTestCase {
+public class QueryCacheTest extends BaseNonConfigCoreFunctionalTestCase {
 
 	private static final CompositeKey PK = new CompositeKey(1, 2);
+	private static final ExecutorService executor = Executors.newFixedThreadPool(4);
 	
 	@Override
 	public String[] getMappings() {
@@ -71,12 +67,22 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Override
-	public void configure(Configuration cfg) {
-		super.configure( cfg );
-		cfg.setProperty( Environment.USE_QUERY_CACHE, "true" );
-		cfg.setProperty( Environment.CACHE_REGION_PREFIX, "foo" );
-		cfg.setProperty( Environment.USE_SECOND_LEVEL_CACHE, "true" );
-		cfg.setProperty( Environment.GENERATE_STATISTICS, "true" );
+	protected void addSettings(Map settings) {
+		settings.put( AvailableSettings.USE_QUERY_CACHE, "true" );
+		settings.put( AvailableSettings.CACHE_REGION_PREFIX, "foo" );
+		settings.put( AvailableSettings.USE_SECOND_LEVEL_CACHE, "true" );
+		settings.put( AvailableSettings.GENERATE_STATISTICS, "true" );
+	}
+
+	@Override
+	protected void shutDown() {
+		super.shutDown();
+		executor.shutdown();
+	}
+
+	@Override
+	protected boolean isCleanupTestDataRequired() {
+		return true;
 	}
 
 	@Override
@@ -131,7 +137,7 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 	@Test
 	@TestForIssue( jiraKey = "JBPAPP-4224" )
 	public void testHitCacheInSameSession() {
-		sessionFactory().evictQueries();
+		sessionFactory().getCache().evictQueryRegions();
 		sessionFactory().getStatistics().clear();
 		Session s = openSession();
 		List list = new ArrayList();
@@ -177,7 +183,7 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 	@Test
 	public void testQueryCacheInvalidation() throws Exception {
 
-		sessionFactory().evictQueries();
+		sessionFactory().getCache().evictQueryRegions();
 		sessionFactory().getStatistics().clear();
 
 		final String queryString = "from Item i where i.name='widget'";
@@ -277,9 +283,10 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testQueryCacheFetch() throws Exception {
-		sessionFactory().evictQueries();
+		sessionFactory().getCache().evictQueryRegions();
 		sessionFactory().getStatistics().clear();
 
+		// persist our 2 items.  This saves them to the db, but also into the second level entity cache region
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
 		Item i = new Item();
@@ -299,18 +306,24 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 
 		Thread.sleep(200);
 
+		// perform the cacheable query.  this will execute the query (no query cache hit), but the Items will be
+		// found in second level entity cache region
 		s = openSession();
 		t = s.beginTransaction();
-		List result = s.createQuery( queryString ).setCacheable(true).list();
+		List result = s.createQuery( queryString ).setCacheable( true ).list();
 		assertEquals( result.size(), 2 );
 		t.commit();
 		s.close();
-
 		assertEquals( qs.getCacheHitCount(), 0 );
 		assertEquals( s.getSessionFactory().getStatistics().getEntityFetchCount(), 0 );
 
-		sessionFactory().evict(Item.class);
 
+		// evict the Items from the second level entity cache region
+		sessionFactory().getCache().evictEntityRegion( Item.class );
+
+		// now, perform the cacheable query again.  this time we should not execute the query (query cache hit).
+		// However, the Items will not be found in second level entity cache region this time (we evicted them above)
+		// nor are they in associated with the session.
 		s = openSession();
 		t = s.beginTransaction();
 		result = s.createQuery( queryString ).setCacheable(true).list();
@@ -333,7 +346,7 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testProjectionCache() throws Exception {
-		sessionFactory().evictQueries();
+		sessionFactory().getCache().evictQueryRegions();
         sessionFactory().getStatistics().clear();
 
 		final String queryString = "select i.description as desc from Item i where i.name='widget'";
@@ -480,6 +493,50 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
+	@Test
+	@TestForIssue( jiraKey = "HHH-3051" )
+	public void testScalarSQLQuery() {
+		sessionFactory().getCache().evictQueryRegions();
+		sessionFactory().getStatistics().clear();
+
+		Session s = openSession();
+		s.beginTransaction();
+		Item item = new Item();
+		item.setName("fooName");
+		item.setDescription("fooDescription");
+		s.persist(item);
+		s.getTransaction().commit();
+		s.close();
+
+		s = openSession();
+		s.beginTransaction();
+		
+		// Note: StandardQueryCache#put handles single results and multiple results differently.  So, test both
+		// 1 and 2+ scalars.
+		
+        String sqlQuery = "select name, description from Items";
+        SQLQuery query = s.createSQLQuery(sqlQuery);
+        query.setCacheable(true);
+        query.addScalar("name");
+        query.addScalar("description");
+        Object[] result1 = (Object[]) query.uniqueResult();
+        assertNotNull( result1 );
+        assertEquals( result1.length, 2 );
+        assertEquals( result1[0], "fooName" );
+        assertEquals( result1[1], "fooDescription" );
+		
+        sqlQuery = "select name from Items";
+        query = s.createSQLQuery(sqlQuery);
+        query.setCacheable(true);
+        query.addScalar("name");
+        String result2 = (String) query.uniqueResult();
+        assertNotNull( result2 );
+        assertEquals( result2, "fooName" );
+        
+        s.getTransaction().commit();
+        s.close();
+	}
+
 //	@Test
 //	public void testGetByCompositeIdNoCache() {
 //		Query query = em.createQuery("FROM EntityWithCompositeKey e WHERE e.pk = :pk");
@@ -494,5 +551,114 @@ public class QueryCacheTest extends BaseCoreFunctionalTestCase {
 //		assertEquals(1, query.getResultList().size());
 //	}
 
+	@Test
+	@TestForIssue(jiraKey = "HHH-9962")
+	/* Test courtesy of Giambattista Bloisi */
+	public void testDelayedLoad() throws InterruptedException, ExecutionException {
+		DelayLoadOperations interceptor = new DelayLoadOperations();
+		final SessionBuilder sessionBuilder = sessionFactory().withOptions().interceptor(interceptor);
+		Item item1 = new Item();
+		item1.setName("Item1");
+		item1.setDescription("Washington");
+		Session s1 = sessionBuilder.openSession();
+		Transaction tx1 = s1.beginTransaction();
+		s1.persist(item1);
+		tx1.commit();
+		s1.close();
+
+		Item item2 = new Item();
+		item2.setName("Item2");
+		item2.setDescription("Chicago");
+		Session s2 = sessionBuilder.openSession();
+		Transaction tx2 = s2.beginTransaction();
+		s2.persist(item2);
+		tx2.commit();
+		s2.close();
+
+		interceptor.blockOnLoad();
+
+		Future<Item> fetchedItem = executor.submit(new Callable<Item>() {
+			public Item call() throws Exception {
+				return findByDescription(sessionBuilder, "Washington");
+			}
+		});
+
+		// wait for the onLoad listener to be called
+		interceptor.waitOnLoad();
+
+		Session s3 = sessionBuilder.openSession();
+		Transaction tx3 = s3.beginTransaction();
+		item1.setDescription("New York");
+		item2.setDescription("Washington");
+		s3.update(item1);
+		s3.update(item2);
+		tx3.commit();
+		s3.close();
+
+		interceptor.unblockOnLoad();
+
+		// the concurrent query was executed before the data was amended so
+		// let's expect "Item1" to be returned as living in Washington
+		Item fetched = fetchedItem.get();
+		assertEquals("Item1", fetched.getName());
+
+		// Query again: now "Item2" is expected to live in Washington
+		fetched = findByDescription(sessionBuilder, "Washington");
+		assertEquals("Item2", fetched.getName());
+	}
+
+	protected Item findByDescription(SessionBuilder sessionBuilder, final String description) {
+		Session s = sessionBuilder.openSession();
+		try {
+         return (Item) s.createCriteria(Item.class)
+               .setCacheable(true)
+               .setReadOnly(true)
+               .add(Restrictions.eq("description", description))
+               .uniqueResult();
+
+      } finally {
+         s.close();
+      }
+	}
+
+	public class DelayLoadOperations extends EmptyInterceptor {
+
+		private volatile CountDownLatch blockLatch;
+		private volatile CountDownLatch waitLatch;
+
+		@Override
+		public boolean onLoad(Object entity, Serializable id, Object[] state, String[] propertyNames, Type[] types) {
+			// Synchronize load and update activities
+			try {
+				if (waitLatch != null) {
+					waitLatch.countDown();
+					waitLatch = null;
+				}
+				if (blockLatch != null) {
+					blockLatch.await();
+					blockLatch = null;
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new RuntimeException(e);
+			}
+			return true;
+		}
+
+		public void blockOnLoad() {
+			blockLatch = new CountDownLatch(1);
+			waitLatch = new CountDownLatch(1);
+		}
+
+		public void waitOnLoad() throws InterruptedException {
+			waitLatch.await();
+		}
+
+		public void unblockOnLoad() {
+			if (blockLatch != null) {
+				blockLatch.countDown();
+			}
+		}
+	}
 }
 

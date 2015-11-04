@@ -1,35 +1,17 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
 
 import java.io.Serializable;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
 import org.hibernate.action.internal.CollectionRemoveAction;
 import org.hibernate.event.spi.EventSource;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.pretty.MessageHelper;
@@ -42,8 +24,7 @@ import org.hibernate.type.Type;
  * @author Gavin King
  */
 public abstract class ReattachVisitor extends ProxyVisitor {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, ReattachVisitor.class.getName());
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( ReattachVisitor.class );
 
 	private final Serializable ownerIdentifier;
 	private final Object owner;
@@ -76,7 +57,7 @@ public abstract class ReattachVisitor extends ProxyVisitor {
 	 * {@inheritDoc}
 	 */
 	@Override
-    Object processComponent(Object component, CompositeType componentType) throws HibernateException {
+	Object processComponent(Object component, CompositeType componentType) throws HibernateException {
 		Type[] types = componentType.getSubtypes();
 		if ( component == null ) {
 			processValues( new Object[types.length], types );
@@ -94,12 +75,16 @@ public abstract class ReattachVisitor extends ProxyVisitor {
 	 * @param role The persister representing the collection to be removed.
 	 * @param collectionKey The collection key (differs from owner-id in the case of property-refs).
 	 * @param source The session from which the request originated.
+	 *
 	 * @throws HibernateException
 	 */
-	void removeCollection(CollectionPersister role, Serializable collectionKey, EventSource source) throws HibernateException {
+	void removeCollection(CollectionPersister role, Serializable collectionKey, EventSource source)
+			throws HibernateException {
 		if ( LOG.isTraceEnabled() ) {
-			LOG.tracev( "Collection dereferenced while transient {0}",
-					MessageHelper.collectionInfoString( role, ownerIdentifier, source.getFactory() ) );
+			LOG.tracev(
+					"Collection dereferenced while transient {0}",
+					MessageHelper.collectionInfoString( role, ownerIdentifier, source.getFactory() )
+			);
 		}
 		source.getActionQueue().addAction( new CollectionRemoveAction( owner, role, collectionKey, false, source ) );
 	}
@@ -111,13 +96,14 @@ public abstract class ReattachVisitor extends ProxyVisitor {
 	 * and thus we cannot rely on the owner's EntityEntry snapshot...
 	 *
 	 * @param role The persister for the collection role being processed.
-	 * @return
+	 *
+	 * @return The value from the owner that identifies the grouping into the collection
 	 */
 	final Serializable extractCollectionKeyFromOwner(CollectionPersister role) {
-        if ( role.getCollectionType().useLHSPrimaryKey() ) {
+		if ( role.getCollectionType().useLHSPrimaryKey() ) {
 			return ownerIdentifier;
 		}
-        return (Serializable)role.getOwnerEntityPersister().getPropertyValue(
+		return (Serializable) role.getOwnerEntityPersister().getPropertyValue(
 				owner,
 				role.getCollectionType().getLHSPropertyName()
 		);

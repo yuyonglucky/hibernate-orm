@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.configuration.internal.metadata;
 
@@ -27,13 +10,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import org.dom4j.Element;
-
-import org.jboss.logging.Logger;
-
 import org.hibernate.MappingException;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.envers.RelationTargetAuditMode;
 import org.hibernate.envers.configuration.internal.AuditEntitiesConfiguration;
 import org.hibernate.envers.configuration.internal.GlobalConfiguration;
@@ -57,12 +36,17 @@ import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Property;
 import org.hibernate.mapping.Table;
 import org.hibernate.mapping.Value;
+import org.hibernate.service.ServiceRegistry;
 import org.hibernate.type.CollectionType;
 import org.hibernate.type.ComponentType;
 import org.hibernate.type.ManyToOneType;
 import org.hibernate.type.OneToOneType;
 import org.hibernate.type.TimestampType;
 import org.hibernate.type.Type;
+
+import org.jboss.logging.Logger;
+
+import org.dom4j.Element;
 
 /**
  * @author Adam Warski (adam at warski dot org)
@@ -79,12 +63,14 @@ public final class AuditMetadataGenerator {
 			AuditMetadataGenerator.class.getName()
 	);
 
-	private final Configuration cfg;
+	private final MetadataImplementor metadata;
+	private final ServiceRegistry serviceRegistry;
 	private final GlobalConfiguration globalCfg;
 	private final AuditEntitiesConfiguration verEntCfg;
 	private final AuditStrategy auditStrategy;
-	private final ClassLoaderService classLoaderService;
 	private final Element revisionInfoRelationMapping;
+
+	private final ClassLoaderService classLoaderService;
 
 	/*
 	 * Generators for different kinds of property values/types.
@@ -106,16 +92,18 @@ public final class AuditMetadataGenerator {
 	private final Map<String, Map<Join, Element>> entitiesJoins;
 
 	public AuditMetadataGenerator(
-			Configuration cfg, GlobalConfiguration globalCfg,
+			MetadataImplementor metadata,
+			ServiceRegistry serviceRegistry,
+			GlobalConfiguration globalCfg,
 			AuditEntitiesConfiguration verEntCfg,
-			AuditStrategy auditStrategy, ClassLoaderService classLoaderService,
+			AuditStrategy auditStrategy,
 			Element revisionInfoRelationMapping,
 			AuditEntityNameRegister auditEntityNameRegister) {
-		this.cfg = cfg;
+		this.metadata = metadata;
+		this.serviceRegistry = serviceRegistry;
 		this.globalCfg = globalCfg;
 		this.verEntCfg = verEntCfg;
 		this.auditStrategy = auditStrategy;
-		this.classLoaderService = classLoaderService;
 		this.revisionInfoRelationMapping = revisionInfoRelationMapping;
 
 		this.basicMetadataGenerator = new BasicMetadataGenerator();
@@ -128,6 +116,20 @@ public final class AuditMetadataGenerator {
 		entitiesConfigurations = new HashMap<String, EntityConfiguration>();
 		notAuditedEntitiesConfigurations = new HashMap<String, EntityConfiguration>();
 		entitiesJoins = new HashMap<String, Map<Join, Element>>();
+
+		classLoaderService = serviceRegistry.getService( ClassLoaderService.class );
+	}
+
+	public MetadataImplementor getMetadata() {
+		return metadata;
+	}
+
+	public ServiceRegistry getServiceRegistry() {
+		return serviceRegistry;
+	}
+
+	public ClassLoaderService getClassLoaderService() {
+		return classLoaderService;
 	}
 
 	/**
@@ -139,6 +141,9 @@ public final class AuditMetadataGenerator {
 	private Element cloneAndSetupRevisionInfoRelationMapping() {
 		final Element revMapping = (Element) revisionInfoRelationMapping.clone();
 		revMapping.addAttribute( "name", verEntCfg.getRevisionFieldName() );
+		if ( globalCfg.isCascadeDeleteRevision() ) {
+			revMapping.addAttribute( "on-delete", "cascade" );
+		}
 
 		MetadataTools.addOrModifyColumn( revMapping, verEntCfg.getRevisionFieldName() );
 
@@ -150,12 +155,16 @@ public final class AuditMetadataGenerator {
 	}
 
 	void addRevisionType(Element anyMapping, Element anyMappingEnd) {
+		addRevisionType( anyMapping, anyMappingEnd, false );
+	}
+
+	void addRevisionType(Element anyMapping, Element anyMappingEnd, boolean isKey) {
 		final Element revTypeProperty = MetadataTools.addProperty(
 				anyMapping,
 				verEntCfg.getRevisionTypePropName(),
 				verEntCfg.getRevisionTypePropType(),
 				true,
-				false
+				isKey
 		);
 		revTypeProperty.addAttribute( "type", "org.hibernate.envers.internal.entities.RevisionTypeType" );
 
@@ -322,7 +331,8 @@ public final class AuditMetadataGenerator {
 			MetadataTools.addModifiedFlagProperty(
 					parent,
 					propertyAuditingData.getName(),
-					globalCfg.getModifiedFlagSuffix()
+					globalCfg.getModifiedFlagSuffix(),
+					propertyAuditingData.getModifiedFlagName()
 			);
 		}
 	}
@@ -697,10 +707,6 @@ public final class AuditMetadataGenerator {
 		return basicMetadataGenerator;
 	}
 
-	Configuration getCfg() {
-		return cfg;
-	}
-
 	GlobalConfiguration getGlobalCfg() {
 		return globalCfg;
 	}
@@ -711,10 +717,6 @@ public final class AuditMetadataGenerator {
 
 	AuditStrategy getAuditStrategy() {
 		return auditStrategy;
-	}
-
-	ClassLoaderService getClassLoaderService() {
-		return classLoaderService;
 	}
 
 	AuditEntityNameRegister getAuditEntityNameRegister() {

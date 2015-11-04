@@ -1,42 +1,28 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cfg;
+
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.AnnotationException;
 import org.hibernate.AssertionFailure;
 import org.hibernate.MappingException;
+import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.mapping.Column;
 import org.hibernate.mapping.Component;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Property;
 import org.hibernate.mapping.Selectable;
 import org.hibernate.mapping.SimpleValue;
+
+import org.jboss.logging.Logger;
 
 /**
  * @author Emmanuel Bernard
@@ -46,17 +32,17 @@ public class CopyIdentifierComponentSecondPass implements SecondPass {
 
 	private final String referencedEntityName;
 	private final Component component;
-	private final Mappings mappings;
+	private final MetadataBuildingContext buildingContext;
 	private final Ejb3JoinColumn[] joinColumns;
 
 	public CopyIdentifierComponentSecondPass(
 			Component comp,
 			String referencedEntityName,
 			Ejb3JoinColumn[] joinColumns,
-			Mappings mappings) {
+			MetadataBuildingContext buildingContext) {
 		this.component = comp;
 		this.referencedEntityName = referencedEntityName;
-		this.mappings = mappings;
+		this.buildingContext = buildingContext;
 		this.joinColumns = joinColumns;
 	}
 
@@ -86,7 +72,7 @@ public class CopyIdentifierComponentSecondPass implements SecondPass {
 				break;
 			}
 			//JPA 2 requires referencedColumnNames to be case insensitive
-			columnByReferencedName.put( referencedColumnName.toLowerCase(), joinColumn );
+			columnByReferencedName.put( referencedColumnName.toLowerCase(Locale.ROOT), joinColumn );
 		}
 		//try default column orientation
 		int index = 0;
@@ -108,12 +94,11 @@ public class CopyIdentifierComponentSecondPass implements SecondPass {
 			else {
 				Property property = new Property();
 				property.setName( referencedProperty.getName() );
-				property.setNodeName( referencedProperty.getNodeName() );
 				//FIXME set optional?
 				//property.setOptional( property.isOptional() );
 				property.setPersistentClass( component.getOwner() );
 				property.setPropertyAccessorName( referencedProperty.getPropertyAccessorName() );
-				SimpleValue value = new SimpleValue( mappings, component.getTable() );
+				SimpleValue value = new SimpleValue( buildingContext.getMetadataCollector(), component.getTable() );
 				property.setValue( value );
 				final SimpleValue referencedValue = (SimpleValue) referencedProperty.getValue();
 				value.setTypeName( referencedValue.getTypeName() );
@@ -139,9 +124,12 @@ public class CopyIdentifierComponentSecondPass implements SecondPass {
 						String logicalColumnName = null;
 						if ( isExplicitReference ) {
 							final String columnName = column.getName();
-							logicalColumnName = mappings.getLogicalColumnName( columnName, referencedPersistentClass.getTable() );
+							logicalColumnName = buildingContext.getMetadataCollector().getLogicalColumnName(
+									referencedPersistentClass.getTable(),
+									columnName
+							);
 							//JPA 2 requires referencedColumnNames to be case insensitive
-							joinColumn = columnByReferencedName.get( logicalColumnName.toLowerCase() );
+							joinColumn = columnByReferencedName.get( logicalColumnName.toLowerCase(Locale.ROOT ) );
 						}
 						else {
 							joinColumn = columnByReferencedName.get( "" + index );

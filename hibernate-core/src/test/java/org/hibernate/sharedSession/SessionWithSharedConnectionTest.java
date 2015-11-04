@@ -1,51 +1,30 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.sharedSession;
+
+import org.hibernate.IrrelevantEntity;
+import org.hibernate.Session;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.event.service.spi.EventListenerRegistry;
+import org.hibernate.event.spi.EventType;
+import org.hibernate.event.spi.PostInsertEvent;
+import org.hibernate.event.spi.PostInsertEventListener;
+import org.hibernate.persister.entity.EntityPersister;
+
+import org.junit.Test;
+
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-
-import java.lang.reflect.Field;
-import java.util.List;
-
-import org.hibernate.IrrelevantEntity;
-import org.hibernate.Session;
-import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.engine.transaction.internal.TransactionCoordinatorImpl;
-import org.hibernate.engine.transaction.spi.TransactionContext;
-import org.hibernate.engine.transaction.spi.TransactionCoordinator;
-import org.hibernate.event.service.spi.EventListenerRegistry;
-import org.hibernate.event.spi.EventType;
-import org.hibernate.event.spi.PostInsertEvent;
-import org.hibernate.event.spi.PostInsertEventListener;
-import org.hibernate.persister.entity.EntityPersister;
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.junit.Test;
 
 /**
  * @author Steve Ebersole
@@ -64,8 +43,9 @@ public class SessionWithSharedConnectionTest extends BaseCoreFunctionalTestCase 
 
 		//the list should have registered and then released a JDBC resource
 		assertFalse(
-				((SessionImplementor) secondSession).getTransactionCoordinator()
+				((SessionImplementor) secondSession)
 						.getJdbcCoordinator()
+						.getResourceRegistry()
 						.hasRegisteredResources()
 		);
 
@@ -102,8 +82,8 @@ public class SessionWithSharedConnectionTest extends BaseCoreFunctionalTestCase 
 				.openSession();
 
 		// directly assert state of the second session
-		assertTrue( ((TransactionContext) secondSession).isAutoCloseSessionEnabled() );
-		assertTrue( ((TransactionContext) secondSession).shouldAutoClose() );
+		assertTrue( ((SessionImplementor) secondSession).isAutoCloseSessionEnabled() );
+		assertTrue( ((SessionImplementor) secondSession).shouldAutoClose() );
 
 		// now commit the transaction and make sure that does not close the sessions
 		session.getTransaction().commit();
@@ -126,8 +106,8 @@ public class SessionWithSharedConnectionTest extends BaseCoreFunctionalTestCase 
 				.openSession();
 
 		// directly assert state of the second session
-		assertTrue( ((TransactionContext) secondSession).isAutoCloseSessionEnabled() );
-		assertTrue( ((TransactionContext) secondSession).shouldAutoClose() );
+		assertTrue( ((SessionImplementor) secondSession).isAutoCloseSessionEnabled() );
+		assertTrue( ((SessionImplementor) secondSession).shouldAutoClose() );
 
 		// now rollback the transaction and make sure that does not close the sessions
 		session.getTransaction().rollback();
@@ -140,23 +120,23 @@ public class SessionWithSharedConnectionTest extends BaseCoreFunctionalTestCase 
 
 	}
 
-	@Test
-	@TestForIssue( jiraKey = "HHH-7090" )
-	public void testSharedTransactionContextAutoJoining() {
-		Session session = sessionFactory().openSession();
-		session.getTransaction().begin();
-
-		Session secondSession = session.sessionWithOptions()
-				.transactionContext()
-				.autoJoinTransactions( true )
-				.openSession();
-
-		// directly assert state of the second session
-		assertFalse( ((TransactionContext) secondSession).shouldAutoJoinTransaction() );
-
-		secondSession.close();
-		session.close();
-	}
+//	@Test
+//	@TestForIssue( jiraKey = "HHH-7090" )
+//	public void testSharedTransactionContextAutoJoining() {
+//		Session session = sessionFactory().openSession();
+//		session.getTransaction().begin();
+//
+//		Session secondSession = session.sessionWithOptions()
+//				.transactionContext()
+//				.autoJoinTransactions( true )
+//				.openSession();
+//
+//		// directly assert state of the second session
+//		assertFalse( ((SessionImplementor) secondSession).shouldAutoJoinTransaction() );
+//
+//		secondSession.close();
+//		session.close();
+//	}
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-7090" )
@@ -171,7 +151,7 @@ public class SessionWithSharedConnectionTest extends BaseCoreFunctionalTestCase 
 				.openSession();
 
 		// directly assert state of the second session
-		assertTrue( ((TransactionContext) secondSession).isFlushBeforeCompletionEnabled() );
+//		assertTrue( ((SessionImplementor) secondSession).isFlushBeforeCompletionEnabled() );
 
 		// now try it out
 		Integer id = (Integer) secondSession.save( new IrrelevantEntity() );
@@ -192,49 +172,6 @@ public class SessionWithSharedConnectionTest extends BaseCoreFunctionalTestCase 
 		session.close();
 	}
 	
-	@Test
-	@TestForIssue( jiraKey = "HHH-7239" )
-	public void testSessionRemovedFromObserversOnClose() throws Exception {
-		Session session = sessionFactory().openSession();
-		session.getTransaction().begin();
-
-		//get the initial count of observers (use reflection as the observers property isn't exposed) 
-		Field field = TransactionCoordinatorImpl.class.getDeclaredField( "observers" );
-		field.setAccessible(true);
-		List observers = (List) field.get( ( ( SessionImplementor ) session ).getTransactionCoordinator() );
-		int originalObserverSize = observers.size();
-		
-		//opening 2nd session registers it with the TransactionCoordinator currently as an observer
-		Session secondSession = session.sessionWithOptions()
-				.connection()
-				.flushBeforeCompletion( false )
-				.autoClose( false )
-				.openSession();
-		
-		observers = (List) field.get( ( ( SessionImplementor ) session ).getTransactionCoordinator() );
-		//the observer size should be larger
-		final int observerSizeWithSecondSession = observers.size();
-		assertTrue( observerSizeWithSecondSession > originalObserverSize);
-
-		//don't need to actually even do anything with the 2nd session
-		secondSession.close();
-		
-		//the second session should be released from the observers on close since it didn't have any after transaction actions
-		observers = (List) field.get( ( ( SessionImplementor ) session ).getTransactionCoordinator() );
-
-		assertEquals( originalObserverSize, observers.size() );
-
-		//store the transaction coordinator here since it's not available after session close
-		TransactionCoordinator transactionCoordinator = ((SessionImplementor) session).getTransactionCoordinator();
-		
-		session.getTransaction().commit();
-		session.close();
-		
-		//on original session close all observers should be released
-		observers = (List) field.get( transactionCoordinator );
-		assertEquals( 0, observers.size() );
-	}
-
 	@Test
 	@TestForIssue( jiraKey = "HHH-7239" )
 	public void testChildSessionCallsAfterTransactionAction() throws Exception {

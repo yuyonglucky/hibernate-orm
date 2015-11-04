@@ -1,31 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.configuration.internal.metadata;
 
 import java.util.Properties;
-
-import org.dom4j.Element;
 
 import org.hibernate.envers.configuration.internal.metadata.reader.PropertyAuditingData;
 import org.hibernate.envers.internal.entities.mapper.SimpleMapperBuilder;
@@ -36,7 +17,8 @@ import org.hibernate.type.CustomType;
 import org.hibernate.type.EnumType;
 import org.hibernate.type.SerializableToBlobType;
 import org.hibernate.type.Type;
-import org.hibernate.usertype.DynamicParameterizedType;
+
+import org.dom4j.Element;
 
 /**
  * Generates metadata for basic properties: immutable types (including enums).
@@ -44,6 +26,7 @@ import org.hibernate.usertype.DynamicParameterizedType;
  * @author Adam Warski (adam at warski dot org)
  */
 public final class BasicMetadataGenerator {
+
 	@SuppressWarnings({"unchecked"})
 	boolean addBasic(
 			Element parent, PropertyAuditingData propertyAuditingData,
@@ -125,14 +108,10 @@ public final class BasicMetadataGenerator {
 					)
 			);
 		}
-		else if ( parameters.get( DynamicParameterizedType.XPROPERTY ) != null ) {
-			// Case of annotations.
+		else {
 			parent.addElement( "param" ).addAttribute( "name", EnumType.NAMED )
 					.setText( "" + !((EnumType) ((CustomType) type).getUserType()).isOrdinal() );
 		}
-		// Otherwise we assume that the choice between ordinal and named representation has been omitted.
-		// Call to EnumType#isOrdinal() would always return the default Types.INTEGER. We let Hibernate
-		// to choose the proper strategy during runtime.
 	}
 
 	@SuppressWarnings({"unchecked"})

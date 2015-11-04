@@ -1,37 +1,28 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.jdbc.dialect.spi;
 
+import org.hibernate.dialect.Dialect;
+import org.hibernate.service.Service;
+
 /**
- * Deprecated
+ * Contract for determining the {@link Dialect} to use based on information about the database / driver.
  *
- * @deprecated Deprecated in favor of {@link DatabaseMetaDataDialectResolver} to account for resolving by name versus
- * by DatabaseMetaData
- *
- * @see DatabaseMetaDataDialectResolver
- * @see DatabaseInfoDialectResolver
+ * @author Tomoto Shimizu Washio
+ * @author Steve Ebersole
  */
-@Deprecated
-public interface DialectResolver extends DatabaseMetaDataDialectResolver {
+public interface DialectResolver extends Service {
+	/**
+	 * Determine the {@link Dialect} to use based on the given information.  Implementations are expected to return
+	 * the {@link Dialect} instance to use, or {@code null} if the they did not locate a match.
+	 *
+	 * @param info Access to the information about the database/driver needed to perform the resolution
+	 *
+	 * @return The dialect to use, or null.
+	 */
+	public Dialect resolveDialect(DialectResolutionInfo info);
 }

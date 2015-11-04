@@ -1,31 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
 
 import java.io.Serializable;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
@@ -41,6 +22,7 @@ import org.hibernate.engine.spi.Status;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.ReplicateEvent;
 import org.hibernate.event.spi.ReplicateEventListener;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
@@ -53,9 +35,7 @@ import org.hibernate.type.Type;
  * @author Steve Ebersole
  */
 public class DefaultReplicateEventListener extends AbstractSaveEventListener implements ReplicateEventListener {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class,
-                                                                       DefaultReplicateEventListener.class.getName());
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( DefaultReplicateEventListener.class );
 
 	/**
 	 * Handle the given replicate event.
@@ -105,7 +85,13 @@ public class DefaultReplicateEventListener extends AbstractSaveEventListener imp
 		final boolean traceEnabled = LOG.isTraceEnabled();
 		if ( oldVersion != null ) {
 			if ( traceEnabled ) {
-				LOG.tracev( "Found existing row for {0}", MessageHelper.infoString( persister, id, source.getFactory() ) );
+				LOG.tracev(
+						"Found existing row for {0}", MessageHelper.infoString(
+						persister,
+						id,
+						source.getFactory()
+				)
+				);
 			}
 
 			/// HHH-2378
@@ -120,18 +106,22 @@ public class DefaultReplicateEventListener extends AbstractSaveEventListener imp
 
 			// if can replicate, will result in a SQL UPDATE
 			// else do nothing (don't even reassociate object!)
-			if ( canReplicate )
+			if ( canReplicate ) {
 				performReplication( entity, id, realOldVersion, persister, replicationMode, source );
-			else if ( traceEnabled )
+			}
+			else if ( traceEnabled ) {
 				LOG.trace( "No need to replicate" );
+			}
 
 			//TODO: would it be better to do a refresh from db?
 		}
 		else {
 			// no existing row - do an insert
 			if ( traceEnabled ) {
-				LOG.tracev( "No existing row, replicating new instance {0}",
-						MessageHelper.infoString( persister, id, source.getFactory() ) );
+				LOG.tracev(
+						"No existing row, replicating new instance {0}",
+						MessageHelper.infoString( persister, id, source.getFactory() )
+				);
 			}
 
 			final boolean regenerate = persister.isIdentifierAssignedByInsert(); // prefer re-generation of identity!
@@ -151,7 +141,12 @@ public class DefaultReplicateEventListener extends AbstractSaveEventListener imp
 	}
 
 	@Override
-    protected boolean visitCollectionsBeforeSave(Object entity, Serializable id, Object[] values, Type[] types, EventSource source) {
+	protected boolean visitCollectionsBeforeSave(
+			Object entity,
+			Serializable id,
+			Object[] values,
+			Type[] types,
+			EventSource source) {
 		//TODO: we use two visitors here, inefficient!
 		OnReplicateVisitor visitor = new OnReplicateVisitor( source, id, entity, false );
 		visitor.processEntityPropertyValues( values, types );
@@ -159,7 +154,7 @@ public class DefaultReplicateEventListener extends AbstractSaveEventListener imp
 	}
 
 	@Override
-    protected boolean substituteValuesIfNecessary(
+	protected boolean substituteValuesIfNecessary(
 			Object entity,
 			Serializable id,
 			Object[] values,
@@ -169,7 +164,7 @@ public class DefaultReplicateEventListener extends AbstractSaveEventListener imp
 	}
 
 	@Override
-    protected boolean isVersionIncrementDisabled() {
+	protected boolean isVersionIncrementDisabled() {
 		return true;
 	}
 
@@ -210,7 +205,10 @@ public class DefaultReplicateEventListener extends AbstractSaveEventListener imp
 			EventSource source) {
 		source.getPersistenceContext().incrementCascadeLevel();
 		try {
-			new Cascade( CascadingActions.REPLICATE, CascadePoint.AFTER_UPDATE, source ).cascade(
+			Cascade.cascade(
+					CascadingActions.REPLICATE,
+					CascadePoint.AFTER_UPDATE,
+					source,
 					persister,
 					entity,
 					replicationMode
@@ -222,7 +220,7 @@ public class DefaultReplicateEventListener extends AbstractSaveEventListener imp
 	}
 
 	@Override
-    protected CascadingAction getCascadeAction() {
+	protected CascadingAction getCascadeAction() {
 		return CascadingActions.REPLICATE;
 	}
 }

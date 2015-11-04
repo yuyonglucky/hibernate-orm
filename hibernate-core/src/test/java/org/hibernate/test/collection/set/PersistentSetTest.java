@@ -1,41 +1,24 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.collection.set;
 
 import java.util.HashSet;
-
-import org.junit.Test;
+import java.util.Map;
 
 import org.hibernate.CacheMode;
 import org.hibernate.Session;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.cfg.Environment;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.collection.internal.PersistentSet;
 import org.hibernate.criterion.Restrictions;
 import org.hibernate.stat.CollectionStatistics;
+
 import org.hibernate.testing.FailureExpected;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -44,16 +27,18 @@ import static org.junit.Assert.assertTrue;
 /**
  * @author Steve Ebersole
  */
-public class PersistentSetTest extends BaseCoreFunctionalTestCase {
+public class PersistentSetTest extends BaseNonConfigCoreFunctionalTestCase {
 	@Override
 	public String[] getMappings() {
 		return new String[] { "collection/set/Mappings.hbm.xml" };
 	}
 
 	@Override
-	public void configure(Configuration cfg) {
-		super.configure( cfg );
-		cfg.setProperty( Environment.GENERATE_STATISTICS, "true" );
+	protected void addSettings(Map settings) {
+		super.addSettings( settings );
+		settings.put( AvailableSettings.GENERATE_STATISTICS, "true" );
+		settings.put( AvailableSettings.USE_SECOND_LEVEL_CACHE, "true" );
+		settings.put( AvailableSettings.USE_QUERY_CACHE, "true" );
 	}
 
 	@Test

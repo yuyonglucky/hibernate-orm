@@ -1,36 +1,18 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.ast.tree;
-
-import antlr.collections.AST;
 
 import org.hibernate.HibernateException;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.hql.internal.antlr.HqlSqlTokenTypes;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.type.Type;
+
+import antlr.collections.AST;
 
 /**
  * Base class for nodes dealing 'is null' and 'is not null' operators.
@@ -40,12 +22,8 @@ import org.hibernate.type.Type;
  * @author Steve Ebersole
  */
 public abstract class AbstractNullnessCheckNode extends UnaryLogicOperatorNode {
-
-	/**
-	 * {@inheritDoc}
-	 */
 	@Override
-    public void initialize() {
+	public void initialize() {
 		// TODO : this really needs to be delayed unitl after we definitively know the operand node type;
 		// where this is currently a problem is parameters for which where we cannot unequivocally
 		// resolve an expected type
@@ -113,14 +91,15 @@ public abstract class AbstractNullnessCheckNode extends UnaryLogicOperatorNode {
 	}
 
 	private static Type extractDataType(Node operand) {
-		Type type = null;
 		if ( operand instanceof SqlNode ) {
-			type = ( ( SqlNode ) operand ).getDataType();
+			return ( (SqlNode) operand ).getDataType();
 		}
-		if ( type == null && operand instanceof ExpectedTypeAwareNode ) {
-			type = ( ( ExpectedTypeAwareNode ) operand ).getExpectedType();
+
+		if ( operand instanceof ExpectedTypeAwareNode ) {
+			return ( (ExpectedTypeAwareNode) operand ).getExpectedType();
 		}
-		return type;
+
+		return null;
 	}
 
 	private static String[] extractMutationTexts(Node operand, int count) {
@@ -132,9 +111,9 @@ public abstract class AbstractNullnessCheckNode extends UnaryLogicOperatorNode {
 			return rtn;
 		}
 		else if ( operand.getType() == HqlSqlTokenTypes.VECTOR_EXPR ) {
-			String[] rtn = new String[ operand.getNumberOfChildren() ];
-			int x = 0;
+			final String[] rtn = new String[ operand.getNumberOfChildren() ];
 			AST node = operand.getFirstChild();
+			int x = 0;
 			while ( node != null ) {
 				rtn[ x++ ] = node.getText();
 				node = node.getNextSibling();

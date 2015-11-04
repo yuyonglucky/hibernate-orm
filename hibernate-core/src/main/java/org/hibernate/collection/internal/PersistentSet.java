@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.collection.internal;
 
@@ -167,12 +150,11 @@ public class PersistentSet extends AbstractPersistentCollection implements java.
 	}
 
 	@Override
-	@SuppressWarnings({"unchecked", "UnnecessaryUnboxing"})
 	public boolean contains(Object object) {
 		final Boolean exists = readElementExistence( object );
 		return exists == null
 				? set.contains( object )
-				: exists.booleanValue();
+				: exists;
 	}
 
 	@Override
@@ -197,7 +179,6 @@ public class PersistentSet extends AbstractPersistentCollection implements java.
 	}
 
 	@Override
-	@SuppressWarnings({"unchecked", "UnnecessaryUnboxing"})
 	public boolean add(Object value) {
 		final Boolean exists = isOperationQueueEnabled() ? readElementExistence( value ) : null;
 		if ( exists == null ) {
@@ -210,7 +191,7 @@ public class PersistentSet extends AbstractPersistentCollection implements java.
 				return false;
 			}
 		}
-		else if ( exists.booleanValue() ) {
+		else if ( exists ) {
 			return false;
 		}
 		else {
@@ -220,7 +201,6 @@ public class PersistentSet extends AbstractPersistentCollection implements java.
 	}
 
 	@Override
-	@SuppressWarnings({"unchecked", "UnnecessaryUnboxing"})
 	public boolean remove(Object value) {
 		final Boolean exists = isPutQueueEnabled() ? readElementExistence( value ) : null;
 		if ( exists == null ) {
@@ -233,7 +213,7 @@ public class PersistentSet extends AbstractPersistentCollection implements java.
 				return false;
 			}
 		}
-		else if ( exists.booleanValue() ) {
+		else if ( exists ) {
 			queueOperation( new SimpleRemove( value ) );
 			return true;
 		}

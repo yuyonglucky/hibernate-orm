@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.id.enhanced;
 
@@ -102,7 +85,7 @@ public class OptimizerUnitTest extends BaseUnitTestCase {
 		// test historic sequence behavior, where the initial values start at 1...
 		SourceMock sequence = new SourceMock( 1, 10 );
 		Optimizer optimizer = buildPooledOptimizer( -1, 10 );
-		for ( int i = 1; i < 11; i++ ) {
+		for ( int i = 1; i <= 11; i++ ) {
 			next = ( Long ) optimizer.generate( sequence );
 			assertEquals( i, next.intValue() );
 		}
@@ -110,7 +93,7 @@ public class OptimizerUnitTest extends BaseUnitTestCase {
 		assertEquals( 11, sequence.getCurrentValue() );
 		// force a "clock over"
 		next = ( Long ) optimizer.generate( sequence );
-		assertEquals( 11, next.intValue() );
+		assertEquals( 12, next.intValue() );
 		assertEquals( 3, sequence.getTimesCalled() );
 		assertEquals( 21, sequence.getCurrentValue() );
 	}
@@ -127,12 +110,7 @@ public class OptimizerUnitTest extends BaseUnitTestCase {
 		assertEquals( 1001, sequence.getCurrentValue() );
 
 		Long next = (Long) optimizer.generate( sequence );
-		assertEquals( 1001, next.intValue() );
-		assertEquals( (5+1), sequence.getTimesCalled() );
-		assertEquals( (1001+3), sequence.getCurrentValue() );
-
-		next = (Long) optimizer.generate( sequence );
-		assertEquals( (1001+1), next.intValue() );
+		assertEquals( 1001 +1 , next.intValue() );
 		assertEquals( (5+1), sequence.getTimesCalled() );
 		assertEquals( (1001+3), sequence.getCurrentValue() );
 
@@ -141,9 +119,14 @@ public class OptimizerUnitTest extends BaseUnitTestCase {
 		assertEquals( (5+1), sequence.getTimesCalled() );
 		assertEquals( (1001+3), sequence.getCurrentValue() );
 
-		// force a "clock over"
 		next = (Long) optimizer.generate( sequence );
 		assertEquals( (1001+3), next.intValue() );
+		assertEquals( (5+1), sequence.getTimesCalled() );
+		assertEquals( (1001+3), sequence.getCurrentValue() );
+
+		// force a "clock over"
+		next = (Long) optimizer.generate( sequence );
+		assertEquals( (1001+4), next.intValue() );
 		assertEquals( (5+2), sequence.getTimesCalled() );
 		assertEquals( (1001+6), sequence.getCurrentValue() );
 	}
@@ -228,7 +211,7 @@ public class OptimizerUnitTest extends BaseUnitTestCase {
 		// app ends, and starts back up (we should "lose" only 2 and 3 as id values)
 		final Optimizer optimizer2 = buildPooledOptimizer( 1, 3 );
 		next = ( Long ) optimizer2.generate( sequence );
-		assertEquals( 4, next.intValue() );
+		assertEquals( 5, next.intValue() );
 		assertEquals( 3, sequence.getTimesCalled() );
 		assertEquals( 7, sequence.getCurrentValue() );
 	}

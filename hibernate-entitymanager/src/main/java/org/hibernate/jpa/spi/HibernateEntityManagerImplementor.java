@@ -1,39 +1,21 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2012, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.spi;
 
+import java.util.List;
+import java.util.Map;
 import javax.persistence.LockModeType;
 import javax.persistence.PersistenceException;
 import javax.persistence.criteria.Selection;
-import java.util.List;
-import java.util.Map;
 
 import org.hibernate.HibernateException;
 import org.hibernate.LockOptions;
 import org.hibernate.StaleStateException;
 import org.hibernate.jpa.HibernateEntityManager;
-import org.hibernate.jpa.HibernateEntityManagerFactory;
 import org.hibernate.jpa.criteria.ValueHandlerFactory;
 import org.hibernate.jpa.internal.QueryImpl;
 import org.hibernate.type.Type;
@@ -44,13 +26,8 @@ import org.hibernate.type.Type;
  * @author Emmanuel Bernard
  * @author Steve Ebersole
  */
-public interface HibernateEntityManagerImplementor extends HibernateEntityManager {
-	/**
-	 * Get access to the Hibernate extended EMF contract.
-	 *
-	 * @return The Hibernate EMF contract for this EM.
-	 */
-	public HibernateEntityManagerFactory getFactory();
+public interface HibernateEntityManagerImplementor extends HibernateEntityManager, HibernateEntityManagerFactoryAware {
+
 
 	/**
 	 * Used to ensure the EntityManager is open, throwing IllegalStateException if it is closed.
@@ -71,6 +48,11 @@ public interface HibernateEntityManagerImplementor extends HibernateEntityManage
 	 * @return True if a transaction is considered currently in progress; false otherwise.
 	 */
 	boolean isTransactionInProgress();
+
+	/**
+	 * Used to mark a transaction for rollback only (when that is the JPA spec defined behavior).
+	 */
+	public void markForRollbackOnly();
 
 	/**
 	 * Handles marking for rollback and other such operations that need to occur depending on the type of
@@ -131,10 +113,12 @@ public interface HibernateEntityManagerImplementor extends HibernateEntityManage
 	 */
 	public LockOptions getLockRequest(LockModeType lockModeType, Map<String, Object> properties);
 
-	public static interface Options {
+	public static interface QueryOptions {
 		public static interface ResultMetadataValidator {
 			public void validate(Type[] returnTypes);
 		}
+
+		public ResultMetadataValidator getResultMetadataValidator();
 
 		/**
 		 * Get the conversions for the individual tuples in the query results.
@@ -150,8 +134,6 @@ public interface HibernateEntityManagerImplementor extends HibernateEntityManage
 		 * @return The
 		 */
 		public Map<String, Class> getNamedParameterExplicitTypes();
-
-		public ResultMetadataValidator getResultMetadataValidator();
 	}
 
 	/**
@@ -160,10 +142,10 @@ public interface HibernateEntityManagerImplementor extends HibernateEntityManage
 	 * @param jpaqlString The criteria query rendered as a JPA QL string
 	 * @param resultClass The result type (the type expected in the result list)
 	 * @param selection The selection(s)
-	 * @param options The options to use to build the query.
+	 * @param queryOptions The options to use to build the query.
 	 * @param <T> The query type
 	 *
 	 * @return The typed query
 	 */
-	public <T> QueryImpl<T> createQuery(String jpaqlString, Class<T> resultClass, Selection selection, Options options);
+	public <T> QueryImpl<T> createQuery(String jpaqlString, Class<T> resultClass, Selection selection, QueryOptions queryOptions);
 }

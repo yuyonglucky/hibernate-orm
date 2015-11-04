@@ -1,62 +1,44 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.compositeelement;
-import java.util.ArrayList;
 
-import org.junit.Test;
+import java.util.ArrayList;
 
 import org.hibernate.Session;
 import org.hibernate.Transaction;
-import org.hibernate.cfg.Mappings;
+import org.hibernate.boot.Metadata;
 import org.hibernate.criterion.Restrictions;
-import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.function.SQLFunction;
 import org.hibernate.mapping.Collection;
 import org.hibernate.mapping.Component;
 import org.hibernate.mapping.Formula;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.hibernate.type.StandardBasicTypes;
+
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
 /**
  * @author Gavin King
  */
-public class CompositeElementTest extends BaseCoreFunctionalTestCase {
+public class CompositeElementTest extends BaseNonConfigCoreFunctionalTestCase {
 	@Override
 	public String[] getMappings() {
 		return new String[] { "compositeelement/Parent.hbm.xml" };
 	}
 
 	@Override
-	public void afterConfigurationBuilt(Mappings mappings, Dialect dialect) {
-		super.afterConfigurationBuilt( mappings, dialect );
-		Collection children = mappings.getCollection( Parent.class.getName() + ".children" );
+	protected void afterMetadataBuilt(Metadata metadata) {
+		Collection children = metadata.getCollectionBinding( Parent.class.getName() + ".children" );
 		Component childComponents = ( Component ) children.getElement();
 		Formula f = ( Formula ) childComponents.getProperty( "bioLength" ).getValue().getColumnIterator().next();
 
-		SQLFunction lengthFunction = dialect.getFunctions().get( "length" );
+		SQLFunction lengthFunction = metadata.getDatabase().getJdbcEnvironment().getDialect().getFunctions().get( "length" );
 		if ( lengthFunction != null ) {
 			ArrayList args = new ArrayList();
 			args.add( "bio" );

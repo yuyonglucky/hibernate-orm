@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.type.descriptor;
 
@@ -28,19 +11,19 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
 import org.hibernate.internal.CoreMessageLogger;
+
+import static org.hibernate.internal.CoreLogging.messageLogger;
 
 /**
  * (Badly named) helper for dealing with standard JDBC types as defined by {@link java.sql.Types}
  *
  * @author Steve Ebersole
  */
-public class JdbcTypeNameMapper {
+public final class JdbcTypeNameMapper {
+	private static final CoreMessageLogger LOG = messageLogger( JdbcTypeNameMapper.class );
 
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, JdbcTypeNameMapper.class.getName());
 	private static Map<Integer,String> JDBC_TYPE_MAP = buildJdbcTypeMap();
 
 	private static Map<Integer, String> buildJdbcTypeMap() {
@@ -53,7 +36,7 @@ public class JdbcTypeNameMapper {
 			try {
 				final int code = field.getInt( null );
 				String old = map.put( code, field.getName() );
-                if ( old != null ) {
+				if ( old != null ) {
 					LOG.JavaSqlTypesMappedSameCodeMultipleTimes( code, old, field.getName() );
 				}
 			}
@@ -104,4 +87,8 @@ public class JdbcTypeNameMapper {
 		}
 		return name;
 	}
+
+	private JdbcTypeNameMapper() {
+	}
+
 }

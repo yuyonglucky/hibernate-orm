@@ -1,50 +1,53 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.collection.map;
-import java.util.HashMap;
-
-import org.junit.Test;
-
-import org.hibernate.Session;
-import org.hibernate.collection.internal.PersistentMap;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.persistence.CascadeType;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.MapKeyColumn;
+import javax.persistence.OneToMany;
+import javax.persistence.Table;
+
+import org.hibernate.Query;
+import org.hibernate.Session;
+import org.hibernate.collection.internal.PersistentMap;
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
+
 /**
  * Test various situations using a {@link PersistentMap}.
  *
  * @author Steve Ebersole
+ * @author Brett Meyer
  */
 public class PersistentMapTest extends BaseCoreFunctionalTestCase {
 	@Override
 	public String[] getMappings() {
 		return new String[] { "collection/map/Mappings.hbm.xml" };
+	}
+	
+	@Override
+	protected Class<?>[] getAnnotatedClasses() {
+		return new Class<?>[] { User.class, UserData.class };
 	}
 
 	@Test
@@ -157,4 +160,62 @@ public class PersistentMapTest extends BaseCoreFunctionalTestCase {
         session.getTransaction().commit();
         session.close();
     }
+	
+	@Test
+	@TestForIssue(jiraKey = "HHH-5732")
+	public void testClearMap() {
+		Session s = openSession();
+		s.beginTransaction();
+		
+		User user = new User();
+		UserData userData = new UserData();
+		userData.user = user;
+		user.userDatas.put( "foo", userData );
+		s.persist( user );
+		
+		s.getTransaction().commit();
+		s.clear();
+		
+		s.beginTransaction();
+		
+		user = s.get( User.class, 1 );
+	    user.userDatas.clear();
+	    s.update( user );
+		Query q = s.createQuery( "DELETE FROM " + UserData.class.getName() + " d WHERE d.user = :user" );
+		q.setParameter( "user", user );
+		q.executeUpdate();
+		
+		s.getTransaction().commit();
+
+		s.getTransaction().begin();
+
+		assertEquals( s.get( User.class, user.id ).userDatas.size(), 0 );
+		assertEquals( s.createQuery( "FROM " + UserData.class.getName() ).list().size(), 0 );
+		s.createQuery( "delete " + User.class.getName() ).executeUpdate();
+
+		s.getTransaction().commit();
+		s.close();
+	}
+	
+	@Entity
+	@Table(name = "MyUser")
+	private static class User implements Serializable {
+		@Id @GeneratedValue
+		private Integer id;
+		
+		@OneToMany(fetch = FetchType.LAZY, mappedBy = "user", cascade = CascadeType.ALL)
+		@MapKeyColumn(name = "name", nullable = true)
+		private Map<String, UserData> userDatas = new HashMap<String, UserData>();
+	}
+	
+	@Entity
+	@Table(name = "UserData")
+	private static class UserData {
+		@Id @GeneratedValue
+		private Integer id;
+		
+		@ManyToOne
+		@JoinColumn(name = "userId")
+		private User user;
+	}
 }

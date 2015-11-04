@@ -1,8 +1,14 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.reventity;
 
-import javax.persistence.EntityManager;
 import java.util.Arrays;
 import java.util.Map;
+import javax.persistence.EntityManager;
 
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.H2Dialect;
@@ -12,9 +18,8 @@ import org.hibernate.envers.test.Priority;
 import org.hibernate.envers.test.entities.StrTestEntity;
 import org.hibernate.mapping.Table;
 
-import org.junit.Test;
-
 import org.hibernate.testing.RequiresDialect;
+import org.junit.Test;
 
 /**
  * Tests simple auditing process (read and write operations) when <i>REVINFO</i> and audit tables
@@ -65,7 +70,7 @@ public class DifferentDBSchemaTest extends BaseEnversJPAFunctionalTestCase {
 
 	@Test
 	public void testRevinfoSchemaName() {
-		Table revisionTable = getCfg().getClassMapping( "org.hibernate.envers.enhanced.SequenceIdRevisionEntity" )
+		Table revisionTable = metadata().getEntityBinding( "org.hibernate.envers.enhanced.SequenceIdRevisionEntity" )
 				.getTable();
 		assert SCHEMA_NAME.equals( revisionTable.getSchema() );
 	}

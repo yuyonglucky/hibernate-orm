@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.configuration.internal.metadata.reader;
 
@@ -28,6 +11,7 @@ import org.hibernate.annotations.common.reflection.XProperty;
 import org.hibernate.envers.Audited;
 import org.hibernate.envers.ModificationStore;
 import org.hibernate.envers.configuration.internal.GlobalConfiguration;
+import org.hibernate.envers.configuration.internal.metadata.MetadataTools;
 
 /**
  * Reads the audited properties for components.
@@ -52,14 +36,22 @@ public class ComponentAuditedPropertiesReader extends AuditedPropertiesReader {
 	@Override
 	protected boolean checkAudited(
 			XProperty property,
-			PropertyAuditingData propertyData,
-			Audited allClassAudited) {
+			PropertyAuditingData propertyData, String propertyName,
+			Audited allClassAudited, String modifiedFlagSuffix) {
 		// Checking if this property is explicitly audited or if all properties are.
 		final Audited aud = property.getAnnotation( Audited.class );
 		if ( aud != null ) {
 			propertyData.setStore( aud.modStore() );
 			propertyData.setRelationTargetAuditMode( aud.targetAuditMode() );
 			propertyData.setUsingModifiedFlag( checkUsingModifiedFlag( aud ) );
+			if(aud.modifiedColumnName() != null && !"".equals(aud.modifiedColumnName())) {
+				propertyData.setModifiedFlagName(aud.modifiedColumnName());
+			}
+			else {
+				propertyData.setModifiedFlagName(
+						MetadataTools.getModifiedFlagPropertyName( propertyName, modifiedFlagSuffix )
+				);
+			}
 		}
 		else {
 			propertyData.setStore( ModificationStore.FULL );

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.ehcache.internal.regions;
 
@@ -32,12 +15,12 @@ import net.sf.ehcache.concurrent.LockType;
 import net.sf.ehcache.concurrent.StripedReadWriteLockSync;
 import net.sf.ehcache.constructs.nonstop.NonStopCacheException;
 
+import org.hibernate.boot.spi.SessionFactoryOptions;
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.ehcache.internal.nonstop.HibernateNonstopCacheExceptionHandler;
 import org.hibernate.cache.ehcache.internal.strategy.EhcacheAccessStrategyFactory;
 import org.hibernate.cache.spi.CacheDataDescription;
 import org.hibernate.cache.spi.TransactionalDataRegion;
-import org.hibernate.cfg.Settings;
 
 /**
  * An Ehcache specific TransactionalDataRegion.
@@ -53,7 +36,7 @@ import org.hibernate.cfg.Settings;
 public class EhcacheTransactionalDataRegion extends EhcacheDataRegion implements TransactionalDataRegion {
 	private static final int LOCAL_LOCK_PROVIDER_CONCURRENCY = 128;
 
-	private final Settings settings;
+	private final SessionFactoryOptions settings;
 
 	/**
 	 * Metadata associated with the objects stored in the region.
@@ -66,7 +49,7 @@ public class EhcacheTransactionalDataRegion extends EhcacheDataRegion implements
 	 * Construct an transactional Hibernate cache region around the given Ehcache instance.
 	 */
 	EhcacheTransactionalDataRegion(
-			EhcacheAccessStrategyFactory accessStrategyFactory, Ehcache cache, Settings settings,
+			EhcacheAccessStrategyFactory accessStrategyFactory, Ehcache cache, SessionFactoryOptions settings,
 			CacheDataDescription metadata, Properties properties) {
 		super( accessStrategyFactory, cache, properties );
 		this.settings = settings;
@@ -86,7 +69,7 @@ public class EhcacheTransactionalDataRegion extends EhcacheDataRegion implements
 	 *
 	 * @return settings
 	 */
-	public Settings getSettings() {
+	public SessionFactoryOptions getSettings() {
 		return settings;
 	}
 
@@ -263,7 +246,7 @@ public class EhcacheTransactionalDataRegion extends EhcacheDataRegion implements
 	 */
 	public final void readLock(Object key) throws CacheException {
 		try {
-			lockProvider.getSyncForKey( key ).lock( LockType.WRITE );
+			lockProvider.getSyncForKey( key ).lock( LockType.READ );
 		}
 		catch (net.sf.ehcache.CacheException e) {
 			if ( e instanceof NonStopCacheException ) {
@@ -285,7 +268,7 @@ public class EhcacheTransactionalDataRegion extends EhcacheDataRegion implements
 	 */
 	public final void readUnlock(Object key) throws CacheException {
 		try {
-			lockProvider.getSyncForKey( key ).unlock( LockType.WRITE );
+			lockProvider.getSyncForKey( key ).unlock( LockType.READ );
 		}
 		catch (net.sf.ehcache.CacheException e) {
 			if ( e instanceof NonStopCacheException ) {

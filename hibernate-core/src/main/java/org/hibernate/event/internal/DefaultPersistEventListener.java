@@ -1,32 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.HibernateException;
 import org.hibernate.ObjectDeletedException;
@@ -40,6 +21,7 @@ import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.PersistEvent;
 import org.hibernate.event.spi.PersistEventListener;
 import org.hibernate.id.ForeignGenerator;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
@@ -53,19 +35,15 @@ import org.hibernate.proxy.LazyInitializer;
  * @author Gavin King
  */
 public class DefaultPersistEventListener extends AbstractSaveEventListener implements PersistEventListener {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(
-			CoreMessageLogger.class,
-			DefaultPersistEventListener.class.getName()
-	);
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( DefaultPersistEventListener.class );
 
 	@Override
-    protected CascadingAction getCascadeAction() {
+	protected CascadingAction getCascadeAction() {
 		return CascadingActions.PERSIST;
 	}
 
 	@Override
-    protected Boolean getAssumedUnsaved() {
+	protected Boolean getAssumedUnsaved() {
 		return Boolean.TRUE;
 	}
 
@@ -73,16 +51,18 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 	 * Handle the given create event.
 	 *
 	 * @param event The create event to be handled.
+	 *
 	 * @throws HibernateException
 	 */
 	public void onPersist(PersistEvent event) throws HibernateException {
-		onPersist( event, new IdentityHashMap(10) );
+		onPersist( event, new IdentityHashMap( 10 ) );
 	}
 
 	/**
 	 * Handle the given create event.
 	 *
 	 * @param event The create event to be handled.
+	 *
 	 * @throws HibernateException
 	 */
 	public void onPersist(PersistEvent event, Map createCache) throws HibernateException {
@@ -170,7 +150,7 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 
 	}
 
-	@SuppressWarnings( {"unchecked"})
+	@SuppressWarnings({"unchecked"})
 	protected void entityIsPersistent(PersistEvent event, Map createCache) {
 		LOG.trace( "Ignoring persistent instance" );
 		final EventSource source = event.getSession();
@@ -180,7 +160,7 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 		final Object entity = source.getPersistenceContext().unproxy( event.getObject() );
 		final EntityPersister persister = source.getEntityPersister( event.getEntityName(), entity );
 
-		if ( createCache.put(entity, entity)==null ) {
+		if ( createCache.put( entity, entity ) == null ) {
 			justCascade( createCache, source, entity, persister );
 
 		}
@@ -188,8 +168,8 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 
 	private void justCascade(Map createCache, EventSource source, Object entity, EntityPersister persister) {
 		//TODO: merge into one method!
-		cascadeBeforeSave(source, persister, entity, createCache);
-		cascadeAfterSave(source, persister, entity, createCache);
+		cascadeBeforeSave( source, persister, entity, createCache );
+		cascadeAfterSave( source, persister, entity, createCache );
 	}
 
 	/**
@@ -198,7 +178,7 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 	 * @param event The save event to be handled.
 	 * @param createCache The copy cache of entity instance to merge/copy instance.
 	 */
-	@SuppressWarnings( {"unchecked"})
+	@SuppressWarnings({"unchecked"})
 	protected void entityIsTransient(PersistEvent event, Map createCache) {
 		LOG.trace( "Saving transient instance" );
 
@@ -210,7 +190,7 @@ public class DefaultPersistEventListener extends AbstractSaveEventListener imple
 		}
 	}
 
-	@SuppressWarnings( {"unchecked"})
+	@SuppressWarnings({"unchecked"})
 	private void entityIsDeleted(PersistEvent event, Map createCache) {
 		final EventSource source = event.getSession();
 

@@ -1,31 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.entities.mapper.relation;
 
 import java.io.Serializable;
 
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.entities.mapper.relation.lazy.ToOneDelegateSessionImplementor;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
 import org.hibernate.persister.entity.EntityPersister;
@@ -33,7 +16,10 @@ import org.hibernate.persister.entity.EntityPersister;
 /**
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
  */
-public class ToOneEntityLoader {
+public final class ToOneEntityLoader {
+	private ToOneEntityLoader() {
+	}
+
 	/**
 	 * Immediately loads historical entity or its current state when excluded from audit process. Returns {@code null}
 	 * reference if entity has not been found in the database.
@@ -45,8 +31,8 @@ public class ToOneEntityLoader {
 			Object entityId,
 			Number revision,
 			boolean removed,
-			AuditConfiguration verCfg) {
-		if ( verCfg.getEntCfg().getNotVersionEntityConfiguration( entityName ) == null ) {
+			EnversService enversService) {
+		if ( enversService.getEntitiesConfigurations().getNotVersionEntityConfiguration( entityName ) == null ) {
 			// Audited relation, look up entity with Envers.
 			// When user traverses removed entities graph, do not restrict revision type of referencing objects
 			// to ADD or MOD (DEL possible). See HHH-5845.
@@ -68,13 +54,13 @@ public class ToOneEntityLoader {
 			Object entityId,
 			Number revision,
 			boolean removed,
-			AuditConfiguration verCfg) {
+			EnversService enversService) {
 		final EntityPersister persister = versionsReader.getSessionImplementor()
 				.getFactory()
 				.getEntityPersister( entityName );
 		return persister.createProxy(
 				(Serializable) entityId,
-				new ToOneDelegateSessionImplementor( versionsReader, entityClass, entityId, revision, removed, verCfg )
+				new ToOneDelegateSessionImplementor( versionsReader, entityClass, entityId, revision, removed, enversService )
 		);
 	}
 
@@ -89,13 +75,13 @@ public class ToOneEntityLoader {
 			Object entityId,
 			Number revision,
 			boolean removed,
-			AuditConfiguration verCfg) {
+			EnversService enversService) {
 		final EntityPersister persister = versionsReader.getSessionImplementor()
 				.getFactory()
 				.getEntityPersister( entityName );
 		if ( persister.hasProxy() ) {
-			return createProxy( versionsReader, entityClass, entityName, entityId, revision, removed, verCfg );
+			return createProxy( versionsReader, entityClass, entityName, entityId, revision, removed, enversService );
 		}
-		return loadImmediate( versionsReader, entityClass, entityName, entityId, revision, removed, verCfg );
+		return loadImmediate( versionsReader, entityClass, entityName, entityId, revision, removed, enversService );
 	}
 }

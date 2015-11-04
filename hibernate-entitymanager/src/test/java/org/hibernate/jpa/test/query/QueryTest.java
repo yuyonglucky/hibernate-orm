@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.query;
 
@@ -29,22 +12,25 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
-import javax.persistence.EntityManager;
-import javax.persistence.Parameter;
-import javax.persistence.Query;
-import javax.persistence.TemporalType;
-import javax.persistence.Tuple;
+import java.util.Map;
+import javax.persistence.*;
 
 import org.junit.Test;
 
 import org.hibernate.Hibernate;
+import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 import org.hibernate.jpa.test.Distributor;
 import org.hibernate.jpa.test.Item;
 import org.hibernate.jpa.test.Wallet;
+import org.hibernate.stat.Statistics;
+
+import junit.framework.Assert;
 
 import org.hibernate.testing.TestForIssue;
 
+import static junit.framework.Assert.assertNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -55,6 +41,24 @@ import static org.junit.Assert.fail;
  * @author Steve Ebersole
  */
 public class QueryTest extends BaseEntityManagerFunctionalTestCase {
+	@Override
+	public Class[] getAnnotatedClasses() {
+		return new Class[] {
+				Item.class,
+				Distributor.class,
+				Wallet.class,
+				Employee.class,
+				Contractor.class
+		};
+	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	protected void addConfigOptions(Map options) {
+		super.addConfigOptions( options );
+		options.put( AvailableSettings.GENERATE_STATISTICS, "true" );
+	}
+
 	@Test
 	@TestForIssue( jiraKey = "HHH-7192" )
 	public void testTypedManipulationQueryError() {
@@ -111,18 +115,18 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 		em.close();
 	}
 
+	@Test
 	public void testTypeExpression() throws Exception {
-		EntityManager em = getOrCreateEntityManager();
+		final EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
-		Item item = new Item( "Mouse", "Micro$oft mouse" );
-		em.persist( item );
-		item = new Item( "Computer", "Apple II" );
-		em.persist( item );
-		Query q = em.createQuery( "select i from Item i where TYPE(i) = :itemType" );
-		q.setParameter( "itemType", Item.class );
-		List result = q.getResultList();
+		final Employee employee = new Employee( "Lukasz", 100.0 );
+		em.persist( employee );
+		final Contractor contractor = new Contractor( "Kinga", 100.0, "Microsoft" );
+		em.persist( contractor );
+		final Query q = em.createQuery( "SELECT e FROM Employee e where TYPE(e) <> Contractor" );
+		final List result = q.getResultList();
 		assertNotNull( result );
-		assertEquals( 2, result.size() );
+		assertEquals( Arrays.asList( employee ), result );
 		em.getTransaction().rollback();
 		em.close();
 	}
@@ -165,6 +169,49 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 	}
 
 	@Test
+	@TestForIssue( jiraKey = "HHH_8949" )
+	public void testCacheStoreAndRetrieveModeParameter() throws Exception {
+		EntityManager em = getOrCreateEntityManager();
+		em.getTransaction().begin();
+
+		Query query = em.createQuery( "select item from Item item" );
+
+		query.getHints().clear();
+
+		query.setHint( "javax.persistence.cache.retrieveMode", CacheRetrieveMode.USE );
+		query.setHint( "javax.persistence.cache.storeMode", CacheStoreMode.REFRESH );
+
+		assertEquals( CacheRetrieveMode.USE, query.getHints().get( "javax.persistence.cache.retrieveMode" ) );
+		assertEquals( CacheStoreMode.REFRESH, query.getHints().get( "javax.persistence.cache.storeMode" ) );
+
+		query.getHints().clear();
+
+		query.setHint( "javax.persistence.cache.retrieveMode", "USE" );
+		query.setHint( "javax.persistence.cache.storeMode", "REFRESH" );
+
+		assertEquals( "USE", query.getHints().get( "javax.persistence.cache.retrieveMode" ) );
+		assertEquals( "REFRESH", query.getHints().get( "javax.persistence.cache.storeMode" ) );
+
+		em.getTransaction().commit();
+		em.close();
+	}
+
+	@Test
+	public void testJpaPositionalParameters() {
+		EntityManager em = getOrCreateEntityManager();
+		em.getTransaction().begin();
+
+		Query query = em.createQuery( "from Item item where item.name =?1 or item.descr = ?1" );
+		Parameter p1 = query.getParameter( 1 );
+		Assert.assertNotNull( p1 );
+		Assert.assertNotNull( p1.getPosition() );
+		Assert.assertNull( p1.getName() );
+
+		em.getTransaction().commit();
+		em.close();
+	}
+
+	@Test
 	public void testParameterList() throws Exception {
 		final Item item = new Item( "Mouse", "Micro$oft mouse" );
 		final Item item2 = new Item( "Computer", "Dell computer" );
@@ -202,6 +249,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 		params = new ArrayList();
 		params.add( item.getName() );
 		params.add( item2.getName() );
+		// deprecated usage of positional parameter by String
 		q.setParameter( "1", params );
 		result = q.getResultList();
 		assertNotNull( result );
@@ -254,6 +302,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 		params = new ArrayList();
 		params.add( item.getName() );
 		params.add( item2.getName() );
+		// deprecated usage of positional parameter by String
 		q.setParameter( "1", params );
 		result = q.getResultList();
 		assertNotNull( result );
@@ -299,8 +348,13 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 		assertTrue( em.contains( item ) );
 		em.getTransaction().commit();
 
+		Statistics stats = em.getEntityManagerFactory().unwrap( SessionFactoryImplementor.class ).getStatistics();
+		stats.clear();
+		assertEquals( 0, stats.getFlushCount() );
+
 		em.getTransaction().begin();
 		item = (Item) em.createNativeQuery( "select * from Item", Item.class ).getSingleResult();
+		assertEquals( 1, stats.getFlushCount() );
 		assertNotNull( item );
 		assertEquals( "Micro$oft mouse", item.getDescr() );
 		em.remove( item );
@@ -396,6 +450,7 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 
 		// next using jpa-style positional parameter, but as a name (which is how Hibernate core treats these
 		query = em.createQuery( "select w from Wallet w where w.brand = ?1" );
+		// deprecated usage of positional parameter by String
 		query.setParameter( "1", "Lacoste" );
 		w = (Wallet) query.getSingleResult();
 		assertNotNull( w );
@@ -589,13 +644,18 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 		catch (IllegalArgumentException e) {
 			//success
 		}
-		em.getTransaction().commit();
+		assertTrue(
+				"thrown IllegalArgumentException should of caused transaction to be marked for rollback only",
+				true == em.getTransaction().getRollbackOnly()
+		);
+		em.getTransaction().rollback();		// HHH-8442 changed to rollback since thrown ISE causes
+											// transaction to be marked for rollback only.
+											// No need to remove entity since it was rolled back.
 
-		em.clear();
-
-		em.getTransaction().begin();
-		em.remove( em.find( Item.class, item.getName() ) );
-		em.getTransaction().commit();
+		assertNull(
+				"entity should not of been saved to database since IllegalArgumentException should of" +
+						"caused transaction to be marked for rollback only", em.find( Item.class, item.getName() )
+		);
 		em.close();
 
 	}
@@ -649,14 +709,5 @@ public class QueryTest extends BaseEntityManagerFunctionalTestCase {
 		em.getTransaction().commit();
 
 		em.close();
-	}
-
-	@Override
-	public Class[] getAnnotatedClasses() {
-		return new Class[]{
-				Item.class,
-				Distributor.class,
-				Wallet.class
-		};
 	}
 }

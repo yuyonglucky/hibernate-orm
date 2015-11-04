@@ -1,36 +1,22 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.criteria.subquery;
 
+import static org.junit.Assert.assertEquals;
+
+import java.util.Set;
+
 import javax.persistence.EntityManager;
+import javax.persistence.criteria.CollectionJoin;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Join;
 import javax.persistence.criteria.Root;
 import javax.persistence.criteria.Subquery;
-
-import org.junit.Test;
 
 import org.hibernate.dialect.SybaseASE15Dialect;
 import org.hibernate.jpa.test.metamodel.AbstractMetamodelSpecificTest;
@@ -41,11 +27,14 @@ import org.hibernate.jpa.test.metamodel.LineItem_;
 import org.hibernate.jpa.test.metamodel.Order;
 import org.hibernate.jpa.test.metamodel.Order_;
 import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.TestForIssue;
+import org.junit.Test;
 
 /**
  * @author Steve Ebersole
  */
 public class CorrelatedSubqueryTest extends AbstractMetamodelSpecificTest {
+	
 	@Test
 	public void testBasicCorrelation() {
 		CriteriaBuilder builder = entityManagerFactory().getCriteriaBuilder();
@@ -131,5 +120,26 @@ public class CorrelatedSubqueryTest extends AbstractMetamodelSpecificTest {
 
 		em.getTransaction().commit();
 		em.close();
+	}
+	
+	@Test
+	@TestForIssue(jiraKey = "HHH-8556")
+	public void testCorrelatedJoinsFromSubquery() {
+		CriteriaBuilder builder = entityManagerFactory().getCriteriaBuilder();
+		CriteriaQuery<Customer> cquery = builder.createQuery(Customer.class);
+        Root<Customer> customer = cquery.from(Customer.class);
+        cquery.select(customer);
+        Subquery<Order> sq = cquery.subquery(Order.class);
+        Join<Customer, Order> sqo = sq.correlate(customer.join(Customer_.orders));
+        sq.select(sqo);
+        Set<Join<?, ?>> cJoins = sq.getCorrelatedJoins();
+        
+        // ensure the join is returned in #getCorrelatedJoins
+        assertEquals( cJoins.size(), 1);
+	}
+
+	@Test
+	public void testVariousSubqueryJoinSemantics() {
+		// meant to assert semantics of #getJoins versus #getCorrelatedJoins
 	}
 }

@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.components;
 
 import org.hibernate.Session;
@@ -8,10 +14,9 @@ import org.hibernate.envers.test.entities.components.UniquePropsNotAuditedEntity
 import org.hibernate.mapping.Column;
 import org.hibernate.mapping.PersistentClass;
 
+import org.hibernate.testing.TestForIssue;
 import org.junit.Assert;
 import org.junit.Test;
-
-import org.hibernate.testing.TestForIssue;
 
 /**
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
@@ -34,10 +39,10 @@ public class PropertiesGroupTest extends BaseEnversFunctionalTestCase {
 	@Test
 	@Priority(10)
 	public void initData() {
-		uniquePropsAudit = configuration().getClassMapping(
+		uniquePropsAudit = metadata().getEntityBinding(
 				"org.hibernate.envers.test.entities.components.UniquePropsEntity_AUD"
 		);
-		uniquePropsNotAuditedAudit = configuration().getClassMapping(
+		uniquePropsNotAuditedAudit = metadata().getEntityBinding(
 				"org.hibernate.envers.test.entities.components.UniquePropsNotAuditedEntity_AUD"
 		);
 
@@ -80,11 +85,8 @@ public class PropertiesGroupTest extends BaseEnversFunctionalTestCase {
 	@Test
 	public void testHistoryOfUniquePropsNotAuditedEntity() {
 		Assert.assertEquals(
-				entityNotAuditedRev2, getAuditReader().find(
-				UniquePropsNotAuditedEntity.class,
-				entityNotAuditedRev2.getId(),
-				2
-		)
+				entityNotAuditedRev2,
+				getAuditReader().find( UniquePropsNotAuditedEntity.class, entityNotAuditedRev2.getId(), 2 )
 		);
 	}
 }

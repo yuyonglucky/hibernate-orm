@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.annotations;
 
@@ -30,18 +13,22 @@ import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.TimeZone;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import org.hibernate.HibernateException;
 import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.StaleStateException;
 import org.hibernate.Transaction;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl;
+import org.hibernate.dialect.Oracle10gDialect;
 import org.hibernate.tool.hbm2ddl.SchemaExport;
 import org.hibernate.type.StandardBasicTypes;
+
+import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -51,13 +38,19 @@ import static org.junit.Assert.fail;
 /**
  * @author Emmanuel Bernard
  */
-public class EntityTest extends BaseCoreFunctionalTestCase {
-	private DateFormat df = SimpleDateFormat.getDateTimeInstance(DateFormat.LONG, DateFormat.LONG);
+public class EntityTest extends BaseNonConfigCoreFunctionalTestCase {
+	private DateFormat df = SimpleDateFormat.getDateTimeInstance( DateFormat.LONG, DateFormat.LONG );
+
+	@Override
+	protected void configureMetadataBuilder(MetadataBuilder metadataBuilder) {
+		super.configureMetadataBuilder( metadataBuilder );
+		metadataBuilder.applyImplicitNamingStrategy( ImplicitNamingStrategyJpaCompliantImpl.INSTANCE );
+	}
 
 	@Test
 	public void testLoad() throws Exception {
 		//put an object in DB
-		assertEquals( "Flight", configuration().getClassMapping( Flight.class.getName() ).getTable().getName() );
+		assertEquals( "Flight", metadata().getEntityBinding( Flight.class.getName() ).getTable().getName() );
 
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
@@ -98,7 +91,7 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 		s.flush();
 		tx.commit();
 		s.close();
-		
+
 
 		s = openSession();
 		tx = s.beginTransaction();
@@ -180,7 +173,9 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 			//success
 		}
 		finally {
-			if ( tx != null ) tx.rollback();
+			if ( tx != null ) {
+				tx.rollback();
+			}
 			s.close();
 		}
 	}
@@ -226,9 +221,11 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 		}
 		catch (HibernateException e) {
 			//success
+			if ( tx != null ) {
+				tx.rollback();
+			}
 		}
 		finally {
-			if ( tx != null ) tx.rollback();
 			s.close();
 		}
 	}
@@ -274,11 +271,13 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 			tx.commit();
 			fail( "Optimistic locking should work" );
 		}
-		catch (StaleStateException e) {
-			//fine
+		catch (StaleStateException expected) {
+			// expected exception
 		}
 		finally {
-			if ( tx != null ) tx.rollback();
+			if ( tx != null ) {
+				tx.rollback();
+			}
 			s.close();
 		}
 	}
@@ -312,7 +311,7 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testEntityName() throws Exception {
-		assertEquals( "Corporation", configuration().getClassMapping( Company.class.getName() ).getTable().getName() );
+		assertEquals( "Corporation", metadata().getEntityBinding( Company.class.getName() ).getTable().getName() );
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
 		Company comp = new Company();
@@ -356,6 +355,7 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value = Oracle10gDialect.class, comment = "oracle12c returns time in getDate.  For now, skip.")
 	public void testTemporalType() throws Exception {
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
@@ -366,7 +366,7 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 		airFrance.setDepartureDate( new Date( 05, 06, 21, 10, 0, 0 ) );
 		airFrance.setAlternativeDepartureDate( new GregorianCalendar( 2006, 02, 03, 10, 00 ) );
 		airFrance.getAlternativeDepartureDate().setTimeZone( TimeZone.getTimeZone( "GMT" ) );
-		airFrance.setBuyDate( new java.sql.Timestamp(122367443) );
+		airFrance.setBuyDate( new java.sql.Timestamp( 122367443 ) );
 		airFrance.setFactor( 25 );
 		s.persist( airFrance );
 		tx.commit();
@@ -379,10 +379,10 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 		Flight copyAirFrance = (Flight) q.uniqueResult();
 		assertNotNull( copyAirFrance );
 		assertEquals(
-				df.format(new Date( 05, 06, 21 )).toString(),
-				df.format(copyAirFrance.getDepartureDate()).toString()
+				df.format( new Date( 05, 06, 21 ) ).toString(),
+				df.format( copyAirFrance.getDepartureDate() ).toString()
 		);
-		assertEquals( df.format(airFrance.getBuyDate()), df.format(copyAirFrance.getBuyDate()));
+		assertEquals( df.format( airFrance.getBuyDate() ), df.format( copyAirFrance.getBuyDate() ) );
 
 		s.delete( copyAirFrance );
 		tx.commit();
@@ -404,7 +404,9 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 		}
 		catch (Exception e) {
 			//success
-			if ( tx != null ) tx.rollback();
+			if ( tx != null ) {
+				tx.rollback();
+			}
 		}
 		finally {
 			s.close();
@@ -413,7 +415,7 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 
 	@Override
 	protected Class[] getAnnotatedClasses() {
-		return new Class[]{
+		return new Class[] {
 				Flight.class,
 				Company.class,
 				Sky.class
@@ -433,7 +435,7 @@ public class EntityTest extends BaseCoreFunctionalTestCase {
 	}
 
 	private SchemaExport schemaExport() {
-		return new SchemaExport( serviceRegistry(), configuration() );
+		return new SchemaExport( serviceRegistry(), metadata() );
 	}
 
 	@After

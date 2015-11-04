@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.id.enhanced;
 
@@ -27,10 +10,10 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
 import org.hibernate.id.IntegralDataTypeHolder;
+import org.hibernate.internal.CoreMessageLogger;
+import org.jboss.logging.Logger;
 
 /**
  * Variation of {@link PooledOptimizer} which interprets the incoming database value as the lo value, rather than
@@ -41,13 +24,18 @@ import org.hibernate.id.IntegralDataTypeHolder;
  * @see PooledOptimizer
  */
 public class PooledLoOptimizer extends AbstractOptimizer {
-	private static final Logger log = Logger.getLogger( PooledLoOptimizer.class );
+	private static final CoreMessageLogger LOG = Logger.getMessageLogger(
+			CoreMessageLogger.class,
+			PooledLoOptimizer.class.getName()
+	);
 
 	private static class GenerationState {
 		// last value read from db source
 		private IntegralDataTypeHolder lastSourceValue;
 		// the current generator value
 		private IntegralDataTypeHolder value;
+		// the value at which we'll hit the db again
+		private IntegralDataTypeHolder upperLimitValue;
 	}
 
 	/**
@@ -61,9 +49,7 @@ public class PooledLoOptimizer extends AbstractOptimizer {
 		if ( incrementSize < 1 ) {
 			throw new HibernateException( "increment size cannot be less than 1" );
 		}
-		if ( log.isTraceEnabled() ) {
-			log.tracev( "Creating pooled optimizer (lo) with [incrementSize={0}; returnClass=]", incrementSize, returnClass.getName() );
-		}
+		LOG.creatingPooledLoOptimizer( incrementSize, returnClass.getName() );
 	}
 
 	@Override
@@ -71,8 +57,9 @@ public class PooledLoOptimizer extends AbstractOptimizer {
 		final GenerationState generationState = locateGenerationState( callback.getTenantIdentifier() );
 
 		if ( generationState.lastSourceValue == null
-				|| ! generationState.value.lt( generationState.lastSourceValue.copy().add( incrementSize ) ) ) {
+				|| ! generationState.value.lt( generationState.upperLimitValue ) ) {
 			generationState.lastSourceValue = callback.getNextValue();
+			generationState.upperLimitValue = generationState.lastSourceValue.copy().add( incrementSize );
 			generationState.value = generationState.lastSourceValue.copy();
 			// handle cases where initial-value is less that one (hsqldb for instance).
 			while ( generationState.value.lt( 1 ) ) {

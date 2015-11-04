@@ -1,30 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.interceptor;
 import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Queue;
 
 import org.junit.Test;
@@ -154,18 +138,14 @@ public class InterceptorTest extends BaseCoreFunctionalTestCase {
         	s.persist( new User( "john", "test" ) );
         	t.commit();
             fail( "Transaction should have timed out" );
-        } 
-        catch ( TransactionException e ) {
-        	// Insure that the Exception is "transaction timeout expired"
-        	String exceptionActual = e.toString();
-			String exceptionExpected = "org.hibernate.TransactionException: transaction timeout expired";
-			if ( !exceptionActual.contains( exceptionExpected ) ) {
-        		String msg = String.format( "Transaction failed for the wrong reason.  Expected [%s] but received [%s]",
-        				exceptionExpected, exceptionActual );
-        		fail( msg );
-        				
-        	}
-        } 
+        }
+		catch (TransactionException e) {
+			assertTrue(
+					"Transaction failed for the wrong reason.  Expecting transaction timeout, but found [" +
+							e.getMessage() + "]"					,
+					e.getMessage().contains( "transaction timeout expired" )
+			);
+		}
 	}
 
 	@Test
@@ -296,7 +276,8 @@ public class InterceptorTest extends BaseCoreFunctionalTestCase {
 			@Override
 			public String onPrepareStatement(String sql) {
 				assertNotNull( sql );
-				assertTrue( sql.toLowerCase().startsWith( expectedSQLs.poll().toLowerCase() ) );
+				String expectedSql = expectedSQLs.poll().toLowerCase(Locale.ROOT);
+				assertTrue("sql:\n " + sql.toLowerCase(Locale.ROOT) +"\n doesn't start with \n"+expectedSql+"\n", sql.toLowerCase(Locale.ROOT).startsWith( expectedSql ) );
 				return sql;
 			}
 		};
@@ -331,7 +312,6 @@ public class InterceptorTest extends BaseCoreFunctionalTestCase {
 		assertTrue( expectedSQLs.isEmpty() );
 	}
 
-	@Test(expected = AssertionFailure.class)
 	public void testPrepareStatementFaultIntercept() {
 		final Interceptor interceptor = new EmptyInterceptor() {
 			@Override
@@ -340,12 +320,18 @@ public class InterceptorTest extends BaseCoreFunctionalTestCase {
 			}
 		};
 
-		Session s = openSession(interceptor);
-		Transaction t = s.beginTransaction();
-		User u = new User( "Kinga", "Mroz" );
-		s.persist( u );
-		t.commit();
-		s.close();
+		Session s = openSession( interceptor );
+		try {
+
+			Transaction t = s.beginTransaction();
+			User u = new User( "Kinga", "Mroz" );
+			s.persist( u );
+			t.commit();
+		}catch (TransactionException e){
+			assertTrue( e.getCause() instanceof AssertionFailure );
+		}finally {
+			s.close();
+		}
 	}
 }
 

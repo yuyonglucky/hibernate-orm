@@ -1,22 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * JBoss, Home of Professional Open Source
- * Copyright 2011 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.cfg.persister;
 
@@ -39,8 +25,9 @@ import org.hibernate.cache.spi.entry.CacheEntry;
 import org.hibernate.cache.spi.entry.CacheEntryStructure;
 import org.hibernate.cfg.NotYetImplementedException;
 import org.hibernate.collection.spi.PersistentCollection;
+import org.hibernate.engine.internal.MutableEntityEntryFactory;
 import org.hibernate.engine.spi.CascadeStyle;
-import org.hibernate.engine.spi.Mapping;
+import org.hibernate.engine.spi.EntityEntryFactory;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.ValueInclusion;
@@ -50,11 +37,10 @@ import org.hibernate.mapping.Collection;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.metadata.ClassMetadata;
 import org.hibernate.metadata.CollectionMetadata;
-import org.hibernate.metamodel.binding.EntityBinding;
-import org.hibernate.metamodel.binding.PluralAttributeBinding;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.spi.PersisterClassResolver;
+import org.hibernate.persister.spi.PersisterCreationContext;
 import org.hibernate.persister.walking.spi.AttributeDefinition;
 import org.hibernate.persister.walking.spi.CollectionElementDefinition;
 import org.hibernate.persister.walking.spi.CollectionIndexDefinition;
@@ -76,27 +62,17 @@ public class GoofyPersisterClassProvider implements PersisterClassResolver {
 	}
 
 	@Override
-	public Class<? extends EntityPersister> getEntityPersisterClass(EntityBinding metadata) {
-		return NoopEntityPersister.class;
-	}
-
-	@Override
 	public Class<? extends CollectionPersister> getCollectionPersisterClass(Collection metadata) {
-		return NoopCollectionPersister.class;
-	}
-
-	@Override
-	public Class<? extends CollectionPersister> getCollectionPersisterClass(PluralAttributeBinding metadata) {
 		return NoopCollectionPersister.class;
 	}
 
 	public static class NoopEntityPersister implements EntityPersister {
 
-		public NoopEntityPersister(org.hibernate.mapping.PersistentClass persistentClass,
-								   org.hibernate.cache.spi.access.EntityRegionAccessStrategy strategy,
-								   NaturalIdRegionAccessStrategy naturalIdRegionAccessStrategy,
-								   SessionFactoryImplementor sf,
-								   Mapping mapping) {
+		public NoopEntityPersister(
+				final PersistentClass persistentClass,
+				final EntityRegionAccessStrategy cacheAccessStrategy,
+				final NaturalIdRegionAccessStrategy naturalIdRegionAccessStrategy,
+				final PersisterCreationContext creationContext) {
 			throw new GoofyException(NoopEntityPersister.class);
 		}
 
@@ -116,6 +92,10 @@ public class GoofyPersisterClassProvider implements PersisterClassResolver {
 		}
 
 		@Override
+		public void generateEntityDefinition() {
+		}
+
+		@Override
 		public void postInstantiate() throws MappingException {
 
 		}
@@ -123,6 +103,11 @@ public class GoofyPersisterClassProvider implements PersisterClassResolver {
 		@Override
 		public SessionFactoryImplementor getFactory() {
 			return null;
+		}
+
+		@Override
+		public EntityEntryFactory getEntityEntryFactory() {
+			return MutableEntityEntryFactory.INSTANCE;
 		}
 
 		@Override
@@ -599,14 +584,24 @@ public class GoofyPersisterClassProvider implements PersisterClassResolver {
 		public Iterable<AttributeDefinition> getAttributes() {
 			throw new NotYetImplementedException();
 		}
+
+        @Override
+        public int[] resolveAttributeIndexes(String[] attributeNames) {
+            return null;
+        }
+
+		@Override
+		public boolean canUseReferenceCacheEntries() {
+			return false;
+		}
 	}
 
 	public static class NoopCollectionPersister implements CollectionPersister {
 
-		public NoopCollectionPersister(org.hibernate.mapping.Collection collection,
-									   org.hibernate.cache.spi.access.CollectionRegionAccessStrategy strategy,
-									   org.hibernate.cfg.Configuration configuration,
-									   SessionFactoryImplementor sf) {
+		public NoopCollectionPersister(
+				Collection collectionBinding,
+				CollectionRegionAccessStrategy cacheAccessStrategy,
+				PersisterCreationContext creationContext) {
 			throw new GoofyException(NoopCollectionPersister.class);
 		}
 
@@ -785,18 +780,6 @@ public class GoofyPersisterClassProvider implements PersisterClassResolver {
 			return false;  //To change body of implemented methods use File | Settings | File Templates.
 		}
 
-		public String getNodeName() {
-			return null;  //To change body of implemented methods use File | Settings | File Templates.
-		}
-
-		public String getElementNodeName() {
-			return null;  //To change body of implemented methods use File | Settings | File Templates.
-		}
-
-		public String getIndexNodeName() {
-			return null;  //To change body of implemented methods use File | Settings | File Templates.
-		}
-
 		public void postInstantiate() throws MappingException {
 			//To change body of implemented methods use File | Settings | File Templates.
 		}
@@ -848,6 +831,11 @@ public class GoofyPersisterClassProvider implements PersisterClassResolver {
 		@Override
 		public int getBatchSize() {
 			return 0;
+		}
+
+		@Override
+		public String getMappedByProperty() {
+			return null;
 		}
 
 		@Override

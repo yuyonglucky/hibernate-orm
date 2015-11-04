@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2006-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.joinfetch;
 import java.util.List;
@@ -91,11 +74,11 @@ public class JoinFetchTest extends BaseCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 		
-		sessionFactory().evict(Item.class);
+		sessionFactory().getCache().evictEntityRegion(Item.class);
 
 		s = openSession();
 		t = s.beginTransaction();
-		i = (Item) s.get( Item.class, i.getId() );
+		i = s.get( Item.class, i.getId() );
 		assertTrue( Hibernate.isInitialized( i.getBids() ) );
 		assertEquals( i.getBids().size(), 2 );
 		assertTrue( Hibernate.isInitialized( i.getComments() ) );
@@ -103,11 +86,11 @@ public class JoinFetchTest extends BaseCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 
-		sessionFactory().evict(Bid.class);
+		sessionFactory().getCache().evictEntityRegion(Bid.class);
 
 		s = openSession();
 		t = s.beginTransaction();
-		b = (Bid) s.get( Bid.class, b.getId() );
+		b = s.get( Bid.class, b.getId() );
 		assertTrue( Hibernate.isInitialized( b.getItem() ) );
 		assertTrue( Hibernate.isInitialized( b.getItem().getComments() ) );
 		assertEquals( b.getItem().getComments().size(), 3 );
@@ -115,7 +98,7 @@ public class JoinFetchTest extends BaseCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 
-		sessionFactory().evictCollection(Item.class.getName() + ".bids");
+		sessionFactory().getCache().evictCollectionRegion(Item.class.getName() + ".bids");
 		
 		s = openSession();
 		t = s.beginTransaction();
@@ -254,11 +237,11 @@ public class JoinFetchTest extends BaseCoreFunctionalTestCase {
 		
 		s = openSession();
 		t = s.beginTransaction();
-		hb = (Group) s.get(Group.class, "hibernate");
+		hb = s.get(Group.class, "hibernate");
 		assertTrue( Hibernate.isInitialized( hb.getUsers() ) );
 		gavin = (User) hb.getUsers().get("gavin");
 		assertFalse( Hibernate.isInitialized( gavin.getGroups() ) );
-		max = (User) s.get(User.class, "max");
+		max = s.get(User.class, "max");
 		assertFalse( Hibernate.isInitialized( max.getGroups() ) );
 		t.commit();
 		s.close();
@@ -272,7 +255,7 @@ public class JoinFetchTest extends BaseCoreFunctionalTestCase {
 		assertTrue( Hibernate.isInitialized( hb.getUsers() ) );
 		gavin = (User) hb.getUsers().get("gavin");
 		assertTrue( Hibernate.isInitialized( gavin.getGroups() ) );
-		max = (User) s.get(User.class, "max");
+		max = s.get(User.class, "max");
 		assertTrue( Hibernate.isInitialized( max.getGroups() ) );
 		t.commit();
 		s.close();

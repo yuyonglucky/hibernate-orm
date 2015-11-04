@@ -1,57 +1,40 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.SharedCacheMode;
-import javax.persistence.ValidationMode;
-import javax.persistence.spi.PersistenceUnitTransactionType;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import javax.persistence.EntityManager;
+import javax.persistence.SharedCacheMode;
+import javax.persistence.ValidationMode;
+import javax.persistence.spi.PersistenceUnitTransactionType;
 
-import org.jboss.logging.Logger;
-
+import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.Dialect;
-import org.hibernate.jpa.AvailableSettings;
-import org.hibernate.jpa.internal.EntityManagerFactoryImpl;
 import org.hibernate.internal.util.StringHelper;
+import org.hibernate.jpa.AvailableSettings;
+import org.hibernate.jpa.HibernateEntityManagerFactory;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
-import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 
+import org.hibernate.testing.junit4.BaseUnitTestCase;
 import org.junit.After;
 import org.junit.Before;
 
-import org.hibernate.testing.junit4.BaseUnitTestCase;
+import org.jboss.logging.Logger;
 
 /**
  * A base class for all ejb tests.
@@ -68,7 +51,7 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 	private static final Dialect dialect = Dialect.getDialect();
 
 	private StandardServiceRegistryImpl serviceRegistry;
-	private EntityManagerFactoryImpl entityManagerFactory;
+	private HibernateEntityManagerFactory entityManagerFactory;
 
 	private EntityManager em;
 	private ArrayList<EntityManager> isolatedEms = new ArrayList<EntityManager>();
@@ -77,7 +60,7 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 		return dialect;
 	}
 
-	protected EntityManagerFactory entityManagerFactory() {
+	protected HibernateEntityManagerFactory entityManagerFactory() {
 		return entityManagerFactory;
 	}
 
@@ -90,10 +73,10 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 	public void buildEntityManagerFactory() throws Exception {
 		log.trace( "Building EntityManagerFactory" );
 
-		entityManagerFactory = (EntityManagerFactoryImpl) Bootstrap.getEntityManagerFactoryBuilder(
+		entityManagerFactory =  Bootstrap.getEntityManagerFactoryBuilder(
 				buildPersistenceUnitDescriptor(),
 				buildSettings()
-		).build();
+		).build().unwrap( HibernateEntityManagerFactory.class );
 
 		serviceRegistry = (StandardServiceRegistryImpl) entityManagerFactory.getSessionFactory()
 				.getServiceRegistry()
@@ -189,7 +172,12 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 		}
 
 		@Override
-		public void pushClassTransformer(List<String> entityClassNames) {
+		public ClassLoader getTempClassLoader() {
+			return null;
+		}
+
+		@Override
+		public void pushClassTransformer(Collection<String> entityClassNames) {
 		}
 	}
 
@@ -326,6 +314,10 @@ public abstract class BaseEntityManagerFunctionalTestCase extends BaseUnitTestCa
 		EntityManager isolatedEm = entityManagerFactory.createEntityManager(props);
 		isolatedEms.add( isolatedEm );
 		return isolatedEm;
+	}
+
+	protected EntityManager createEntityManager() {
+		return createEntityManager( Collections.emptyMap() );
 	}
 
 	protected EntityManager createEntityManager(Map properties) {

@@ -1,58 +1,41 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.graph.internal;
 
-import javax.persistence.AttributeNode;
-import javax.persistence.Subgraph;
-import javax.persistence.metamodel.Attribute;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.jboss.logging.Logger;
+import javax.persistence.AttributeNode;
+import javax.persistence.metamodel.Attribute;
 
+import org.hibernate.graph.spi.AttributeNodeImplementor;
+import org.hibernate.graph.spi.GraphNodeImplementor;
 import org.hibernate.internal.util.collections.CollectionHelper;
-import org.hibernate.jpa.HibernateEntityManagerFactory;
-import org.hibernate.jpa.graph.spi.AttributeNodeImplementor;
-import org.hibernate.jpa.graph.spi.GraphNodeImplementor;
+import org.hibernate.jpa.internal.EntityManagerFactoryImpl;
+import org.hibernate.jpa.spi.HibernateEntityManagerFactoryAware;
+import org.jboss.logging.Logger;
 
 /**
  * Base class for EntityGraph and Subgraph implementations.
  *
  * @author Steve Ebersole
  */
-public abstract class AbstractGraphNode<T> implements GraphNodeImplementor {
+public abstract class AbstractGraphNode<T> implements GraphNodeImplementor, HibernateEntityManagerFactoryAware {
 	private static final Logger log = Logger.getLogger( AbstractGraphNode.class );
 
-	private final HibernateEntityManagerFactory entityManagerFactory;
+	private final EntityManagerFactoryImpl entityManagerFactory;
 	private final boolean mutable;
 
 	private Map<String, AttributeNodeImplementor<?>> attributeNodeMap;
 
-	protected AbstractGraphNode(HibernateEntityManagerFactory entityManagerFactory, boolean mutable) {
+	protected AbstractGraphNode(EntityManagerFactoryImpl entityManagerFactory, boolean mutable) {
 		this.entityManagerFactory = entityManagerFactory;
 		this.mutable = mutable;
 	}
@@ -80,7 +63,7 @@ public abstract class AbstractGraphNode<T> implements GraphNodeImplementor {
 	}
 
 	@Override
-	public HibernateEntityManagerFactory entityManagerFactory() {
+	public EntityManagerFactoryImpl getFactory() {
 		return entityManagerFactory;
 	}
 
@@ -104,13 +87,13 @@ public abstract class AbstractGraphNode<T> implements GraphNodeImplementor {
 		}
 	}
 
-	protected void addAttributeNodes(String... attributeNames) {
+	public void addAttributeNodes(String... attributeNames) {
 		for ( String attributeName : attributeNames ) {
 			addAttribute( attributeName );
 		}
 	}
 
-	protected AttributeNodeImpl addAttribute(String attributeName) {
+	public AttributeNodeImpl addAttribute(String attributeName) {
 		return addAttributeNode( buildAttributeNode( attributeName ) );
 	}
 
@@ -199,5 +182,10 @@ public abstract class AbstractGraphNode<T> implements GraphNodeImplementor {
 	@SuppressWarnings("unchecked")
 	public <X> SubgraphImpl<X> addKeySubgraph(String attributeName, Class<X> type) {
 		return addAttribute( attributeName ).makeKeySubgraph( type );
+	}
+	
+	@Override
+	public boolean containsAttribute(String name) {
+		return attributeNodeMap != null && attributeNodeMap.containsKey( name );
 	}
 }

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.dialect;
 
@@ -32,12 +15,19 @@ import java.util.Map;
 
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
+import org.hibernate.boot.TempTableDdlTransactionHandling;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.function.CharIndexFunction;
 import org.hibernate.dialect.function.NoArgSQLFunction;
 import org.hibernate.dialect.function.SQLFunctionTemplate;
 import org.hibernate.dialect.function.StandardSQLFunction;
 import org.hibernate.dialect.function.VarArgsSQLFunction;
+import org.hibernate.dialect.identity.AbstractTransactSQLIdentityColumnSupport;
+import org.hibernate.dialect.identity.IdentityColumnSupport;
+import org.hibernate.hql.spi.id.IdTableSupportStandardImpl;
+import org.hibernate.hql.spi.id.MultiTableBulkIdStrategy;
+import org.hibernate.hql.spi.id.local.AfterUseAction;
+import org.hibernate.hql.spi.id.local.LocalTemporaryTableBulkIdStrategy;
 import org.hibernate.type.StandardBasicTypes;
 
 /**
@@ -147,32 +137,6 @@ abstract class AbstractTransactSQLDialect extends Dialect {
 	}
 
 	@Override
-	public boolean supportsIdentityColumns() {
-		return true;
-	}
-
-	@Override
-	public String getIdentitySelectString() {
-		return "select @@identity";
-	}
-
-	@Override
-	public String getIdentityColumnString() {
-		//starts with 1, implicitly
-		return "identity not null";
-	}
-
-	@Override
-	public boolean supportsInsertSelectIdentity() {
-		return true;
-	}
-
-	@Override
-	public String appendIdentitySelectToInsert(String insertSQL) {
-		return insertSQL + "\nselect @@identity";
-	}
-
-	@Override
 	public String appendLockHint(LockOptions lockOptions, String tableName) {
 		return lockOptions.getLockMode().greaterThan( LockMode.READ ) ? tableName + " holdlock" : tableName;
 	}
@@ -250,19 +214,18 @@ abstract class AbstractTransactSQLDialect extends Dialect {
 	}
 
 	@Override
-	public boolean supportsTemporaryTables() {
-		return true;
-	}
-
-	@Override
-	public String generateTemporaryTableName(String baseTableName) {
-		return "#" + baseTableName;
-	}
-
-	@Override
-	public boolean dropTemporaryTableAfterUse() {
-		// sql-server, at least needed this dropped after use; strange!
-		return true;
+	public MultiTableBulkIdStrategy getDefaultMultiTableBulkIdStrategy() {
+		return new LocalTemporaryTableBulkIdStrategy(
+				new IdTableSupportStandardImpl() {
+					@Override
+					public String generateIdTableName(String baseName) {
+						return "#" + baseName;
+					}
+				},
+				// sql-server, at least needed this dropped after use; strange!
+				AfterUseAction.DROP,
+				TempTableDdlTransactionHandling.NONE
+		);
 	}
 
 	@Override
@@ -301,4 +264,15 @@ abstract class AbstractTransactSQLDialect extends Dialect {
 	public boolean supportsTupleDistinctCounts() {
 		return false;
 	}
+	
+	@Override
+	public boolean supportsTuplesInSubqueries() {
+		return false;
+	}
+
+	@Override
+	public IdentityColumnSupport getIdentityColumnSupport() {
+		return new AbstractTransactSQLIdentityColumnSupport();
+	}
+
 }

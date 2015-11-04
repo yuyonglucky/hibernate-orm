@@ -1,31 +1,16 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.property;
 
-import org.junit.Test;
+import org.hibernate.property.access.internal.PropertyAccessStrategyBasicImpl;
+import org.hibernate.property.access.spi.PropertyAccess;
 
 import org.hibernate.testing.junit4.BaseUnitTestCase;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
@@ -85,22 +70,18 @@ public class BasicPropertyAccessorTest extends BaseUnitTestCase {
 
 	@Test
 	public void testBridgeMethodDisregarded() {
-		BasicPropertyAccessor accessor = new BasicPropertyAccessor();
+		PropertyAccessStrategyBasicImpl accessStrategy = PropertyAccessStrategyBasicImpl.INSTANCE;
 
 		{
-			BasicPropertyAccessor.BasicGetter getter = (BasicPropertyAccessor.BasicGetter) accessor.getGetter( Duper.class, "it" );
-			assertEquals( String.class, getter.getReturnType() );
-
-			BasicPropertyAccessor.BasicSetter setter = (BasicPropertyAccessor.BasicSetter) accessor.getSetter( Duper.class, "it" );
-			assertEquals( Object.class, setter.getMethod().getParameterTypes()[0] );
+			final PropertyAccess access = accessStrategy.buildPropertyAccess( Duper.class, "it" );
+			assertEquals( String.class, access.getGetter().getReturnType() );
+			assertEquals( Object.class, access.getSetter().getMethod().getParameterTypes()[0] );
 		}
 
 		{
-			BasicPropertyAccessor.BasicGetter getter = (BasicPropertyAccessor.BasicGetter) accessor.getGetter( Duper2.class, "it" );
-			assertEquals( String.class, getter.getReturnType() );
-
-			BasicPropertyAccessor.BasicSetter setter = (BasicPropertyAccessor.BasicSetter) accessor.getSetter( Duper2.class, "it" );
-			assertEquals( String.class, setter.getMethod().getParameterTypes()[0] );
+			final PropertyAccess access = accessStrategy.buildPropertyAccess( Duper2.class, "it" );
+			assertEquals( String.class, access.getGetter().getReturnType() );
+			assertEquals( String.class, access.getSetter().getMethod().getParameterTypes()[0] );
 		}
 	}
 }

@@ -1,7 +1,13 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.envers.test.integration.superclass.auditparents;
 
-import javax.persistence.EntityManager;
 import java.util.Set;
+import javax.persistence.EntityManager;
 
 import org.hibernate.envers.Audited;
 import org.hibernate.envers.test.BaseEnversJPAFunctionalTestCase;
@@ -71,7 +77,7 @@ public class TotalAuditParentsTest extends BaseEnversJPAFunctionalTestCase {
 		);
 		Set<String> unexpectedColumns = TestTools.makeSet( "notAudited" );
 
-		Table table = getCfg().getClassMapping(
+		Table table = metadata().getEntityBinding(
 				"org.hibernate.envers.test.integration.superclass.auditparents.BabyCompleteEntity_AUD"
 		).getTable();
 

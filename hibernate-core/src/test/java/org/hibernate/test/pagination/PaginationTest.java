@@ -1,49 +1,38 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.pagination;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
-
-import org.junit.Test;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.hibernate.Criteria;
 import org.hibernate.Query;
 import org.hibernate.SQLQuery;
 import org.hibernate.Session;
 import org.hibernate.criterion.Order;
+import org.hibernate.engine.query.spi.HQLQueryPlan;
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.junit.Test;
 
+import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * @author Gavin King
  */
-public class PaginationTest extends BaseCoreFunctionalTestCase {
+public class PaginationTest extends BaseNonConfigCoreFunctionalTestCase {
 	public static final int NUMBER_OF_TEST_ROWS = 100;
 
 	@Override
@@ -116,6 +105,41 @@ public class PaginationTest extends BaseCoreFunctionalTestCase {
 		session.getTransaction().commit();
 		session.close();
 		cleanupTestData();
+	}
+
+	/**
+	 * @author Piotr Findeisen <piotr.findeisen@gmail.com>
+	 */
+	@Test
+	@TestForIssue( jiraKey = "HHH-951" )
+	@RequiresDialectFeature(
+			value = DialectChecks.SupportLimitCheck.class,
+			comment = "Dialect does not support limit"
+	)
+	public void testLimitWithExpreesionAndFetchJoin() {
+		Session session = openSession();
+		session.beginTransaction();
+
+		String hql = "SELECT b, 1 FROM DataMetaPoint b inner join fetch b.dataPoint dp";
+		session.createQuery(hql)
+				.setMaxResults(3)
+				// This should not fail
+				.list();
+
+		HQLQueryPlan queryPlan = new HQLQueryPlan(hql, false, Collections.EMPTY_MAP, sessionFactory());
+		String sqlQuery = queryPlan.getTranslators()[0]
+				.collectSqlStrings().get(0);
+
+		session.getTransaction().commit();
+		session.close();
+
+		Matcher matcher = Pattern.compile(
+				"(?is)\\b(?<column>\\w+\\.\\w+)\\s+as\\s+(?<alias>\\w+)\\b.*\\k<column>\\s+as\\s+\\k<alias>")
+				.matcher(sqlQuery);
+		if (matcher.find()) {
+			fail(format("Column %s mapped to alias %s twice in generated SQL: %s", matcher.group("column"),
+					matcher.group("alias"), sqlQuery));
+		}
 	}
 
 	@Test

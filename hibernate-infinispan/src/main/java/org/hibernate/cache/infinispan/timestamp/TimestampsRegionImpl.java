@@ -1,38 +1,22 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cache.infinispan.timestamp;
 
 import javax.transaction.Transaction;
-
-import org.infinispan.AdvancedCache;
-import org.infinispan.context.Flag;
 
 import org.hibernate.cache.CacheException;
 import org.hibernate.cache.infinispan.impl.BaseGeneralDataRegion;
 import org.hibernate.cache.infinispan.util.Caches;
 import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.TimestampsRegion;
+
+import org.hibernate.engine.spi.SessionImplementor;
+import org.infinispan.AdvancedCache;
+import org.infinispan.context.Flag;
 
 /**
  * Defines the behavior of the timestamps cache region for Infinispan.
@@ -97,7 +81,7 @@ public class TimestampsRegionImpl extends BaseGeneralDataRegion implements Times
 
 
 	@Override
-	public Object get(Object key) throws CacheException {
+	public Object get(SessionImplementor session, Object key) throws CacheException {
 		if ( checkValid() ) {
 			return cache.get( key );
 		}
@@ -107,7 +91,7 @@ public class TimestampsRegionImpl extends BaseGeneralDataRegion implements Times
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public void put(final Object key, final Object value) throws CacheException {
+	public void put(SessionImplementor session, final Object key, final Object value) throws CacheException {
 		try {
 			// We ensure ASYNC semantics (JBCACHE-1175) and make sure previous
 			// value is not loaded from cache store cos it's not needed.

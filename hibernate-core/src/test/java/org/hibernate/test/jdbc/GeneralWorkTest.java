@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2007-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.jdbc;
 import java.sql.Connection;
@@ -65,17 +48,17 @@ public class GeneralWorkTest extends BaseCoreFunctionalTestCase {
 						// in this current form, users must handle try/catches themselves for proper resource release
 						Statement statement = null;
 						try {
-							statement = ((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().createStatement();
+							statement = ((SessionImplementor)session).getJdbcCoordinator().getStatementPreparer().createStatement();
 							ResultSet resultSet = null;
 							try {
 								
-								resultSet = ((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( statement, "select * from T_JDBC_PERSON" );
+								resultSet = ((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().extract( statement, "select * from T_JDBC_PERSON" );
 							}
 							finally {
 								releaseQuietly( ((SessionImplementor)session), resultSet, statement );
 							}
 							try {
-								((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( statement, "select * from T_JDBC_BOAT" );
+								((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().extract( statement, "select * from T_JDBC_BOAT" );
 							}
 							finally {
 								releaseQuietly( ((SessionImplementor)session), resultSet, statement );
@@ -101,8 +84,8 @@ public class GeneralWorkTest extends BaseCoreFunctionalTestCase {
 						public void execute(Connection connection) throws SQLException {
 							Statement statement = null;
 							try {
-								statement = ((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().createStatement();
-								((SessionImplementor)session).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( statement, "select * from non_existent" );
+								statement = ((SessionImplementor)session).getJdbcCoordinator().getStatementPreparer().createStatement();
+								((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().extract( statement, "select * from non_existent" );
 							}
 							finally {
 								releaseQuietly( ((SessionImplementor)session), statement );
@@ -136,10 +119,10 @@ public class GeneralWorkTest extends BaseCoreFunctionalTestCase {
 						Statement statement = null;
 						long personCount = 0;
 						try {
-							statement = ((SessionImplementor)session2).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().createStatement();
+							statement = ((SessionImplementor)session2).getJdbcCoordinator().getStatementPreparer().createStatement();
 							ResultSet resultSet = null;
 							try {
-								resultSet = ((SessionImplementor)session2).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().extract( statement, "select count(*) from T_JDBC_PERSON" );
+								resultSet = ((SessionImplementor)session2).getJdbcCoordinator().getResultSetReturn().extract( statement, "select count(*) from T_JDBC_PERSON" );
 								resultSet.next();
 								personCount = resultSet.getLong( 1 );
 								assertEquals( 1L, personCount );
@@ -171,7 +154,7 @@ public class GeneralWorkTest extends BaseCoreFunctionalTestCase {
 			return;
 		}
 		try {
-			s.getTransactionCoordinator().getJdbcCoordinator().release( statement );
+			s.getJdbcCoordinator().getResourceRegistry().release( statement );
 		}
 		catch (Exception e) {
 			// ignore
@@ -183,7 +166,7 @@ public class GeneralWorkTest extends BaseCoreFunctionalTestCase {
 			return;
 		}
 		try {
-			s.getTransactionCoordinator().getJdbcCoordinator().release( resultSet, statement );
+			s.getJdbcCoordinator().getResourceRegistry().release( resultSet, statement );
 		}
 		catch (Exception e) {
 			// ignore

@@ -1,31 +1,13 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.jdbc;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -33,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author Steve Ebersole
  */
-public class ColumnNameCache {
+public final class ColumnNameCache {
 	private static final float LOAD_FACTOR = .75f;
 
 	private final ConcurrentHashMap<String, Integer> columnNameToIndexCache;
@@ -61,13 +43,13 @@ public class ColumnNameCache {
 	 *
 	 * @throws SQLException INdicates a problems accessing the underlying JDBC ResultSet
 	 */
-	public int getIndexForColumnName(String columnName, ResultSet rs) throws SQLException {
+	public Integer getIndexForColumnName(String columnName, ResultSet rs) throws SQLException {
 		final Integer cached = columnNameToIndexCache.get( columnName );
 		if ( cached != null ) {
 			return cached;
 		}
 		else {
-			final int index = rs.findColumn( columnName );
+			final Integer index = Integer.valueOf( rs.findColumn( columnName ) );
 			columnNameToIndexCache.put( columnName, index);
 			return index;
 		}

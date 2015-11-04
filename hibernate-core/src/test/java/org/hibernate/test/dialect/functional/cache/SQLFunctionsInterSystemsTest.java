@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.dialect.functional.cache;
 
@@ -35,10 +18,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.jboss.logging.Logger;
-import org.junit.Test;
-
-import org.hibernate.LockMode;
+import org.hibernate.LockOptions;
 import org.hibernate.Query;
 import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
@@ -47,13 +27,17 @@ import org.hibernate.dialect.Cache71Dialect;
 import org.hibernate.dialect.function.SQLFunction;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.jdbc.Work;
+
+import org.hibernate.testing.RequiresDialect;
+import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.hibernate.test.legacy.Blobber;
 import org.hibernate.test.legacy.Broken;
 import org.hibernate.test.legacy.Fixed;
 import org.hibernate.test.legacy.Simple;
 import org.hibernate.test.legacy.Single;
-import org.hibernate.testing.RequiresDialect;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Test;
+
+import org.jboss.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -78,7 +62,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testDialectSQLFunctions() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -138,7 +121,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing", "unchecked"})
 	public void testSetProperties() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -173,7 +155,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testBroken() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -205,7 +186,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testNothinToUpdate() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -229,7 +209,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testCachedQuery() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -290,7 +269,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testCachedQueryRegion() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -344,7 +322,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing", "unchecked"})
 	public void testSQLFunctions() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -542,7 +519,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		s.close();
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testSqlFunctionAsAlias() throws Exception {
 		String functionName = locateAppropriateDialectFunctionNameForAliasTest();
 		if (functionName == null) {
@@ -583,7 +559,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 		return null;
 	}
 
-	@SuppressWarnings( {"UnnecessaryBoxing"})
 	public void testCachedQueryOnInsert() throws Exception {
 		Session s = openSession();
 		Transaction t = s.beginTransaction();
@@ -638,7 +613,6 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 
 	}
 
-    @SuppressWarnings( {"UnnecessaryBoxing", "UnnecessaryUnboxing"})
 	public void testInterSystemsFunctions() throws Exception {
         Calendar cal = new GregorianCalendar();
         cal.set(1977,6,3,0,0,0);
@@ -656,8 +630,8 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 					new Work() {
 						@Override
 						public void execute(Connection connection) throws SQLException {
-							Statement stmt = ((SessionImplementor)s).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().createStatement();
-							((SessionImplementor)s).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().executeUpdate( stmt, "DROP FUNCTION spLock FROM TestInterSystemsFunctionsClass" );
+							Statement stmt = ((SessionImplementor)s).getJdbcCoordinator().getStatementPreparer().createStatement();
+							((SessionImplementor)s).getJdbcCoordinator().getResultSetReturn().executeUpdate( stmt, "DROP FUNCTION spLock FROM TestInterSystemsFunctionsClass" );
 						}
 					}
 			);
@@ -673,7 +647,9 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 				new Work() {
 					@Override
 					public void execute(Connection connection) throws SQLException {
-						Statement stmt = ((SessionImplementor)s).getTransactionCoordinator().getJdbcCoordinator().getStatementPreparer().createStatement();
+						Statement stmt = ( (SessionImplementor) s ).getJdbcCoordinator()
+								.getStatementPreparer()
+								.createStatement();
 						String create_function = "CREATE FUNCTION SQLUser.TestInterSystemsFunctionsClass_spLock\n" +
 								"     ( INOUT pHandle %SQLProcContext, \n" +
 								"       ROWID INTEGER \n" +
@@ -685,7 +661,10 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 								"    {\n" +
 								"        q 0\n" +
 								"     }";
-						((SessionImplementor)s).getTransactionCoordinator().getJdbcCoordinator().getResultSetReturn().executeUpdate( stmt, create_function );
+						( (SessionImplementor) s ).getJdbcCoordinator().getResultSetReturn().executeUpdate(
+								stmt,
+								create_function
+						);
 					}
 				}
 		);
@@ -694,7 +673,7 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
         s.beginTransaction();
 
         TestInterSystemsFunctionsClass object = new TestInterSystemsFunctionsClass( Long.valueOf( 10 ) );
-        object.setDateText("1977-07-03");
+        object.setDateText( "1977-07-03" );
         object.setDate1( testvalue );
         object.setDate3( testvalue3 );
         s.save( object );
@@ -703,9 +682,9 @@ public class SQLFunctionsInterSystemsTest extends BaseCoreFunctionalTestCase {
 
         Session s2 = openSession();
         s2.beginTransaction();
-        TestInterSystemsFunctionsClass test = (TestInterSystemsFunctionsClass) s2.get(TestInterSystemsFunctionsClass.class, Long.valueOf(10));
+        TestInterSystemsFunctionsClass test = s2.get(TestInterSystemsFunctionsClass.class, 10L );
         assertTrue( test.getDate1().equals(testvalue));
-        test = (TestInterSystemsFunctionsClass) s2.get(TestInterSystemsFunctionsClass.class, Long.valueOf(10), LockMode.UPGRADE);
+        test = (TestInterSystemsFunctionsClass) s2.byId( TestInterSystemsFunctionsClass.class ).with( LockOptions.NONE ).load( 10L );
         assertTrue( test.getDate1().equals(testvalue));
         Date value = (Date) s2.createQuery( "select nvl(o.date,o.dateText) from TestInterSystemsFunctionsClass as o" )
 				.list()

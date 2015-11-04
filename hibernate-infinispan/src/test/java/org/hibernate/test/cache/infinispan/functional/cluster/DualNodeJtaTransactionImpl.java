@@ -1,35 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2007, Red Hat, Inc. and/or it's affiliates or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat, Inc. and/or it's affiliates.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.cache.infinispan.functional.cluster;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import javax.transaction.HeuristicMixedException;
 import javax.transaction.HeuristicRollbackException;
 import javax.transaction.RollbackException;
@@ -40,6 +16,13 @@ import javax.transaction.Transaction;
 import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
@@ -79,9 +62,11 @@ public class DualNodeJtaTransactionImpl implements Transaction {
       } else {
          status = Status.STATUS_PREPARING;
 
-         for (int i = 0; i < synchronizations.size(); i++) {
-            Synchronization s = (Synchronization) synchronizations.get(i);
-            s.beforeCompletion();
+         if (synchronizations != null) {
+            for (int i = 0; i < synchronizations.size(); i++) {
+               Synchronization s = (Synchronization) synchronizations.get(i);
+               s.beforeCompletion();
+            }
          }
 
          if (!runXaResourcePrepare()) {
@@ -106,9 +91,11 @@ public class DualNodeJtaTransactionImpl implements Transaction {
 
          status = Status.STATUS_COMMITTED;
 
-         for (int i = 0; i < synchronizations.size(); i++) {
-            Synchronization s = (Synchronization) synchronizations.get(i);
-            s.afterCompletion(status);
+         if (synchronizations != null) {
+            for (int i = 0; i < synchronizations.size(); i++) {
+               Synchronization s = (Synchronization) synchronizations.get(i);
+               s.afterCompletion(status);
+            }
          }
 
          // status = Status.STATUS_NO_TRANSACTION;

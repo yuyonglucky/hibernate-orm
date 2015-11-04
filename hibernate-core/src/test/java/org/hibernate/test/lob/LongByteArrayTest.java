@@ -1,35 +1,19 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.lob;
 
-import junit.framework.AssertionFailedError;
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.Arrays;
 
 import org.hibernate.Session;
-import org.hibernate.internal.util.collections.ArrayHelper;
+
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Assert;
+import org.junit.Test;
+import junit.framework.AssertionFailedError;
 
 import static org.junit.Assert.assertNull;
 
@@ -56,7 +40,7 @@ public abstract class LongByteArrayTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LongByteArrayHolder ) s.get( LongByteArrayHolder.class, entity.getId() );
+		entity = s.get( LongByteArrayHolder.class, entity.getId() );
 		assertNull( entity.getLongByteArray() );
 		entity.setLongByteArray( original );
 		s.getTransaction().commit();
@@ -64,7 +48,7 @@ public abstract class LongByteArrayTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LongByteArrayHolder ) s.get( LongByteArrayHolder.class, entity.getId() );
+		entity = s.get( LongByteArrayHolder.class, entity.getId() );
 		Assert.assertEquals( ARRAY_SIZE, entity.getLongByteArray().length );
 		assertEquals( original, entity.getLongByteArray() );
 		entity.setLongByteArray( changed );
@@ -73,7 +57,7 @@ public abstract class LongByteArrayTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LongByteArrayHolder ) s.get( LongByteArrayHolder.class, entity.getId() );
+		entity = s.get( LongByteArrayHolder.class, entity.getId() );
 		Assert.assertEquals( ARRAY_SIZE, entity.getLongByteArray().length );
 		assertEquals( changed, entity.getLongByteArray() );
 		entity.setLongByteArray( null );
@@ -82,7 +66,7 @@ public abstract class LongByteArrayTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LongByteArrayHolder ) s.get( LongByteArrayHolder.class, entity.getId() );
+		entity = s.get( LongByteArrayHolder.class, entity.getId() );
 		assertNull( entity.getLongByteArray() );
 		entity.setLongByteArray( empty );
 		s.getTransaction().commit();
@@ -90,7 +74,7 @@ public abstract class LongByteArrayTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		entity = ( LongByteArrayHolder ) s.get( LongByteArrayHolder.class, entity.getId() );
+		entity = s.get( LongByteArrayHolder.class, entity.getId() );
 		if ( entity.getLongByteArray() != null ) {
 			Assert.assertEquals( empty.length, entity.getLongByteArray().length );
 			assertEquals( empty, entity.getLongByteArray() );
@@ -137,7 +121,7 @@ public abstract class LongByteArrayTest extends BaseCoreFunctionalTestCase {
 	}
 
 	public static void assertEquals(byte[] val1, byte[] val2) {
-		if ( !ArrayHelper.isEquals( val1, val2 ) ) {
+		if ( !Arrays.equals( val1, val2 ) ) {
 			throw new AssertionFailedError( "byte arrays did not match" );
 		}
 	}

@@ -1,46 +1,31 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.configuration.internal.metadata;
 
-import javax.persistence.JoinColumn;
 import java.util.Iterator;
-
-import org.dom4j.Attribute;
-import org.dom4j.Document;
-import org.dom4j.Element;
+import javax.persistence.JoinColumn;
 
 import org.hibernate.envers.internal.tools.StringTools;
 import org.hibernate.mapping.Column;
 import org.hibernate.mapping.Formula;
 import org.hibernate.mapping.Selectable;
 
+import org.dom4j.Attribute;
+import org.dom4j.Document;
+import org.dom4j.Element;
+
 /**
  * @author Adam Warski (adam at warski dot org)
  * @author Lukasz Antoniak (lukasz dot antoniak at gmail dot com)
  * @author Michal Skowronek (mskowr at o2 dot pl)
  */
-public class MetadataTools {
+public final class MetadataTools {
+	private MetadataTools() {
+	}
 
 	public static Element addNativelyGeneratedId(
 			Element parent, String name, String type,
@@ -82,11 +67,11 @@ public class MetadataTools {
 		}
 		else {
 			propMapping = parent.addElement( "property" );
+			propMapping.addAttribute( "insert", Boolean.toString( insertable ) );
+			propMapping.addAttribute( "update", Boolean.toString( updateable ) );
 		}
 
 		propMapping.addAttribute( "name", name );
-		propMapping.addAttribute( "insert", Boolean.toString( insertable ) );
-		propMapping.addAttribute( "update", Boolean.toString( updateable ) );
 
 		if ( type != null ) {
 			propMapping.addAttribute( "type", type );
@@ -99,10 +84,10 @@ public class MetadataTools {
 		return addProperty( parent, name, type, insertable, false, key );
 	}
 
-	public static Element addModifiedFlagProperty(Element parent, String propertyName, String suffix) {
+	public static Element addModifiedFlagProperty(Element parent, String propertyName, String suffix, String modifiedFlagName) {
 		return addProperty(
 				parent,
-				getModifiedFlagPropertyName( propertyName, suffix ),
+				(modifiedFlagName != null) ? modifiedFlagName : getModifiedFlagPropertyName( propertyName, suffix ),
 				"boolean",
 				true,
 				false,
@@ -415,7 +400,7 @@ public class MetadataTools {
 
 	public static ColumnNameIterator getColumnNameIterator(final JoinColumn[] joinColumns) {
 		return new ColumnNameIterator() {
-			int counter = 0;
+			int counter;
 
 			public boolean hasNext() {
 				return counter < joinColumns.length;

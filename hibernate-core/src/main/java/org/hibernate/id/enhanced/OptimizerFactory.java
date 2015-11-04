@@ -1,34 +1,16 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.id.enhanced;
 
 import java.lang.reflect.Constructor;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.ReflectHelper;
+import org.jboss.logging.Logger;
 
 /**
  * Factory for {@link Optimizer} instances.
@@ -67,7 +49,6 @@ public class OptimizerFactory {
 	 * @deprecated Use {@link #buildOptimizer(String, Class, int, long)} instead
 	 */
 	@Deprecated
-	@SuppressWarnings( {"UnnecessaryBoxing", "unchecked"})
 	public static Optimizer buildOptimizer(String type, Class returnClass, int incrementSize) {
 		final Class<? extends Optimizer> optimizerClass;
 
@@ -87,7 +68,7 @@ public class OptimizerFactory {
 
 		try {
 			final Constructor ctor = optimizerClass.getConstructor( CTOR_SIG );
-			return (Optimizer) ctor.newInstance( returnClass, Integer.valueOf( incrementSize ) );
+			return (Optimizer) ctor.newInstance( returnClass, incrementSize );
 		}
 		catch( Throwable ignore ) {
 			LOG.unableToInstantiateOptimizer( type );
@@ -110,7 +91,6 @@ public class OptimizerFactory {
 	 *
 	 * @return The built optimizer
 	 */
-	@SuppressWarnings({ "UnnecessaryBoxing", "deprecation" })
 	public static Optimizer buildOptimizer(String type, Class returnClass, int incrementSize, long explicitInitialValue) {
 		final Optimizer optimizer = buildOptimizer( type, returnClass, incrementSize );
 		if ( InitialValueAwareOptimizer.class.isInstance( optimizer ) ) {

@@ -1,32 +1,17 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.hibernate.MappingException;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -88,6 +73,21 @@ public class JoinSequence {
 		return fromPart;
 	}
 
+	private Set<String> treatAsDeclarations;
+
+	public void applyTreatAsDeclarations(Set<String> treatAsDeclarations) {
+		if ( treatAsDeclarations == null || treatAsDeclarations.isEmpty() ) {
+			return;
+		}
+
+		if ( this.treatAsDeclarations == null ) {
+			this.treatAsDeclarations = new HashSet<String>();
+		}
+
+		this.treatAsDeclarations.addAll( treatAsDeclarations );
+	}
+
+
 	/**
 	 * Create a full, although shallow, copy.
 	 *
@@ -142,23 +142,21 @@ public class JoinSequence {
 	 * Generate a JoinFragment
 	 *
 	 * @param enabledFilters The filters associated with the originating session to properly define join conditions
-	 * @param includeExtraJoins Should {@link #addExtraJoins} to called.  Honestly I do not understand the full
-	 * ramifications of this argument
+	 * @param includeAllSubclassJoins Should all subclass joins be added to the rendered JoinFragment?
 	 *
 	 * @return The JoinFragment
 	 *
 	 * @throws MappingException Indicates a problem access the provided metadata, or incorrect metadata
 	 */
-	public JoinFragment toJoinFragment(Map enabledFilters, boolean includeExtraJoins) throws MappingException {
-		return toJoinFragment( enabledFilters, includeExtraJoins, null, null );
+	public JoinFragment toJoinFragment(Map enabledFilters, boolean includeAllSubclassJoins) throws MappingException {
+		return toJoinFragment( enabledFilters, includeAllSubclassJoins, null, null );
 	}
 
 	/**
 	 * Generate a JoinFragment
 	 *
 	 * @param enabledFilters The filters associated with the originating session to properly define join conditions
-	 * @param includeExtraJoins Should {@link #addExtraJoins} to called.  Honestly I do not understand the full
-	 * ramifications of this argument
+	 * @param includeAllSubclassJoins Should all subclass joins be added to the rendered JoinFragment?
 	 * @param withClauseFragment The with clause (which represents additional join restrictions) fragment
 	 * @param withClauseJoinAlias The
 	 *
@@ -168,27 +166,29 @@ public class JoinSequence {
 	 */
 	public JoinFragment toJoinFragment(
 			Map enabledFilters,
-			boolean includeExtraJoins,
+			boolean includeAllSubclassJoins,
 			String withClauseFragment,
 			String withClauseJoinAlias) throws MappingException {
 		final QueryJoinFragment joinFragment = new QueryJoinFragment( factory.getDialect(), useThetaStyle );
 		if ( rootJoinable != null ) {
 			joinFragment.addCrossJoin( rootJoinable.getTableName(), rootAlias );
-			final String filterCondition = rootJoinable.filterFragment( rootAlias, enabledFilters );
+			final String filterCondition = rootJoinable.filterFragment( rootAlias, enabledFilters, treatAsDeclarations );
 			// JoinProcessor needs to know if the where clause fragment came from a dynamic filter or not so it
 			// can put the where clause fragment in the right place in the SQL AST.   'hasFilterCondition' keeps track
 			// of that fact.
 			joinFragment.setHasFilterCondition( joinFragment.addCondition( filterCondition ) );
-			if ( includeExtraJoins ) {
-				//TODO: not quite sure about the full implications of this!
-				addExtraJoins( joinFragment, rootAlias, rootJoinable, true );
-			}
+			addSubclassJoins( joinFragment, rootAlias, rootJoinable, true, includeAllSubclassJoins, treatAsDeclarations );
 		}
 
 		Joinable last = rootJoinable;
 
 		for ( Join join : joins ) {
-			final String on = join.getAssociationType().getOnCondition( join.getAlias(), factory, enabledFilters );
+			// technically the treatAsDeclarations should only apply to rootJoinable or to a single Join,
+			// but that is not possible atm given how these JoinSequence and Join objects are built.
+			// However, it is generally ok given how the HQL parser builds these JoinSequences (a HQL join
+			// results in a JoinSequence with an empty rootJoinable and a single Join).  So we use that here
+			// as an assumption
+			final String on = join.getAssociationType().getOnCondition( join.getAlias(), factory, enabledFilters, treatAsDeclarations );
 			String condition;
 			if ( last != null
 					&& isManyToManyRoot( last )
@@ -208,10 +208,8 @@ public class JoinSequence {
 				condition = on;
 			}
 
-			if ( withClauseFragment != null ) {
-				if ( join.getAlias().equals( withClauseJoinAlias ) ) {
-					condition += " and " + withClauseFragment;
-				}
+			if ( withClauseFragment != null && !isManyToManyRoot( join.joinable )) {
+				condition += " and " + withClauseFragment;
 			}
 
 			joinFragment.addJoin(
@@ -223,20 +221,21 @@ public class JoinSequence {
 					condition
 			);
 
-			//TODO: not quite sure about the full implications of this!
-			if ( includeExtraJoins ) {
-				addExtraJoins(
-						joinFragment,
-						join.getAlias(),
-						join.getJoinable(),
-						join.joinType == JoinType.INNER_JOIN
-				);
-			}
+			addSubclassJoins(
+					joinFragment,
+					join.getAlias(),
+					join.getJoinable(),
+					join.joinType == JoinType.INNER_JOIN,
+					includeAllSubclassJoins,
+					// ugh.. this is needed because of how HQL parser (FromElementFactory/SessionFactoryHelper)
+					// builds the JoinSequence for HQL joins
+					treatAsDeclarations
+			);
 			last = join.getJoinable();
 		}
 
 		if ( next != null ) {
-			joinFragment.addFragment( next.toJoinFragment( enabledFilters, includeExtraJoins ) );
+			joinFragment.addFragment( next.toJoinFragment( enabledFilters, includeAllSubclassJoins ) );
 		}
 
 		joinFragment.addCondition( conditions.toString() );
@@ -256,11 +255,17 @@ public class JoinSequence {
 		return false;
 	}
 
-	private void addExtraJoins(JoinFragment joinFragment, String alias, Joinable joinable, boolean innerJoin) {
-		final boolean include = isIncluded( alias );
+	private void addSubclassJoins(
+			JoinFragment joinFragment,
+			String alias,
+			Joinable joinable,
+			boolean innerJoin,
+			boolean includeSubclassJoins,
+			Set<String> treatAsDeclarations) {
+		final boolean include = includeSubclassJoins && isIncluded( alias );
 		joinFragment.addJoins(
-				joinable.fromJoinFragment( alias, innerJoin, include ),
-				joinable.whereJoinFragment( alias, innerJoin, include )
+				joinable.fromJoinFragment( alias, innerJoin, include, treatAsDeclarations ),
+				joinable.whereJoinFragment( alias, innerJoin, include, treatAsDeclarations )
 		);
 	}
 

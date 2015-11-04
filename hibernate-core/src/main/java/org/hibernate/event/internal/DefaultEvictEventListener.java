@@ -1,31 +1,12 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.event.internal;
 
 import java.io.Serializable;
-
-import org.jboss.logging.Logger;
 
 import org.hibernate.HibernateException;
 import org.hibernate.engine.internal.Cascade;
@@ -37,6 +18,7 @@ import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EvictEvent;
 import org.hibernate.event.spi.EvictEventListener;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.pretty.MessageHelper;
@@ -52,14 +34,13 @@ import org.hibernate.proxy.LazyInitializer;
  * @author Steve Ebersole
  */
 public class DefaultEvictEventListener implements EvictEventListener {
-
-    private static final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class,
-                                                                       DefaultEvictEventListener.class.getName());
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( DefaultEvictEventListener.class );
 
 	/**
 	 * Handle the given evict event.
 	 *
 	 * @param event The evict event to be handled.
+	 *
 	 * @throws HibernateException
 	 */
 	public void onEvict(EvictEvent event) throws HibernateException {
@@ -118,18 +99,22 @@ public class DefaultEvictEventListener implements EvictEventListener {
 	}
 
 	protected void doEvict(
-		final Object object,
-		final EntityKey key,
-		final EntityPersister persister,
-		final EventSource session)
-	throws HibernateException {
+			final Object object,
+			final EntityKey key,
+			final EntityPersister persister,
+			final EventSource session)
+			throws HibernateException {
 
 		if ( LOG.isTraceEnabled() ) {
 			LOG.tracev( "Evicting {0}", MessageHelper.infoString( persister ) );
 		}
 
 		if ( persister.hasNaturalIdentifier() ) {
-			session.getPersistenceContext().getNaturalIdHelper().handleEviction( object, persister, key.getIdentifier() );
+			session.getPersistenceContext().getNaturalIdHelper().handleEviction(
+					object,
+					persister,
+					key.getIdentifier()
+			);
 		}
 
 		// remove all collections for the entity from the session-level cache
@@ -143,6 +128,6 @@ public class DefaultEvictEventListener implements EvictEventListener {
 		// This is now handled by removeEntity()
 		//session.getPersistenceContext().removeDatabaseSnapshot(key);
 
-		new Cascade( CascadingActions.EVICT, CascadePoint.AFTER_EVICT, session ).cascade( persister, object );
+		Cascade.cascade( CascadingActions.EVICT, CascadePoint.AFTER_EVICT, session, persister, object );
 	}
 }

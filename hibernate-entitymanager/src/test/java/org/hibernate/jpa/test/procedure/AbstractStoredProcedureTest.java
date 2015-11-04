@@ -1,3 +1,9 @@
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.jpa.test.procedure;
 
 import java.util.List;
@@ -5,15 +11,16 @@ import javax.persistence.EntityManager;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
-import org.hibernate.procedure.internal.ParameterStrategy;
 import org.hibernate.procedure.internal.ProcedureCallMementoImpl;
+import org.hibernate.procedure.spi.ParameterStrategy;
 import org.hibernate.type.IntegerType;
 import org.hibernate.type.LongType;
 import org.hibernate.type.StringType;
 
 import org.junit.Test;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 /**
  * @author Strong Liu <stliu@hibernate.org>
@@ -52,13 +59,13 @@ public abstract class AbstractStoredProcedureTest extends BaseEntityManagerFunct
 		list = m2.getParameterDeclarations();
 
 		memento = list.get( 0 );
-		assertEquals( Integer.valueOf( 0 ), memento.getPosition() );
+		assertEquals( Integer.valueOf( 1 ), memento.getPosition() );
 		assertEquals( javax.persistence.ParameterMode.INOUT, memento.getMode() );
 		assertEquals( StringType.INSTANCE, memento.getHibernateType() );
 		assertEquals( String.class, memento.getType() );
 
 		memento = list.get( 1 );
-		assertEquals( Integer.valueOf( 1 ), memento.getPosition() );
+		assertEquals( Integer.valueOf( 2 ), memento.getPosition() );
 		assertEquals( javax.persistence.ParameterMode.INOUT, memento.getMode() );
 		assertEquals( LongType.INSTANCE, memento.getHibernateType() );
 		assertEquals( Long.class, memento.getType() );

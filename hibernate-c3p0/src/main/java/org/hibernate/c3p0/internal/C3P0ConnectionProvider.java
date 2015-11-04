@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2007-2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.c3p0.internal;
 
@@ -32,20 +15,21 @@ import javax.sql.DataSource;
 
 import com.mchange.v2.c3p0.DataSources;
 
-import org.jboss.logging.Logger;
-
 import org.hibernate.HibernateException;
-import org.hibernate.cfg.Environment;
-import org.hibernate.engine.jdbc.connections.internal.ConnectionProviderInitiator;
-import org.hibernate.internal.util.config.ConfigurationHelper;
-import org.hibernate.service.UnknownUnwrapTypeException;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.boot.registry.classloading.spi.ClassLoadingException;
+import org.hibernate.cfg.Environment;
+import org.hibernate.engine.jdbc.connections.internal.ConnectionProviderInitiator;
 import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
+import org.hibernate.internal.util.StringHelper;
+import org.hibernate.internal.util.config.ConfigurationHelper;
+import org.hibernate.service.UnknownUnwrapTypeException;
 import org.hibernate.service.spi.Configurable;
 import org.hibernate.service.spi.ServiceRegistryAwareService;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
 import org.hibernate.service.spi.Stoppable;
+
+import org.jboss.logging.Logger;
 
 /**
  * A connection provider that uses a C3P0 connection pool. Hibernate will use this by
@@ -196,8 +180,8 @@ public class C3P0ConnectionProvider
 			// revert to traditional hibernate behavior of setting initialPoolSize to minPoolSize
 			// unless otherwise specified with a c3p0.*-style parameter.
 			final Integer initialPoolSize = ConfigurationHelper.getInteger( C3P0_STYLE_INITIAL_POOL_SIZE, props );
-			if ( initialPoolSize == null && minPoolSize != null ) {
-				c3props.put( C3P0_STYLE_INITIAL_POOL_SIZE, String.valueOf( minPoolSize ).trim() );
+			if ( initialPoolSize == null ) {
+				setOverwriteProperty( "", C3P0_STYLE_INITIAL_POOL_SIZE, props, c3props, minPoolSize );
 			}
 
 			final DataSource unpooled = DataSources.unpooledDataSource( jdbcUrl, connectionProps );
@@ -213,15 +197,8 @@ public class C3P0ConnectionProvider
 			throw new HibernateException( LOG.unableToInstantiateC3p0ConnectionPool(), e );
 		}
 
-		final String i = (String) props.get( Environment.ISOLATION );
-		if ( i == null ) {
-			isolation = null;
-		}
-		else {
-			isolation = Integer.valueOf( i );
-			LOG.jdbcIsolationLevel( Environment.isolationLevelToString( isolation ) );
-		}
-
+		isolation = ConnectionProviderInitiator.extractIsolation( props );
+		LOG.jdbcIsolationLevel( ConnectionProviderInitiator.toIsolationNiceName( isolation ) );
 	}
 
 	@Override

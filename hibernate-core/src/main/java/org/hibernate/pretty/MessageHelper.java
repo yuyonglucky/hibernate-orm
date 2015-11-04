@@ -1,26 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.pretty;
 import java.io.Serializable;
@@ -82,11 +64,11 @@ public final class MessageHelper {
 	 *
 	 * @param persister The persister for the entity
 	 * @param id The entity id value
-	 * @param factory The session factory
+	 * @param factory The session factory - Could be null!
 	 * @return An info string, in the form [FooBar#1]
 	 */
 	public static String infoString(
-			EntityPersister persister, 
+			EntityPersister persister,
 			Object id, 
 			SessionFactoryImplementor factory) {
 		StringBuilder s = new StringBuilder();
@@ -110,7 +92,12 @@ public final class MessageHelper {
 				s.append( id );
 			}
 			else {
-				s.append( idType.toLoggableString( id, factory ) );
+				if ( factory != null ) {
+					s.append( idType.toLoggableString( id, factory ) );
+				}
+				else {
+					s.append( "<not loggable>" );
+				}
 			}
 		}
 		s.append( ']' );
@@ -271,7 +258,8 @@ public final class MessageHelper {
 			if ( collectionKey.getClass().isAssignableFrom( 
 					ownerIdentifierType.getReturnedClass() ) ) {
 				ownerKey = collectionKey;
-			} else {
+			}
+			else {
 				ownerKey = session.getPersistenceContext()
 						.getEntry( collection.getOwner() ).getId();
 			}
@@ -367,7 +355,8 @@ public final class MessageHelper {
 		if ( id.getClass().isAssignableFrom( 
 				ownerIdentifierType.getReturnedClass() ) ) {
 			s.append( ownerIdentifierType.toLoggableString( id, factory ) );
-		} else {
+		}
+		else {
 			// TODO: This is a crappy backup if a property-ref is used.
 			// If the reference is an object w/o toString(), this isn't going to work.
 			s.append( id.toString() );

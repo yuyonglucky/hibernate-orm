@@ -1,35 +1,18 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.engine.query.spi.sql;
+
 import java.util.Map;
 
 import org.hibernate.LockMode;
 
 /**
  * Represents a return defined as part of a native sql query which
- * names a collection role in the form {classname}.{collectionrole}; it
+ * names a collection role in the form {className}.{collectionRole}; it
  * is used in defining a custom sql query for loading an entity's
  * collection in non-fetching scenarios (i.e., loading the collection
  * itself as the "root" of the result).
@@ -52,6 +35,7 @@ public class NativeSQLQueryCollectionReturn extends NativeSQLQueryNonScalarRetur
 	 * @param propertyResults Any user-supplied column->property mappings
 	 * @param lockMode The lock mode to apply to the collection.
 	 */
+	@SuppressWarnings("unchecked")
 	public NativeSQLQueryCollectionReturn(
 			String alias,
 			String ownerEntityName,
@@ -62,6 +46,13 @@ public class NativeSQLQueryCollectionReturn extends NativeSQLQueryNonScalarRetur
 		this.ownerEntityName = ownerEntityName;
 		this.ownerProperty = ownerProperty;
 		this.hashCode = determineHashCode();
+	}
+
+	private int determineHashCode() {
+		int result = super.hashCode();
+		result = 31 * result + ( ownerEntityName != null ? ownerEntityName.hashCode() : 0 );
+		result = 31 * result + ( ownerProperty != null ? ownerProperty.hashCode() : 0 );
+		return result;
 	}
 
 	/**
@@ -82,6 +73,8 @@ public class NativeSQLQueryCollectionReturn extends NativeSQLQueryNonScalarRetur
 		return ownerProperty;
 	}
 
+	@Override
+	@SuppressWarnings("RedundantIfStatement")
 	public boolean equals(Object o) {
 		if ( this == o ) {
 			return true;
@@ -93,7 +86,7 @@ public class NativeSQLQueryCollectionReturn extends NativeSQLQueryNonScalarRetur
 			return false;
 		}
 
-		NativeSQLQueryCollectionReturn that = ( NativeSQLQueryCollectionReturn ) o;
+		final NativeSQLQueryCollectionReturn that = (NativeSQLQueryCollectionReturn) o;
 
 		if ( ownerEntityName != null ? !ownerEntityName.equals( that.ownerEntityName ) : that.ownerEntityName != null ) {
 			return false;
@@ -105,14 +98,8 @@ public class NativeSQLQueryCollectionReturn extends NativeSQLQueryNonScalarRetur
 		return true;
 	}
 
+	@Override
 	public int hashCode() {
 		return hashCode;
-	}
-	
-	private int determineHashCode() {
-		int result = super.hashCode();
-		result = 31 * result + ( ownerEntityName != null ? ownerEntityName.hashCode() : 0 );
-		result = 31 * result + ( ownerProperty != null ? ownerProperty.hashCode() : 0 );
-		return result;
 	}
 }

@@ -1,22 +1,8 @@
-/* 
+/*
  * Hibernate, Relational Persistence for Idiomatic Java
- * 
- * JBoss, Home of Professional Open Source
- * Copyright 2013 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
  *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.test.sql.refcursor;
 
@@ -102,10 +88,10 @@ public class CursorFromCallableTest extends BaseCoreFunctionalTestCase {
 				Arrays.asList( new NumValue( 1, "Line 1" ), new NumValue( 2, "Line 2" ) ),
 				session.getNamedQuery( "NumValue.getSomeValues" ).list()
 		);
-		JdbcCoordinator jdbcCoordinator = ( (SessionImplementor) session ).getTransactionCoordinator().getJdbcCoordinator();
+		JdbcCoordinator jdbcCoordinator = ( (SessionImplementor) session ).getJdbcCoordinator();
 		Assert.assertFalse(
 				"Prepared statement and result set should be released after query execution.",
-				jdbcCoordinator.hasRegisteredResources()
+				jdbcCoordinator.getResourceRegistry().hasRegisteredResources()
 		);
 		session.getTransaction().commit();
 		session.close();
@@ -118,7 +104,7 @@ public class CursorFromCallableTest extends BaseCoreFunctionalTestCase {
 		session.doWork( new Work() {
 			@Override
 			public void execute(Connection connection) throws SQLException {
-				final JdbcCoordinator jdbcCoordinator = ( (SessionImplementor) session ).getTransactionCoordinator().getJdbcCoordinator();
+				final JdbcCoordinator jdbcCoordinator = ( (SessionImplementor) session ).getJdbcCoordinator();
 				final StatementPreparer statementPreparer = jdbcCoordinator.getStatementPreparer();
 				final ResultSetReturn resultSetReturn = jdbcCoordinator.getResultSetReturn();
 				PreparedStatement preparedStatement = null;
@@ -129,7 +115,7 @@ public class CursorFromCallableTest extends BaseCoreFunctionalTestCase {
 				finally {
 					if ( preparedStatement != null ) {
 						try {
-							jdbcCoordinator.release( preparedStatement );
+							jdbcCoordinator.getResourceRegistry().release( preparedStatement );
 						}
 						catch ( Throwable ignore ) {
 							// ignore...

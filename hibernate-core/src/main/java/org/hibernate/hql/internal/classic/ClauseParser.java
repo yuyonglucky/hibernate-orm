@@ -1,31 +1,14 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, Red Hat Middleware LLC or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Middleware LLC.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
- *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.hql.internal.classic;
+
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 import org.hibernate.QueryException;
 
@@ -33,15 +16,15 @@ import org.hibernate.QueryException;
  * Parses the Hibernate query into its constituent clauses.
  */
 public class ClauseParser implements Parser {
-
 	private Parser child;
-	private List selectTokens;
-	private boolean cacheSelectTokens = false;
-	private boolean byExpected = false;
-	private int parenCount = 0;
+	private List<String> selectTokens;
+	private boolean cacheSelectTokens;
+	private boolean byExpected;
+	private int parenCount;
 
+	@Override
 	public void token(String token, QueryTranslatorImpl q) throws QueryException {
-		String lcToken = token.toLowerCase();
+		String lcToken = token.toLowerCase(Locale.ROOT);
 
 		if ( "(".equals( token ) ) {
 			parenCount++;
@@ -58,7 +41,7 @@ public class ClauseParser implements Parser {
 
 		if ( isClauseStart ) {
 			if ( lcToken.equals( "select" ) ) {
-				selectTokens = new ArrayList();
+				selectTokens = new ArrayList<String>();
 				cacheSelectTokens = true;
 			}
 			else if ( lcToken.equals( "from" ) ) {
@@ -87,7 +70,9 @@ public class ClauseParser implements Parser {
 				byExpected = true;
 			}
 			else if ( lcToken.equals( "by" ) ) {
-				if ( !byExpected ) throw new QueryException( "GROUP or ORDER expected before BY" );
+				if ( !byExpected ) {
+					throw new QueryException( "GROUP or ORDER expected before BY" );
+				}
 				child.start( q );
 				byExpected = false;
 			}
@@ -122,17 +107,18 @@ public class ClauseParser implements Parser {
 		}
 	}
 
+	@Override
 	public void start(QueryTranslatorImpl q) {
 	}
 
+	@Override
 	public void end(QueryTranslatorImpl q) throws QueryException {
 		endChild( q );
 		if ( selectTokens != null ) {
 			child = new SelectParser();
 			child.start( q );
-			Iterator iter = selectTokens.iterator();
-			while ( iter.hasNext() ) {
-				token( ( String ) iter.next(), q );
+			for ( String selectToken : selectTokens ) {
+				token( selectToken, q );
 			}
 			child.end( q );
 		}
@@ -142,10 +128,3 @@ public class ClauseParser implements Parser {
 	}
 
 }
-
-
-
-
-
-
-

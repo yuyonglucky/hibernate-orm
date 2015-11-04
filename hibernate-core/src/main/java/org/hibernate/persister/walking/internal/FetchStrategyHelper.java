@@ -1,31 +1,13 @@
 /*
- * jDocBook, processing of DocBook sources
+ * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.persister.walking.internal;
 
-import java.util.Iterator;
-
 import org.hibernate.FetchMode;
+import org.hibernate.engine.FetchStrategy;
 import org.hibernate.engine.FetchStyle;
 import org.hibernate.engine.FetchTiming;
 import org.hibernate.engine.profile.Fetch;
@@ -42,7 +24,10 @@ import org.hibernate.type.AssociationType;
 /**
  * @author Steve Ebersole
  */
-public class FetchStrategyHelper {
+public final class FetchStrategyHelper {
+	private FetchStrategyHelper() {
+	}
+
 	/**
 	 * Determine the fetch-style (if one) explicitly set for this association via fetch profiles.
 	 * <p/>
@@ -75,9 +60,7 @@ public class FetchStrategyHelper {
 				: rootPropertyName;
 		final String fetchRole = persister.getEntityName() + "." + relativePropertyPath;
 
-		Iterator profiles = loadQueryInfluencers.getEnabledFetchProfileNames().iterator();
-		while ( profiles.hasNext() ) {
-			final String profileName = ( String ) profiles.next();
+		for ( String profileName : loadQueryInfluencers.getEnabledFetchProfileNames() ) {
 			final FetchProfile profile = loadQueryInfluencers.getSessionFactory().getFetchProfile( profileName );
 			final Fetch fetch = profile.getFetchByRole( fetchRole );
 			if ( fetch != null && Fetch.Style.JOIN == fetch.getStyle() ) {
@@ -107,10 +90,17 @@ public class FetchStrategyHelper {
 			return FetchStyle.JOIN;
 		}
 
+		if ( mappingFetchMode == FetchMode.SELECT ) {
+			return FetchStyle.SELECT;
+
+		}
 		if ( type.isEntityType() ) {
 			EntityPersister persister = (EntityPersister) type.getAssociatedJoinable( sessionFactory );
 			if ( persister.isBatchLoadable() ) {
 				return FetchStyle.BATCH;
+			}
+			else if ( !persister.hasProxy() ) {
+				return FetchStyle.JOIN;
 			}
 		}
 		else {
@@ -149,12 +139,21 @@ public class FetchStrategyHelper {
 	}
 
 	private static boolean isSubsequentSelectDelayed(AssociationType type, SessionFactoryImplementor sessionFactory) {
-		if ( type.isEntityType() ) {
+		if ( type.isAnyType() ) {
+			// we'd need more context here.  this is only kept as part of the property state on the owning entity
+			return false;
+		}
+		else if ( type.isEntityType() ) {
 			return ( (EntityPersister) type.getAssociatedJoinable( sessionFactory ) ).hasProxy();
 		}
 		else {
 			final CollectionPersister cp = ( (CollectionPersister) type.getAssociatedJoinable( sessionFactory ) );
 			return cp.isLazy() || cp.isExtraLazy();
 		}
+	}
+
+	public static boolean isJoinFetched(FetchStrategy fetchStrategy) {
+		return fetchStrategy.getTiming() == FetchTiming.IMMEDIATE
+				&& fetchStrategy.getStyle() == FetchStyle.JOIN;
 	}
 }

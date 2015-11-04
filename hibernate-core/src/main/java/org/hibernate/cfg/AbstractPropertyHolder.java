@@ -1,27 +1,11 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2010, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.cfg;
+
 import java.util.HashMap;
 import java.util.Map;
 import javax.persistence.AssociationOverride;
@@ -35,11 +19,19 @@ import javax.persistence.JoinColumn;
 import javax.persistence.JoinTable;
 import javax.persistence.MappedSuperclass;
 
+import org.hibernate.AnnotationException;
 import org.hibernate.AssertionFailure;
 import org.hibernate.annotations.common.reflection.XAnnotatedElement;
 import org.hibernate.annotations.common.reflection.XClass;
 import org.hibernate.annotations.common.reflection.XProperty;
+import org.hibernate.boot.internal.AttributeConverterDescriptorImpl;
+import org.hibernate.boot.spi.AttributeConverterDescriptor;
+import org.hibernate.boot.spi.MetadataBuildingContext;
+import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.util.StringHelper;
+import org.hibernate.internal.util.type.PrimitiveWrapperHelper;
+
+import org.jboss.logging.Logger;
 
 /**
  * No idea.
@@ -47,6 +39,8 @@ import org.hibernate.internal.util.StringHelper;
  * @author Emmanuel Bernard
  */
 public abstract class AbstractPropertyHolder implements PropertyHolder {
+	private static final Logger log = CoreLogging.logger( AbstractPropertyHolder.class );
+
 	protected AbstractPropertyHolder parent;
 	private Map<String, Column[]> holderColumnOverride;
 	private Map<String, Column[]> currentPropertyColumnOverride;
@@ -55,19 +49,73 @@ public abstract class AbstractPropertyHolder implements PropertyHolder {
 	private Map<String, JoinTable> holderJoinTableOverride;
 	private Map<String, JoinTable> currentPropertyJoinTableOverride;
 	private String path;
-	private Mappings mappings;
+	private MetadataBuildingContext context;
 	private Boolean isInIdClass;
-
 
 	AbstractPropertyHolder(
 			String path,
 			PropertyHolder parent,
 			XClass clazzToProcess,
-			Mappings mappings) {
+			MetadataBuildingContext context) {
 		this.path = path;
 		this.parent = (AbstractPropertyHolder) parent;
-		this.mappings = mappings;
+		this.context = context;
 		buildHierarchyColumnOverride( clazzToProcess );
+	}
+
+	protected abstract String normalizeCompositePathForLogging(String attributeName);
+	protected abstract String normalizeCompositePath(String attributeName);
+
+	protected abstract AttributeConversionInfo locateAttributeConversionInfo(XProperty property);
+	protected abstract AttributeConversionInfo locateAttributeConversionInfo(String path);
+
+	@Override
+	public AttributeConverterDescriptor resolveAttributeConverterDescriptor(XProperty property) {
+		AttributeConversionInfo info = locateAttributeConversionInfo( property );
+		if ( info != null ) {
+			if ( info.isConversionDisabled() ) {
+				return null;
+			}
+			else {
+				try {
+					return makeAttributeConverterDescriptor( info );
+				}
+				catch (Exception e) {
+					throw new IllegalStateException(
+							String.format( "Unable to instantiate AttributeConverter [%s", info.getConverterClass().getName() ),
+							e
+					);
+				}
+			}
+		}
+
+		log.debugf( "Attempting to locate auto-apply AttributeConverter for property [%s:%s]", path, property.getName() );
+
+		return context.getMetadataCollector()
+				.getAttributeConverterAutoApplyHandler()
+				.findAutoApplyConverterForAttribute( property, context );
+	}
+
+	protected AttributeConverterDescriptor makeAttributeConverterDescriptor(AttributeConversionInfo conversion) {
+		try {
+			AttributeConverterDefinition definition = new AttributeConverterDefinition( conversion.getConverterClass().newInstance(), false );
+			return AttributeConverterDescriptorImpl.create( definition, context.getMetadataCollector().getClassmateContext() );
+		}
+		catch (Exception e) {
+			throw new AnnotationException( "Unable to create AttributeConverter instance", e );
+		}
+	}
+
+	protected boolean areTypeMatch(Class converterDefinedType, Class propertyType) {
+		if ( converterDefinedType == null ) {
+			throw new AnnotationException( "AttributeConverter defined java type cannot be null" );
+		}
+		if ( propertyType == null ) {
+			throw new AnnotationException( "Property defined java type cannot be null" );
+		}
+
+		return converterDefinedType.equals( propertyType )
+				|| PrimitiveWrapperHelper.arePrimitiveWrapperEquivalents( converterDefinedType, propertyType );
 	}
 
 	@Override
@@ -90,8 +138,8 @@ public abstract class AbstractPropertyHolder implements PropertyHolder {
 	 *
 	 * @return The mappings
 	 */
-	protected Mappings getMappings() {
-		return mappings;
+	protected MetadataBuildingContext getContext() {
+		return context;
 	}
 
 	/**
@@ -286,7 +334,7 @@ public abstract class AbstractPropertyHolder implements PropertyHolder {
 		Map<String, Column[]> columnOverride = new HashMap<String, Column[]>();
 		Map<String, JoinColumn[]> joinColumnOverride = new HashMap<String, JoinColumn[]>();
 		Map<String, JoinTable> joinTableOverride = new HashMap<String, JoinTable>();
-		while ( current != null && !mappings.getReflectionManager().toXClass( Object.class ).equals( current ) ) {
+		while ( current != null && !context.getBuildingOptions().getReflectionManager().toXClass( Object.class ).equals( current ) ) {
 			if ( current.isAnnotationPresent( Entity.class ) || current.isAnnotationPresent( MappedSuperclass.class )
 					|| current.isAnnotationPresent( Embeddable.class ) ) {
 				//FIXME is embeddable override?

@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2008, 2013, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.envers.internal.entities.mapper;
 
@@ -29,18 +12,19 @@ import java.util.Map;
 
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.spi.SessionImplementor;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
+import org.hibernate.envers.boot.internal.EnversService;
 import org.hibernate.envers.internal.entities.PropertyData;
 import org.hibernate.envers.internal.reader.AuditReaderImplementor;
 import org.hibernate.envers.internal.tools.MappingTools;
 import org.hibernate.envers.internal.tools.ReflectionTools;
 import org.hibernate.envers.internal.tools.Tools;
 import org.hibernate.envers.tools.Pair;
-import org.hibernate.property.Getter;
+import org.hibernate.property.access.spi.Getter;
 
 /**
  * @author Adam Warski (adam at warski dot org)
  * @author Michal Skowronek (mskowr at o2 dot pl)
+ * @author Lukasz Zuchowski (author at zuchos dot com)
  */
 public class MultiPropertyMapper implements ExtendedPropertyMapper {
 	protected final Map<PropertyData, PropertyMapper> properties;
@@ -66,7 +50,10 @@ public class MultiPropertyMapper implements ExtendedPropertyMapper {
 			return (CompositeMapperBuilder) properties.get( propertyData );
 		}
 
-		final ComponentPropertyMapper componentMapperBuilder = new ComponentPropertyMapper( propertyData, componentClass );
+		final ComponentPropertyMapper componentMapperBuilder = new ComponentPropertyMapper(
+				propertyData,
+				componentClass
+		);
 		addComposite( propertyData, componentMapperBuilder );
 
 		return componentMapperBuilder;
@@ -78,7 +65,7 @@ public class MultiPropertyMapper implements ExtendedPropertyMapper {
 		propertyDatas.put( propertyData.getName(), propertyData );
 	}
 
-	private Object getAtIndexOrNull(Object[] array, int index) {
+	protected Object getAtIndexOrNull(Object[] array, int index) {
 		return array == null ? null : array[index];
 	}
 
@@ -115,10 +102,10 @@ public class MultiPropertyMapper implements ExtendedPropertyMapper {
 		for ( PropertyData propertyData : properties.keySet() ) {
 			Getter getter;
 			if ( newObj != null ) {
-				getter = ReflectionTools.getGetter( newObj.getClass(), propertyData );
+				getter = ReflectionTools.getGetter( newObj.getClass(), propertyData, session.getFactory().getServiceRegistry() );
 			}
 			else if ( oldObj != null ) {
-				getter = ReflectionTools.getGetter( oldObj.getClass(), propertyData );
+				getter = ReflectionTools.getGetter( oldObj.getClass(), propertyData, session.getFactory().getServiceRegistry() );
 			}
 			else {
 				return false;
@@ -143,10 +130,10 @@ public class MultiPropertyMapper implements ExtendedPropertyMapper {
 		for ( PropertyData propertyData : properties.keySet() ) {
 			Getter getter;
 			if ( newObj != null ) {
-				getter = ReflectionTools.getGetter( newObj.getClass(), propertyData );
+				getter = ReflectionTools.getGetter( newObj.getClass(), propertyData, session.getFactory().getServiceRegistry() );
 			}
 			else if ( oldObj != null ) {
-				getter = ReflectionTools.getGetter( oldObj.getClass(), propertyData );
+				getter = ReflectionTools.getGetter( oldObj.getClass(), propertyData, session.getFactory().getServiceRegistry() );
 			}
 			else {
 				return;
@@ -162,10 +149,14 @@ public class MultiPropertyMapper implements ExtendedPropertyMapper {
 
 	@Override
 	public void mapToEntityFromMap(
-			AuditConfiguration verCfg, Object obj, Map data, Object primaryKey,
-			AuditReaderImplementor versionsReader, Number revision) {
+			EnversService enversService,
+			Object obj,
+			Map data,
+			Object primaryKey,
+			AuditReaderImplementor versionsReader,
+			Number revision) {
 		for ( PropertyMapper mapper : properties.values() ) {
-			mapper.mapToEntityFromMap( verCfg, obj, data, primaryKey, versionsReader, revision );
+			mapper.mapToEntityFromMap( enversService, obj, data, primaryKey, versionsReader, revision );
 		}
 	}
 
@@ -222,5 +213,9 @@ public class MultiPropertyMapper implements ExtendedPropertyMapper {
 	@Override
 	public Map<PropertyData, PropertyMapper> getProperties() {
 		return properties;
+	}
+
+	public Map<String, PropertyData> getPropertyDatas() {
+		return propertyDatas;
 	}
 }

@@ -1,5 +1,11 @@
 <?xml version="1.0"?>
-<!DOCTYPE hibernate-mapping PUBLIC 
+<!--
+  ~ Hibernate, Relational Persistence for Idiomatic Java
+  ~
+  ~ License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+  ~ See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+  -->
+<!DOCTYPE hibernate-mapping PUBLIC
 	"-//Hibernate/Hibernate Mapping DTD 3.0//EN"
 	"http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
 
@@ -49,13 +55,13 @@
         <bag name="anotherSet">
 			 <key column="attrb2_id"/> 			 
 			 <composite-element class="org.hibernate.test.legacy.Employee">
-  		     <meta attribute="globalmutated">monetaryamount anotherSet composite level</meta>
-  		      <property name="emp" type="string">
-    		      <meta attribute="globalmutated">monetaryamount anotherSet composite property emp level</meta>
-  		      </property>
-  		      <many-to-one name="empinone" class="org.hibernate.test.legacy.Employee">
-  		          <meta attribute="globalmutated">monetaryamount anotherSet composite property empinone level</meta>
-  		      </many-to-one>
+				 <meta attribute="globalmutated">monetaryamount anotherSet composite level</meta>
+				  <property name="emp" type="string">
+					  <meta attribute="globalmutated">monetaryamount anotherSet composite property emp level</meta>
+				  </property>
+				  <many-to-one name="empinone" class="org.hibernate.test.legacy.Employee">
+					  <meta attribute="globalmutated">monetaryamount anotherSet composite property empinone level</meta>
+				  </many-to-one>
 			 </composite-element>
         </bag>	
 

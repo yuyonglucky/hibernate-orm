@@ -1,41 +1,27 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2009, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.jpa.test.criteria;
 
+import static org.junit.Assert.assertEquals;
+
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
+
 import javax.persistence.EntityManager;
 import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Root;
 import javax.persistence.metamodel.EntityType;
 
-import org.junit.Test;
-
+import org.hibernate.dialect.H2Dialect;
 import org.hibernate.jpa.criteria.CriteriaBuilderImpl;
 import org.hibernate.jpa.criteria.predicate.ComparisonPredicate;
+import org.hibernate.jpa.internal.metamodel.MetamodelImpl;
+import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 import org.hibernate.jpa.test.metamodel.Address;
 import org.hibernate.jpa.test.metamodel.Alias;
 import org.hibernate.jpa.test.metamodel.Country;
@@ -44,15 +30,14 @@ import org.hibernate.jpa.test.metamodel.Customer;
 import org.hibernate.jpa.test.metamodel.Customer_;
 import org.hibernate.jpa.test.metamodel.Info;
 import org.hibernate.jpa.test.metamodel.LineItem;
-import org.hibernate.jpa.internal.metamodel.MetamodelImpl;
 import org.hibernate.jpa.test.metamodel.Order;
 import org.hibernate.jpa.test.metamodel.Phone;
 import org.hibernate.jpa.test.metamodel.Product;
 import org.hibernate.jpa.test.metamodel.ShelfLife;
 import org.hibernate.jpa.test.metamodel.Spouse;
-import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
-
-import static org.junit.Assert.assertEquals;
+import org.hibernate.testing.RequiresDialect;
+import org.hibernate.testing.TestForIssue;
+import org.junit.Test;
 
 /**
  * @author Steve Ebersole
@@ -125,7 +110,7 @@ public class QueryBuilderTest extends BaseEntityManagerFunctionalTestCase {
 		Phone phone3 = new Phone( "3", "555", "0003", address );
 		Phone phone4 = new Phone( "4", "555", "0004" );
 
-		Collection<Phone> phones = new ArrayList<Phone>( 3 );
+		List<Phone> phones = new ArrayList<Phone>( 3 );
 		phones.add( phone1 );
 		phones.add( phone2 );
 		phones.add( phone3 );
@@ -208,6 +193,28 @@ public class QueryBuilderTest extends BaseEntityManagerFunctionalTestCase {
 				)
 		);
 		TypedQuery<Customer> tq = em.createQuery(cquery);
+		tq.getResultList();
+
+		em.getTransaction().commit();
+		em.close();
+	}
+
+	@Test
+	@TestForIssue(jiraKey = "HHH-8699")
+	// For now, restrict to H2.  Selecting w/ predicate functions cause issues for too many dialects.
+	@RequiresDialect(value = H2Dialect.class, jiraKey = "HHH-9092")
+	public void testMultiselectWithPredicates() {
+		EntityManager em = getOrCreateEntityManager();
+		em.getTransaction().begin();
+
+		CriteriaBuilderImpl cb = (CriteriaBuilderImpl) em.getCriteriaBuilder();
+		CriteriaQuery<Customer> cq = cb.createQuery( Customer.class );
+		Root<Customer> r = cq.from( Customer.class );
+		cq.multiselect(
+				r.get( Customer_.id ), r.get( Customer_.name ),
+				cb.concat( "Hello ", r.get( Customer_.name ) ), cb.isNotNull( r.get( Customer_.age ) )
+		);
+		TypedQuery<Customer> tq = em.createQuery( cq );
 		tq.getResultList();
 
 		em.getTransaction().commit();

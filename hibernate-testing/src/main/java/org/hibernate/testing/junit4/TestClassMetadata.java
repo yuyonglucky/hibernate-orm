@@ -1,25 +1,8 @@
 /*
  * Hibernate, Relational Persistence for Idiomatic Java
  *
- * Copyright (c) 2011, Red Hat Inc. or third-party contributors as
- * indicated by the @author tags or express copyright attribution
- * statements applied by the authors.  All third-party contributions are
- * distributed under license by Red Hat Inc.
- *
- * This copyrighted material is made available to anyone wishing to use, modify,
- * copy, or redistribute it subject to the terms and conditions of the GNU
- * Lesser General Public License, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
- * for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this distribution; if not, write to:
- * Free Software Foundation, Inc.
- * 51 Franklin Street, Fifth Floor
- * Boston, MA  02110-1301  USA
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.testing.junit4;
 
@@ -29,10 +12,14 @@ import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+import org.hibernate.internal.SessionFactoryRegistry;
+
 import org.hibernate.testing.AfterClassOnce;
 import org.hibernate.testing.BeforeClassOnce;
 import org.hibernate.testing.OnExpectedFailure;
 import org.hibernate.testing.OnFailure;
+
+import org.jboss.logging.Logger;
 
 /**
  * Metadata about various types of callback methods on a given test class.
@@ -40,7 +27,10 @@ import org.hibernate.testing.OnFailure;
  * @author Steve Ebersole
  */
 public class TestClassMetadata {
+	private static final Logger log = Logger.getLogger( TestClassMetadata.class );
+
 	private static final Object[] NO_ARGS = new Object[0];
+	private final Class testClass;
 
 	private LinkedHashSet<Method> beforeClassOnceMethods;
 	private LinkedHashSet<Method> afterClassOnceMethods;
@@ -48,6 +38,8 @@ public class TestClassMetadata {
 	private LinkedHashSet<Method> onExpectedFailureCallbacks;
 
 	public TestClassMetadata(Class testClass) {
+		this.testClass = testClass;
+
 		processClassHierarchy( testClass );
 	}
 
@@ -83,13 +75,11 @@ public class TestClassMetadata {
 	}
 
 	private void ensureAccessibility(Method method) {
-		if ( !method.isAccessible() ) {
-			try {
-				method.setAccessible( true );
-			}
-			catch (Exception ignored) {
-				// ignore for now
-			}
+		try {
+			method.setAccessible( true );
+		}
+		catch (Exception ignored) {
+			// ignore for now
 		}
 	}
 
@@ -141,17 +131,15 @@ public class TestClassMetadata {
 					)
 			);
 		}
-		if ( !method.isAccessible() ) {
-			try {
-				method.setAccessible( true );
-			}
-			catch (Exception e) {
-				errors.add(
-						new InvalidMethodForAnnotationException(
-								type.buildTypeMarker() + " attached to inaccessible method and unable to make accessible"
-						)
-				);
-			}
+		try {
+			method.setAccessible( true );
+		}
+		catch (Exception e) {
+			errors.add(
+					new InvalidMethodForAnnotationException(
+							type.buildTypeMarker() + " attached to inaccessible method and unable to make accessible"
+					)
+			);
 		}
 	}
 
@@ -178,6 +166,9 @@ public class TestClassMetadata {
 
 
 	public void performBeforeClassCallbacks(Object target) {
+		if ( SessionFactoryRegistry.INSTANCE.hasRegistrations() ) {
+			log.warnf( "Open SessionFactory instances found prior to start of test class [%s]", testClass.getName() );
+		}
 		performCallbacks( beforeClassOnceMethods, target );
 	}
 
@@ -218,6 +209,10 @@ public class TestClassMetadata {
 
 	public void performAfterClassCallbacks(Object target) {
 		performCallbacks( afterClassOnceMethods, target );
+		if ( SessionFactoryRegistry.INSTANCE.hasRegistrations() ) {
+			log.warnf( "Open SessionFactory instances found after completion of test class [%s]; closing them", testClass.getName() );
+			SessionFactoryRegistry.INSTANCE.clearRegistrations();
+		}
 	}
 
 	public void performOnFailureCallback(Object target) {

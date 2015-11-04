@@ -1,47 +1,55 @@
-//$Id: Employee.java 4364 2004-08-17 12:10:32Z oneovthafew $
+/*
+ * Hibernate, Relational Persistence for Idiomatic Java
+ *
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
+ * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
+ */
 package org.hibernate.test.join;
+
 import java.math.BigDecimal;
+import javax.persistence.Column;
+import javax.persistence.DiscriminatorValue;
+import javax.persistence.Entity;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.SecondaryTable;
 
 /**
  * @author Gavin King
+ * @author Steve Ebersole
  */
+@Entity
+@DiscriminatorValue( "E" )
+@SecondaryTable( name = "employee" )
 public class Employee extends Person {
 	private String title;
 	private BigDecimal salary;
 	private Employee manager;
-	/**
-	 * @return Returns the title.
-	 */
+
+	@Column( table = "employee", name = "`title`")
 	public String getTitle() {
 		return title;
 	}
-	/**
-	 * @param title The title to set.
-	 */
+
 	public void setTitle(String title) {
 		this.title = title;
 	}
-	/**
-	 * @return Returns the manager.
-	 */
+
+	@ManyToOne
+	@JoinColumn( table = "employee" )
 	public Employee getManager() {
 		return manager;
 	}
-	/**
-	 * @param manager The manager to set.
-	 */
+
 	public void setManager(Employee manager) {
 		this.manager = manager;
 	}
-	/**
-	 * @return Returns the salary.
-	 */
+
+	@Column( table = "employee" )
 	public BigDecimal getSalary() {
 		return salary;
 	}
-	/**
-	 * @param salary The salary to set.
-	 */
+
 	public void setSalary(BigDecimal salary) {
 		this.salary = salary;
 	}
