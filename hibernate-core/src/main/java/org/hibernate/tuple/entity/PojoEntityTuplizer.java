@@ -8,8 +8,6 @@ package org.hibernate.tuple.entity;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -18,9 +16,7 @@ import org.hibernate.EntityMode;
 import org.hibernate.EntityNameResolver;
 import org.hibernate.HibernateException;
 import org.hibernate.MappingException;
-import org.hibernate.bytecode.enhance.spi.interceptor.LazyAttributeLoader;
-import org.hibernate.bytecode.instrumentation.internal.FieldInterceptionHelper;
-import org.hibernate.bytecode.instrumentation.spi.FieldInterceptor;
+import org.hibernate.bytecode.enhance.spi.interceptor.LazyAttributeLoadingInterceptor;
 import org.hibernate.bytecode.spi.ReflectionOptimizer;
 import org.hibernate.cfg.Environment;
 import org.hibernate.classic.Lifecycle;
@@ -55,26 +51,17 @@ public class PojoEntityTuplizer extends AbstractEntityTuplizer {
 	private final Class mappedClass;
 	private final Class proxyInterface;
 	private final boolean lifecycleImplementor;
-	private final Set<String> lazyPropertyNames;
 	private final ReflectionOptimizer optimizer;
-	private final boolean isInstrumented;
+
+	private final boolean isBytecodeEnhanced;
+
 
 	public PojoEntityTuplizer(EntityMetamodel entityMetamodel, PersistentClass mappedEntity) {
 		super( entityMetamodel, mappedEntity );
 		this.mappedClass = mappedEntity.getMappedClass();
 		this.proxyInterface = mappedEntity.getProxyInterface();
 		this.lifecycleImplementor = Lifecycle.class.isAssignableFrom( mappedClass );
-		this.isInstrumented = entityMetamodel.isInstrumented();
-
-		Iterator iter = mappedEntity.getPropertyClosureIterator();
-		Set<String> tmpLazyPropertyNames = new HashSet<String>( );
-		while ( iter.hasNext() ) {
-			Property property = (Property) iter.next();
-			if ( property.isLazy() ) {
-				tmpLazyPropertyNames.add( property.getName() );
-			}
-		}
-		lazyPropertyNames = tmpLazyPropertyNames.isEmpty() ? null : Collections.unmodifiableSet( tmpLazyPropertyNames );
+		this.isBytecodeEnhanced = entityMetamodel.getBytecodeEnhancementMetadata().isEnhancedForLazyLoading();
 
 		String[] getterNames = new String[propertySpan];
 		String[] setterNames = new String[propertySpan];
@@ -202,12 +189,12 @@ public class PojoEntityTuplizer extends AbstractEntityTuplizer {
 	}
 
 	@Override
-	protected Instantiator buildInstantiator(PersistentClass persistentClass) {
+	protected Instantiator buildInstantiator(EntityMetamodel entityMetamodel, PersistentClass persistentClass) {
 		if ( optimizer == null ) {
-			return new PojoInstantiator( persistentClass, null );
+			return new PojoEntityInstantiator( entityMetamodel, persistentClass, null );
 		}
 		else {
-			return new PojoInstantiator( persistentClass, optimizer.getInstantiationOptimizer() );
+			return new PojoEntityInstantiator( entityMetamodel, persistentClass, optimizer.getInstantiationOptimizer() );
 		}
 	}
 
@@ -283,49 +270,35 @@ public class PojoEntityTuplizer extends AbstractEntityTuplizer {
 	//TODO: need to make the majority of this functionality into a top-level support class for custom impl support
 
 	@Override
-	public void afterInitialize(Object entity, boolean lazyPropertiesAreUnfetched, SessionImplementor session) {
-		if ( isInstrumented() ) {
-			Set<String> lazyProps = lazyPropertiesAreUnfetched && getEntityMetamodel().hasLazyProperties() ?
-					lazyPropertyNames : null;
-			//TODO: if we support multiple fetch groups, we would need
-			//      to clone the set of lazy properties!
-			FieldInterceptionHelper.injectFieldInterceptor( entity, getEntityName(), lazyProps, session );
-		}
+	public void afterInitialize(Object entity, SessionImplementor session) {
 
-		// new bytecode enhancement lazy interception
+		// moving to multiple fetch groups, the idea of `lazyPropertiesAreUnfetched` really
+		// needs to become either:
+		// 		1) the names of all un-fetched fetch groups
+		//		2) the names of all fetched fetch groups
+		// probably (2) is best
+		//
+		// ultimately this comes from EntityEntry, although usage-search seems to show it is never updated there.
+		//
+		// also org.hibernate.persister.entity.AbstractEntityPersister.initializeLazyPropertiesFromDatastore()
+		//		needs to be re-worked
+
 		if ( entity instanceof PersistentAttributeInterceptable ) {
-			if ( lazyPropertiesAreUnfetched && getEntityMetamodel().hasLazyProperties() ) {
-				PersistentAttributeInterceptor interceptor = new LazyAttributeLoader( session, lazyPropertyNames, getEntityName() );
-				( (PersistentAttributeInterceptable) entity ).$$_hibernate_setInterceptor( interceptor );
+			final LazyAttributeLoadingInterceptor interceptor = getEntityMetamodel().getBytecodeEnhancementMetadata().extractInterceptor( entity );
+			if ( interceptor == null ) {
+				getEntityMetamodel().getBytecodeEnhancementMetadata().injectInterceptor( entity, session );
+			}
+			else {
+				if ( interceptor.getLinkedSession() == null ) {
+					interceptor.setSession( session );
+				}
 			}
 		}
 
-		//also clear the fields that are marked as dirty in the dirtyness tracker
+		// clear the fields that are marked as dirty in the dirtyness tracker
 		if ( entity instanceof SelfDirtinessTracker ) {
 			( (SelfDirtinessTracker) entity ).$$_hibernate_clearDirtyAttributes();
 		}
-	}
-
-	@Override
-	public boolean hasUninitializedLazyProperties(Object entity) {
-		if ( getEntityMetamodel().hasLazyProperties() ) {
-			if ( entity instanceof PersistentAttributeInterceptable ) {
-				PersistentAttributeInterceptor interceptor = ( (PersistentAttributeInterceptable) entity ).$$_hibernate_getInterceptor();
-				if ( interceptor != null && interceptor instanceof LazyAttributeLoader ) {
-					return ( (LazyAttributeLoader) interceptor ).isUninitialized();
-				}
-			}
-			FieldInterceptor callback = FieldInterceptionHelper.extractFieldInterceptor( entity );
-			return callback != null && !callback.isInitialized();
-		}
-		else {
-			return false;
-		}
-	}
-
-	@Override
-	public boolean isInstrumented() {
-		return isInstrumented;
 	}
 
 	@Override

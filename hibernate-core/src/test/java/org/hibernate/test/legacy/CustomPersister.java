@@ -10,13 +10,14 @@ import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.Set;
 
 import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.MappingException;
-import org.hibernate.bytecode.spi.EntityInstrumentationMetadata;
+import org.hibernate.bytecode.spi.BytecodeEnhancementMetadata;
 import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
 import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
 import org.hibernate.cache.spi.entry.CacheEntry;
@@ -45,9 +46,9 @@ import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.spi.PersisterCreationContext;
 import org.hibernate.persister.walking.spi.AttributeDefinition;
 import org.hibernate.persister.walking.spi.EntityIdentifierDefinition;
+import org.hibernate.tuple.entity.BytecodeEnhancementMetadataNonPojoImpl;
 import org.hibernate.tuple.entity.EntityMetamodel;
 import org.hibernate.tuple.entity.EntityTuplizer;
-import org.hibernate.tuple.entity.NonPojoInstrumentationMetadata;
 import org.hibernate.type.StandardBasicTypes;
 import org.hibernate.type.Type;
 import org.hibernate.type.VersionType;
@@ -324,7 +325,6 @@ public class CustomPersister implements EntityPersister {
 					clone,
 					this,
 					LockMode.NONE,
-					false,
 					session
 			);
 			TwoPhaseLoad.postHydrate(
@@ -333,7 +333,6 @@ public class CustomPersister implements EntityPersister {
 					null,
 					clone,
 					LockMode.NONE,
-					false,
 					session
 			);
 			TwoPhaseLoad.initializeEntity(
@@ -561,7 +560,7 @@ public class CustomPersister implements EntityPersister {
 	}
 
 	@Override
-	public void afterInitialize(Object entity, boolean fetched, SessionImplementor session) {
+	public void afterInitialize(Object entity, SessionImplementor session) {
 	}
 
 	@Override
@@ -594,7 +593,6 @@ public class CustomPersister implements EntityPersister {
 		return new StandardCacheEntryImpl(
 				state,
 				this,
-				this.hasUninitializedLazyProperties( entity ),
 				version,
 				session,
 				entity
@@ -683,8 +681,8 @@ public class CustomPersister implements EntityPersister {
 	}
 
 	@Override
-	public EntityInstrumentationMetadata getInstrumentationMetadata() {
-		return new NonPojoInstrumentationMetadata( getEntityName() );
+	public BytecodeEnhancementMetadata getInstrumentationMetadata() {
+		return new BytecodeEnhancementMetadataNonPojoImpl( getEntityName() );
 	}
 
 	@Override

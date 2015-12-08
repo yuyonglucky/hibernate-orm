@@ -20,14 +20,17 @@ import org.hibernate.cache.spi.entry.CacheEntry;
 import org.hibernate.cache.spi.entry.ReferenceCacheEntryImpl;
 import org.hibernate.cache.spi.entry.StandardCacheEntryImpl;
 import org.hibernate.engine.internal.CacheHelper;
+import org.hibernate.engine.internal.StatefulPersistenceContext;
 import org.hibernate.engine.internal.TwoPhaseLoad;
 import org.hibernate.engine.internal.Versioning;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityKey;
+import org.hibernate.engine.spi.ManagedEntity;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.Status;
+import org.hibernate.event.service.spi.EventListenerGroup;
 import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventSource;
 import org.hibernate.event.spi.EventType;
@@ -434,7 +437,7 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 			return entity;
 		}
 
-		entity = loadFromSecondLevelCache( event, persister, options );
+		entity = loadFromSecondLevelCache( event, persister, options, keyToLoad );
 		if ( entity != null ) {
 			if ( traceEnabled ) {
 				LOG.tracev(
@@ -561,7 +564,8 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 	protected Object loadFromSecondLevelCache(
 			final LoadEvent event,
 			final EntityPersister persister,
-			final LoadEventListener.LoadType options) {
+			final LoadEventListener.LoadType options,
+			EntityKey entityKey) {
 
 		final SessionImplementor source = event.getSession();
 		final boolean useCache = persister.hasCache()
@@ -602,8 +606,22 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 		}
 
 		CacheEntry entry = (CacheEntry) persister.getCacheEntryStructure().destructure( ce, factory );
-		Object entity = convertCacheEntryToEntity( entry, event.getEntityId(), persister, event );
-		
+		final Object entity;
+		if(entry.isReferenceEntry()) {
+			if( event.getInstanceToLoad() != null ) {
+				throw new HibernateException(
+						String.format( "Attempt to load entity [%s] from cache using provided object instance, but cache " +
+								"is storing references: "+ event.getEntityId()));
+			}
+			else {
+				entity = convertCacheReferenceEntryToEntity( (ReferenceCacheEntryImpl) entry,
+						event.getEntityId(), persister, event.getSession(), entityKey, event );
+			}
+		}
+		else {
+			entity = convertCacheEntryToEntity( entry, event.getEntityId(), persister, event, entityKey );
+		}
+
 		if ( !persister.isInstance( entity ) ) {
 			throw new WrongClassException(
 					"loaded object was of wrong class " + entity.getClass(),
@@ -611,15 +629,84 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 					persister.getEntityName()
 				);
 		}
-		
+
 		return entity;
+	}
+
+	private Object convertCacheReferenceEntryToEntity(
+			ReferenceCacheEntryImpl referenceCacheEntry,
+			Serializable entityId,
+			EntityPersister persister,
+			EventSource session,
+			EntityKey entityKey,
+			LoadEvent loadEvent) {
+		final Object entity = referenceCacheEntry.getReference();
+
+		if ( entity == null ) {
+			throw new IllegalStateException(
+					"Reference cache entry contained null : " + entityId);
+		}
+		else {
+			makeEntityCircularReferenceSafe(referenceCacheEntry, entityId, session, entity, entityKey);
+			//PostLoad is needed for EJB3
+			EventListenerGroup<PostLoadEventListener> evenListenerGroup = getEvenListenerGroup(session);
+
+			if(!evenListenerGroup.isEmpty()) {
+				postLoad(session, evenListenerGroup.listeners(), entity, entityId, persister, loadEvent);
+			}
+			return entity;
+		}
+	}
+
+	private void postLoad(EventSource session, Iterable<PostLoadEventListener> listeners,
+							Object entity, Serializable entityId, EntityPersister persister, LoadEvent event) {
+		PostLoadEvent postLoadEvent = event.getPostLoadEvent()
+				.setEntity(entity)
+				.setId(entityId)
+				.setPersister(persister);
+
+		for (PostLoadEventListener listener : listeners) {
+			listener.onPostLoad(postLoadEvent);
+		}
+	}
+
+	private void makeEntityCircularReferenceSafe(ReferenceCacheEntryImpl referenceCacheEntry,
+												Serializable entityId,
+												EventSource session,
+												Object entity,
+												EntityKey entityKey) {
+
+		final EntityPersister subclassPersister = referenceCacheEntry.getSubclassPersister();
+		// make it circular-reference safe
+		final StatefulPersistenceContext statefulPersistenceContext = (StatefulPersistenceContext) session.getPersistenceContext();
+
+		if ( (entity instanceof ManagedEntity) ) {
+			statefulPersistenceContext.addReferenceEntry(
+					entity,
+					Status.READ_ONLY
+			);
+		}
+		else {
+			TwoPhaseLoad.addUninitializedCachedEntity(
+					entityKey,
+					entity,
+					subclassPersister,
+					LockMode.NONE,
+					referenceCacheEntry.getVersion(),
+					session
+			);
+		}
+
+		subclassPersister.afterInitialize( entity, session );
+		statefulPersistenceContext.initializeNonLazyCollections();
 	}
 
 	private Object convertCacheEntryToEntity(
 			CacheEntry entry,
 			Serializable entityId,
 			EntityPersister persister,
-			LoadEvent event) {
+			LoadEvent event,
+			EntityKey entityKey) {
 
 		final EventSource session = event.getSession();
 		final SessionFactoryImplementor factory = session.getFactory();
@@ -634,47 +721,19 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 		}
 
 		final Object entity;
-		if ( entry.isReferenceEntry() ) {
-			final Object optionalObject = event.getInstanceToLoad();
-			if ( optionalObject != null ) {
-				throw new HibernateException(
-						String.format(
-								"Attempt to load entity [%s] from cache using provided object instance, but cache " +
-										"is storing references",
-								MessageHelper.infoString( persister, entityId, factory )
-						)
-				);
-			}
 
-			ReferenceCacheEntryImpl referenceCacheEntry = (ReferenceCacheEntryImpl) entry;
-			entity = referenceCacheEntry.getReference();
-			if ( entity == null ) {
-				throw new IllegalStateException(
-						"Reference cache entry contained null : " + MessageHelper.infoString(
-								persister,
-								entityId,
-								factory
-						)
-				);
-			}
-			subclassPersister = referenceCacheEntry.getSubclassPersister();
-		}
-		else {
-			subclassPersister = factory.getEntityPersister( entry.getSubclass() );
-			final Object optionalObject = event.getInstanceToLoad();
-			entity = optionalObject == null
-					? session.instantiate( subclassPersister, entityId )
-					: optionalObject;
-		}
+		subclassPersister = factory.getEntityPersister( entry.getSubclass() );
+		final Object optionalObject = event.getInstanceToLoad();
+		entity = optionalObject == null
+				? session.instantiate( subclassPersister, entityId )
+				: optionalObject;
 
 		// make it circular-reference safe
-		final EntityKey entityKey = session.generateEntityKey( entityId, subclassPersister );
 		TwoPhaseLoad.addUninitializedCachedEntity(
 				entityKey,
 				entity,
 				subclassPersister,
 				LockMode.NONE,
-				entry.areLazyPropertiesUnfetched(),
 				entry.getVersion(),
 				session
 		);
@@ -683,38 +742,32 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 		final Object[] values;
 		final Object version;
 		final boolean isReadOnly;
-		if ( entry.isReferenceEntry() ) {
-			values = null;
-			version = null;
-			isReadOnly = true;
+
+		final Type[] types = subclassPersister.getPropertyTypes();
+		// initializes the entity by (desired) side-effect
+		values = ( (StandardCacheEntryImpl) entry ).assemble(
+				entity, entityId, subclassPersister, session.getInterceptor(), session
+		);
+		if ( ( (StandardCacheEntryImpl) entry ).isDeepCopyNeeded() ) {
+			TypeHelper.deepCopy(
+					values,
+					types,
+					subclassPersister.getPropertyUpdateability(),
+					values,
+					session
+			);
+		}
+		version = Versioning.getVersion( values, subclassPersister );
+		LOG.tracef( "Cached Version : %s", version );
+
+		final Object proxy = persistenceContext.getProxy( entityKey );
+		if ( proxy != null ) {
+			// there is already a proxy for this impl
+			// only set the status to read-only if the proxy is read-only
+			isReadOnly = ( (HibernateProxy) proxy ).getHibernateLazyInitializer().isReadOnly();
 		}
 		else {
-			final Type[] types = subclassPersister.getPropertyTypes();
-			// initializes the entity by (desired) side-effect
-			values = ( (StandardCacheEntryImpl) entry ).assemble(
-					entity, entityId, subclassPersister, session.getInterceptor(), session
-			);
-			if ( ( (StandardCacheEntryImpl) entry ).isDeepCopyNeeded() ) {
-				TypeHelper.deepCopy(
-						values,
-						types,
-						subclassPersister.getPropertyUpdateability(),
-						values,
-						session
-				);
-			}
-			version = Versioning.getVersion( values, subclassPersister );
-			LOG.tracef( "Cached Version : %s", version );
-
-			final Object proxy = persistenceContext.getProxy( entityKey );
-			if ( proxy != null ) {
-				// there is already a proxy for this impl
-				// only set the status to read-only if the proxy is read-only
-				isReadOnly = ( (HibernateProxy) proxy ).getHibernateLazyInitializer().isReadOnly();
-			}
-			else {
-				isReadOnly = session.isDefaultReadOnly();
-			}
+			isReadOnly = session.isDefaultReadOnly();
 		}
 
 		persistenceContext.addEntry(
@@ -727,14 +780,13 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 				LockMode.NONE,
 				true,
 				subclassPersister,
-				false,
-				entry.areLazyPropertiesUnfetched()
+				false
 		);
-		subclassPersister.afterInitialize( entity, entry.areLazyPropertiesUnfetched(), session );
+		subclassPersister.afterInitialize( entity, session );
 		persistenceContext.initializeNonLazyCollections();
 
 		//PostLoad is needed for EJB3
-		PostLoadEvent postLoadEvent = new PostLoadEvent( session )
+		PostLoadEvent postLoadEvent = event.getPostLoadEvent()
 				.setEntity( entity )
 				.setId( entityId )
 				.setPersister( persister );
@@ -774,7 +826,6 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 				result,
 				subclassPersister,
 				LockMode.NONE,
-				entry.areLazyPropertiesUnfetched(),
 				entry.getVersion(),
 				session
 		);
@@ -821,17 +872,16 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 				LockMode.NONE,
 				true,
 				subclassPersister,
-				false,
-				entry.areLazyPropertiesUnfetched()
+				false
 		);
-		subclassPersister.afterInitialize( result, entry.areLazyPropertiesUnfetched(), session );
+		subclassPersister.afterInitialize( result, session );
 		persistenceContext.initializeNonLazyCollections();
 		// upgrade the lock if necessary:
 		//lock(result, lockMode);
 
 		//PostLoad is needed for EJB3
 		//TODO: reuse the PostLoadEvent...
-		PostLoadEvent postLoadEvent = new PostLoadEvent( session )
+		PostLoadEvent postLoadEvent = event.getPostLoadEvent()
 				.setEntity( result )
 				.setId( id )
 				.setPersister( persister );
@@ -851,4 +901,14 @@ public class DefaultLoadEventListener extends AbstractLockUpgradeEventListener i
 				.getEventListenerGroup( EventType.POST_LOAD )
 				.listeners();
 	}
+
+	private EventListenerGroup<PostLoadEventListener> getEvenListenerGroup(EventSource session) {
+		return session
+				.getFactory()
+				.getServiceRegistry()
+				.getService( EventListenerRegistry.class)
+				.getEventListenerGroup( EventType.POST_LOAD);
+
+	}
+
 }

@@ -39,7 +39,6 @@ import org.hibernate.boot.model.naming.ImplicitUniqueKeyNameSource;
 import org.hibernate.boot.model.naming.ObjectNameNormalizer;
 import org.hibernate.boot.model.relational.Database;
 import org.hibernate.boot.model.relational.Namespace;
-import org.hibernate.boot.model.source.internal.ConstraintSecondPass;
 import org.hibernate.boot.model.source.internal.ImplicitColumnNamingSecondPass;
 import org.hibernate.boot.model.source.spi.AnyMappingSource;
 import org.hibernate.boot.model.source.spi.AttributePath;
@@ -49,7 +48,6 @@ import org.hibernate.boot.model.source.spi.CascadeStyleSource;
 import org.hibernate.boot.model.source.spi.CollectionIdSource;
 import org.hibernate.boot.model.source.spi.ColumnSource;
 import org.hibernate.boot.model.source.spi.CompositeIdentifierSource;
-import org.hibernate.boot.model.source.spi.ConstraintSource;
 import org.hibernate.boot.model.source.spi.EmbeddableSource;
 import org.hibernate.boot.model.source.spi.EntitySource;
 import org.hibernate.boot.model.source.spi.FilterSource;
@@ -97,6 +95,7 @@ import org.hibernate.cfg.FkSecondPass;
 import org.hibernate.cfg.SecondPass;
 import org.hibernate.engine.FetchStyle;
 import org.hibernate.engine.FetchTiming;
+import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.engine.spi.FilterDefinition;
 import org.hibernate.id.PersistentIdentifierGenerator;
 import org.hibernate.internal.CoreLogging;
@@ -463,8 +462,14 @@ public class ModelBinder {
 
 		bindCustomSql( sourceDocument, entitySource, entityDescriptor );
 
+		final JdbcEnvironment jdbcEnvironment = sourceDocument.getMetadataCollector().getDatabase().getJdbcEnvironment();
+
 		for ( String tableName : entitySource.getSynchronizedTableNames() ) {
-			entityDescriptor.addSynchronizedTable( tableName );
+			final Identifier physicalTableName = sourceDocument.getBuildingOptions().getPhysicalNamingStrategy().toPhysicalTableName(
+					jdbcEnvironment.getIdentifierHelper().toIdentifier( tableName ),
+					jdbcEnvironment
+			);
+			entityDescriptor.addSynchronizedTable( physicalTableName.render( jdbcEnvironment.getDialect() ) );
 		}
 
 		for ( FilterSource filterSource : entitySource.getFilterSources() ) {
@@ -1291,8 +1296,6 @@ public class ModelBinder {
 				}
 			}
 		}
-
-		registerConstraintSecondPasses( mappingDocument, entitySource, entityTableXref );
 	}
 
 	private void handleNaturalIdBinding(
@@ -1323,28 +1326,6 @@ public class ModelBinder {
 		}
 
 		ukBinder.addAttributeBinding( attributeBinding );
-	}
-
-	private void registerConstraintSecondPasses(
-			MappingDocument mappingDocument,
-			EntitySource entitySource,
-			final EntityTableXref entityTableXref) {
-		if ( entitySource.getConstraints() == null ) {
-			return;
-		}
-
-		for ( ConstraintSource constraintSource : entitySource.getConstraints() ) {
-			final String logicalTableName = constraintSource.getTableName();
-			final Table table = entityTableXref.resolveTable( database.toIdentifier( logicalTableName ) );
-
-			mappingDocument.getMetadataCollector().addSecondPass(
-					new ConstraintSecondPass(
-							mappingDocument,
-							table,
-							constraintSource
-					)
-			);
-		}
 	}
 
 	private Property createPluralAttribute(
@@ -3589,6 +3570,7 @@ public class ModelBinder {
 								: FetchMode.JOIN
 				);
 
+				elementBinding.setForeignKeyName( elementSource.getExplicitForeignKeyName() );
 
 				elementBinding.setReferencedEntityName( elementSource.getReferencedEntityName() );
 				if ( StringHelper.isNotEmpty( elementSource.getReferencedEntityAttributeName() ) ) {

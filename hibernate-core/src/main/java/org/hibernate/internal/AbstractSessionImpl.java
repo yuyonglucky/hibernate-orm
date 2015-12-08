@@ -57,6 +57,7 @@ import org.hibernate.resource.transaction.TransactionCoordinatorBuilder;
 import org.hibernate.resource.transaction.TransactionCoordinatorBuilder.TransactionCoordinatorOptions;
 import org.hibernate.resource.transaction.spi.TransactionStatus;
 import org.hibernate.service.ServiceRegistry;
+import org.hibernate.type.descriptor.WrapperOptions;
 
 /**
  * Functionality common to stateless and stateful sessions
@@ -65,11 +66,13 @@ import org.hibernate.service.ServiceRegistry;
  */
 public abstract class AbstractSessionImpl
 		implements Serializable, SharedSessionContract, SessionImplementor, JdbcSessionOwner, TransactionCoordinatorOptions {
+
 	protected transient SessionFactoryImpl factory;
 	private final String tenantIdentifier;
 	private boolean closed;
 
 	protected transient Transaction currentHibernateTransaction;
+	protected transient WrapperOptionsImpl wrapperOptions;
 
 	protected AbstractSessionImpl(SessionFactoryImpl factory, String tenantIdentifier) {
 		this.factory = factory;
@@ -138,7 +141,7 @@ public abstract class AbstractSessionImpl
 				this,
 				getHQLQueryPlan( queryString, false ).getParameterMetadata()
 		);
-		query.setComment( "named HQL query " + namedQueryDefinition.getName() );
+		query.setComment( namedQueryDefinition.getComment() != null ? namedQueryDefinition.getComment() : namedQueryDefinition.getName() );
 		if ( namedQueryDefinition.getLockOptions() != null ) {
 			query.setLockOptions( namedQueryDefinition.getLockOptions() );
 		}
@@ -156,7 +159,7 @@ public abstract class AbstractSessionImpl
 				this,
 				parameterMetadata
 		);
-		query.setComment( "named native SQL query " + namedQueryDefinition.getName() );
+		query.setComment( namedQueryDefinition.getComment() != null ? namedQueryDefinition.getComment() : namedQueryDefinition.getName() );
 		return query;
 	}
 
@@ -193,7 +196,7 @@ public abstract class AbstractSessionImpl
 				this,
 				factory.getQueryPlanCache().getSQLParameterMetadata( nsqlqd.getQueryString() )
 		);
-		query.setComment( "named native SQL query " + queryName );
+		query.setComment( nsqlqd.getComment() != null ? nsqlqd.getComment() : nsqlqd.getName() );
 		initQuery( query, nsqlqd );
 		return query;
 	}
@@ -589,4 +592,12 @@ public abstract class AbstractSessionImpl
 		return factory.getServiceRegistry().getService( TransactionCoordinatorBuilder.class );
 	}
 
+	@Override
+	public WrapperOptions getWrapperOptions() {
+		if ( wrapperOptions == null ) {
+			wrapperOptions = new WrapperOptionsImpl( this );
+		}
+
+		return wrapperOptions;
+	}
 }

@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -96,6 +97,7 @@ import org.hibernate.annotations.Formula;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.GenericGenerators;
 import org.hibernate.annotations.Index;
+import org.hibernate.annotations.LazyGroup;
 import org.hibernate.annotations.LazyToOne;
 import org.hibernate.annotations.LazyToOneOption;
 import org.hibernate.annotations.ListIndexBase;
@@ -135,6 +137,7 @@ import org.hibernate.boot.spi.InFlightMetadataCollector.EntityTableXref;
 import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.cfg.annotations.CollectionBinder;
 import org.hibernate.cfg.annotations.EntityBinder;
+import org.hibernate.cfg.annotations.HCANNHelper;
 import org.hibernate.cfg.annotations.MapKeyColumnDelegator;
 import org.hibernate.cfg.annotations.MapKeyJoinColumnDelegator;
 import org.hibernate.cfg.annotations.Nullability;
@@ -145,7 +148,6 @@ import org.hibernate.cfg.annotations.TableBinder;
 import org.hibernate.engine.OptimisticLockStyle;
 import org.hibernate.engine.spi.FilterDefinition;
 import org.hibernate.id.PersistentIdentifierGenerator;
-import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.loader.PropertyPath;
@@ -1468,8 +1470,6 @@ public final class AnnotationBinder {
 
 	/**
 	 * @param elements List of {@code ProperyData} instances
-	 * @param defaultAccessType The default value access strategy which has to be used in case no explicit local access
-	 * strategy is used
 	 * @param propertyContainer Metadata about a class and its properties
 	 *
 	 * @return the number of id properties found while iterating the elements of {@code annotatedClass} using
@@ -1477,23 +1477,16 @@ public final class AnnotationBinder {
 	 */
 	static int addElementsOfClass(
 			List<PropertyData> elements,
-			AccessType defaultAccessType,
 			PropertyContainer propertyContainer,
 			MetadataBuildingContext context) {
 		int idPropertyCounter = 0;
-		AccessType accessType = defaultAccessType;
 
-		if ( propertyContainer.hasExplicitAccessStrategy() ) {
-			accessType = propertyContainer.getExplicitAccessStrategy();
-		}
-
-		Collection<XProperty> properties = propertyContainer.getProperties( accessType );
+		Collection<XProperty> properties = propertyContainer.getProperties();
 		for ( XProperty p : properties ) {
 			final int currentIdPropertyCounter = addProperty(
 					propertyContainer,
 					p,
 					elements,
-					accessType.getType(),
 					context
 			);
 			idPropertyCounter += currentIdPropertyCounter;
@@ -1505,7 +1498,6 @@ public final class AnnotationBinder {
 			PropertyContainer propertyContainer,
 			XProperty property,
 			List<PropertyData> annElts,
-			String propertyAccessor,
 			MetadataBuildingContext context) {
 		final XClass declaringClass = propertyContainer.getDeclaringClass();
 		final XClass entity = propertyContainer.getEntityAtStake();
@@ -1513,7 +1505,7 @@ public final class AnnotationBinder {
 		PropertyData propertyAnnotatedElement = new PropertyInferredData(
 				declaringClass,
 				property,
-				propertyAccessor,
+				propertyContainer.getClassLevelAccessType().getType(),
 				context.getBuildingOptions().getReflectionManager()
 		);
 
@@ -1560,7 +1552,7 @@ public final class AnnotationBinder {
 										//same dec
 										prop,
 										// the actual @XToOne property
-										propertyAccessor,
+										propertyContainer.getClassLevelAccessType().getType(),
 										//TODO we should get the right accessor but the same as id would do
 										context.getBuildingOptions().getReflectionManager()
 								);
@@ -1664,6 +1656,11 @@ public final class AnnotationBinder {
 				( property.isAnnotationPresent( Id.class )
 						|| property.isAnnotationPresent( EmbeddedId.class ) );
 		propertyBinder.setId( isId );
+
+		final LazyGroup lazyGroupAnnotation = property.getAnnotation( LazyGroup.class );
+		if ( lazyGroupAnnotation != null ) {
+			propertyBinder.setLazyGroup( lazyGroupAnnotation.value() );
+		}
 
 		if ( property.isAnnotationPresent( Version.class ) ) {
 			if ( isIdentifierMapper ) {
@@ -2191,6 +2188,16 @@ public final class AnnotationBinder {
 					if ( isId || ( !optional && nullability != Nullability.FORCED_NULL ) ) {
 						//force columns to not null
 						for ( Ejb3Column col : columns ) {
+							if ( isId && col.isFormula() ) {
+								throw new CannotForceNonNullableException(
+										String.format(
+												Locale.ROOT,
+												"Identifier property [%s] cannot contain formula mapping [%s]",
+												HCANNHelper.annotatedElementSignature( property ),
+												col.getFormulaString()
+										)
+								);
+							}
 							col.forceNotNull();
 						}
 					}
@@ -2560,8 +2567,8 @@ public final class AnnotationBinder {
 			baseClassElements = new ArrayList<PropertyData>();
 			baseReturnedClassOrElement = baseInferredData.getClassOrElement();
 			bindTypeDefs( baseReturnedClassOrElement, buildingContext );
-			PropertyContainer propContainer = new PropertyContainer( baseReturnedClassOrElement, xClassProcessed );
-			addElementsOfClass( baseClassElements, propertyAccessor, propContainer, buildingContext );
+			PropertyContainer propContainer = new PropertyContainer( baseReturnedClassOrElement, xClassProcessed, propertyAccessor );
+			addElementsOfClass( baseClassElements,  propContainer, buildingContext );
 			for ( PropertyData element : baseClassElements ) {
 				orderedBaseClassElements.put( element.getPropertyName(), element );
 			}
@@ -2569,15 +2576,15 @@ public final class AnnotationBinder {
 
 		//embeddable elements can have type defs
 		bindTypeDefs( returnedClassOrElement, buildingContext );
-		PropertyContainer propContainer = new PropertyContainer( returnedClassOrElement, xClassProcessed );
-		addElementsOfClass( classElements, propertyAccessor, propContainer, buildingContext );
+		PropertyContainer propContainer = new PropertyContainer( returnedClassOrElement, xClassProcessed, propertyAccessor );
+		addElementsOfClass( classElements, propContainer, buildingContext );
 
 		//add elements of the embeddable superclass
 		XClass superClass = xClassProcessed.getSuperclass();
 		while ( superClass != null && superClass.isAnnotationPresent( MappedSuperclass.class ) ) {
 			//FIXME: proper support of typevariables incl var resolved at upper levels
-			propContainer = new PropertyContainer( superClass, xClassProcessed );
-			addElementsOfClass( classElements, propertyAccessor, propContainer, buildingContext );
+			propContainer = new PropertyContainer( superClass, xClassProcessed, propertyAccessor );
+			addElementsOfClass( classElements, propContainer, buildingContext );
 			superClass = superClass.getSuperclass();
 		}
 		if ( baseClassElements != null ) {
@@ -2790,9 +2797,11 @@ public final class AnnotationBinder {
 		List<PropertyData> baseClassElements = new ArrayList<PropertyData>();
 		XClass baseReturnedClassOrElement = baseInferredData.getClassOrElement();
 		PropertyContainer propContainer = new PropertyContainer(
-				baseReturnedClassOrElement, inferredData.getPropertyClass()
+				baseReturnedClassOrElement,
+				inferredData.getPropertyClass(),
+				propertyAccessor
 		);
-		addElementsOfClass( baseClassElements, propertyAccessor, propContainer, context );
+		addElementsOfClass( baseClassElements, propContainer, context );
 		//Id properties are on top and there is only one
 		return baseClassElements.get( 0 );
 	}

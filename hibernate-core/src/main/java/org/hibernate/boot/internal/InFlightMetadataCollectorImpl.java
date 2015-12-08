@@ -19,7 +19,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.persistence.AttributeConverter;
-import javax.persistence.Converter;
 import javax.persistence.Embeddable;
 import javax.persistence.Entity;
 import javax.persistence.MapsId;
@@ -45,11 +44,9 @@ import org.hibernate.boot.model.relational.AuxiliaryDatabaseObject;
 import org.hibernate.boot.model.relational.Database;
 import org.hibernate.boot.model.relational.ExportableProducer;
 import org.hibernate.boot.model.relational.Namespace;
-import org.hibernate.boot.model.source.internal.ConstraintSecondPass;
 import org.hibernate.boot.model.source.internal.ImplicitColumnNamingSecondPass;
 import org.hibernate.boot.model.source.spi.LocalMetadataBuildingContext;
 import org.hibernate.boot.spi.AttributeConverterAutoApplyHandler;
-import org.hibernate.boot.spi.AttributeConverterDescriptor;
 import org.hibernate.boot.spi.InFlightMetadataCollector;
 import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.boot.spi.MetadataBuildingOptions;
@@ -1452,7 +1449,6 @@ public class InFlightMetadataCollectorImpl implements InFlightMetadataCollector 
 	private ArrayList<CreateKeySecondPass> createKeySecondPasList;
 	private ArrayList<SecondaryTableSecondPass> secondaryTableSecondPassList;
 	private ArrayList<QuerySecondPass> querySecondPassList;
-	private ArrayList<ConstraintSecondPass> constraintSecondPassList;
 	private ArrayList<ImplicitColumnNamingSecondPass> implicitColumnNamingSecondPassList;
 
 	private ArrayList<SecondPass> generalSecondPassList;
@@ -1484,9 +1480,6 @@ public class InFlightMetadataCollectorImpl implements InFlightMetadataCollector 
 		}
 		else if ( secondPass instanceof QuerySecondPass ) {
 			addQuerySecondPass( (QuerySecondPass) secondPass, onTopOfTheQueue );
-		}
-		else if ( secondPass instanceof ConstraintSecondPass ) {
-			addConstraintSecondPass( ( ConstraintSecondPass) secondPass, onTopOfTheQueue );
 		}
 		else if ( secondPass instanceof ImplicitColumnNamingSecondPass ) {
 			addImplicitColumnNamingSecondPass( (ImplicitColumnNamingSecondPass) secondPass );
@@ -1562,13 +1555,6 @@ public class InFlightMetadataCollectorImpl implements InFlightMetadataCollector 
 		addSecondPass( secondPass, querySecondPassList, onTopOfTheQueue );
 	}
 
-	private void addConstraintSecondPass(ConstraintSecondPass secondPass, boolean onTopOfTheQueue) {
-		if ( constraintSecondPassList == null ) {
-			constraintSecondPassList = new ArrayList<ConstraintSecondPass>();
-		}
-		addSecondPass( secondPass, constraintSecondPassList, onTopOfTheQueue );
-	}
-
 	private void addImplicitColumnNamingSecondPass(ImplicitColumnNamingSecondPass secondPass) {
 		if ( implicitColumnNamingSecondPassList == null ) {
 			implicitColumnNamingSecondPassList = new ArrayList<ImplicitColumnNamingSecondPass>();
@@ -1591,7 +1577,8 @@ public class InFlightMetadataCollectorImpl implements InFlightMetadataCollector 
 
 			processSecondPasses( pkDrivenByDefaultMapsIdSecondPassList );
 			processSecondPasses( setSimpleValueTypeSecondPassList );
-			processSecondPasses( copyIdentifierComponentSecondPasList );
+
+			processCopyIdentifierSecondPassesInOrder();
 
 			processFkSecondPassesInOrder();
 
@@ -1605,7 +1592,6 @@ public class InFlightMetadataCollectorImpl implements InFlightMetadataCollector 
 
 			secondPassCompileForeignKeys( buildingContext );
 
-			processSecondPasses( constraintSecondPassList );
 			processUniqueConstraintHolders( buildingContext );
 			processJPAIndexHolders( buildingContext );
 
@@ -1616,6 +1602,14 @@ public class InFlightMetadataCollectorImpl implements InFlightMetadataCollector 
 		finally {
 			inSecondPass = false;
 		}
+	}
+
+	private void processCopyIdentifierSecondPassesInOrder() {
+		if ( copyIdentifierComponentSecondPasList == null ) {
+			return;
+		}
+		sortCopyIdentifierComponentSecondPasses();
+		processSecondPasses( copyIdentifierComponentSecondPasList );
 	}
 
 	private void processSecondPasses(ArrayList<? extends SecondPass> secondPasses) {
@@ -1629,6 +1623,40 @@ public class InFlightMetadataCollectorImpl implements InFlightMetadataCollector 
 
 		secondPasses.clear();
 	}
+
+	private void sortCopyIdentifierComponentSecondPasses() {
+
+		ArrayList<CopyIdentifierComponentSecondPass> sorted =
+				new ArrayList<CopyIdentifierComponentSecondPass>( copyIdentifierComponentSecondPasList.size() );
+		Set<CopyIdentifierComponentSecondPass> toSort = new HashSet<CopyIdentifierComponentSecondPass>();
+		toSort.addAll( copyIdentifierComponentSecondPasList );
+		topologicalSort( sorted, toSort );
+		copyIdentifierComponentSecondPasList = sorted;
+	}
+
+	/* naive O(n^3) topological sort */
+	private void topologicalSort( List<CopyIdentifierComponentSecondPass> sorted, Set<CopyIdentifierComponentSecondPass> toSort ) {
+		while (!toSort.isEmpty()) {
+			CopyIdentifierComponentSecondPass independent = null;
+
+			searchForIndependent:
+			for ( CopyIdentifierComponentSecondPass secondPass : toSort ) {
+				for ( CopyIdentifierComponentSecondPass other : toSort ) {
+					if (secondPass.dependentUpon( other )) {
+						continue searchForIndependent;
+					}
+				}
+				independent = secondPass;
+				break;
+			}
+			if (independent == null) {
+				throw new MappingException( "cyclic dependency in derived identities" );
+			}
+			toSort.remove( independent );
+			sorted.add( independent );
+		}
+	}
+
 
 	private void processFkSecondPassesInOrder() {
 		if ( fkSecondPassList == null || fkSecondPassList.isEmpty() ) {

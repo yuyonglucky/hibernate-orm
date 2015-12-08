@@ -25,12 +25,16 @@ import javax.persistence.SqlResultSetMappings;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.hibernate.dialect.Oracle8iDialect;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
+import org.hibernate.testing.SkipForDialect;
+
 import org.junit.Test;
 
 /**
  * @author Steve Ebersole
  */
+@SkipForDialect(value = Oracle8iDialect.class, jiraKey = "HHH-10323")
 public class ConstructorResultNativeQueryTest extends BaseEntityManagerFunctionalTestCase {
 	@Entity( name = "Person" )
 	@SqlResultSetMappings(

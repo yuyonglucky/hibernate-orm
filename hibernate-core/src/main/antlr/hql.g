@@ -74,7 +74,6 @@ tokens
 	SOME="some";
 	SUM="sum";
 	TRUE="true";
-	UNION="union";
 	UPDATE="update";
 	VERSIONED="versioned";
 	WHERE="where";
@@ -296,10 +295,6 @@ insertablePropertySpec
 		// Just need *something* to distinguish this on the hql-sql.g side
 		#insertablePropertySpec = #([RANGE, "column-spec"], #insertablePropertySpec);
 	}
-	;
-
-union
-	: queryRule (UNION queryRule)*
 	;
 
 //## query:
@@ -644,22 +639,33 @@ unaryExpression
 	| quantifiedExpression
 	| atom
 	;
-	
+
 caseExpression
-	: CASE^ (whenClause)+ (elseClause)? END! 
-	| CASE^ { #CASE.setType(CASE2); } unaryExpression (altWhenClause)+ (elseClause)? END!
+	// NOTE : the unaryExpression rule contains the subQuery rule
+	: simpleCaseStatement
+	| searchedCaseStatement
 	;
-	
-whenClause
-	: (WHEN^ logicalExpression THEN! unaryExpression)
+
+simpleCaseStatement
+	: CASE^ unaryExpression (simpleCaseWhenClause)+ (elseClause)? END! {
+		#simpleCaseStatement.setType(CASE2);
+	}
 	;
-	
-altWhenClause
+
+simpleCaseWhenClause
 	: (WHEN^ unaryExpression THEN! unaryExpression)
 	;
-	
+
 elseClause
 	: (ELSE^ unaryExpression)
+	;
+
+searchedCaseStatement
+	: CASE^ (searchedCaseWhenClause)+ (elseClause)? END!
+	;
+
+searchedCaseWhenClause
+	: (WHEN^ logicalExpression THEN! unaryExpression)
 	;
 	
 quantifiedExpression
@@ -805,7 +811,7 @@ compoundExpr
 	;
 
 subQuery
-	: union
+	: queryRule
 	{ #subQuery = #([QUERY,"query"], #subQuery); }
 	;
 

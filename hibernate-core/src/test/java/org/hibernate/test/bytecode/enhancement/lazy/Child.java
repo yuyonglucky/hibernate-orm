@@ -34,6 +34,13 @@ public class Child {
 	@LazyToOne(LazyToOneOption.NO_PROXY)
 	Parent parent;
 
+	public Child() {
+	}
+
+	public Child(String name) {
+		this.name = name;
+	}
+
 	public Long getId() {
 		return id;
 	}

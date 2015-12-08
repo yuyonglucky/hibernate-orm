@@ -14,7 +14,6 @@ import org.hibernate.NonUniqueObjectException;
 import org.hibernate.action.internal.AbstractEntityInsertAction;
 import org.hibernate.action.internal.EntityIdentityInsertAction;
 import org.hibernate.action.internal.EntityInsertAction;
-import org.hibernate.bytecode.instrumentation.spi.FieldInterceptor;
 import org.hibernate.classic.Lifecycle;
 import org.hibernate.engine.internal.Cascade;
 import org.hibernate.engine.internal.CascadePoint;
@@ -24,6 +23,7 @@ import org.hibernate.engine.spi.CascadingAction;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityEntryExtraState;
 import org.hibernate.engine.spi.EntityKey;
+import org.hibernate.engine.spi.SelfDirtinessTracker;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.Status;
 import org.hibernate.event.spi.EventSource;
@@ -97,6 +97,10 @@ public abstract class AbstractSaveEventListener extends AbstractReassociateEvent
 			Object anything,
 			EventSource source,
 			boolean requiresImmediateIdAccess) {
+		if ( entity instanceof SelfDirtinessTracker ) {
+			( (SelfDirtinessTracker) entity ).$$_hibernate_clearDirtyAttributes();
+		}
+
 		EntityPersister persister = source.getEntityPersister( entityName, entity );
 		Serializable generatedId = persister.getIdentifierGenerator().generate( source, entity );
 		if ( generatedId == null ) {
@@ -242,7 +246,6 @@ public abstract class AbstractSaveEventListener extends AbstractReassociateEvent
 				LockMode.WRITE,
 				useIdentityColumn,
 				persister,
-				false,
 				false
 		);
 
@@ -288,8 +291,6 @@ public abstract class AbstractSaveEventListener extends AbstractReassociateEvent
 			insert.handleNaturalIdPostSaveNotifications( id );
 		}
 
-		markInterceptorDirty( entity, persister, source );
-
 		EntityEntry newEntry = source.getPersistenceContext().getEntry( entity );
 
 		if ( newEntry != original ) {
@@ -324,18 +325,6 @@ public abstract class AbstractSaveEventListener extends AbstractReassociateEvent
 			);
 			source.getActionQueue().addAction( insert );
 			return insert;
-		}
-	}
-
-	private void markInterceptorDirty(Object entity, EntityPersister persister, EventSource source) {
-		if ( persister.getInstrumentationMetadata().isInstrumented() ) {
-			FieldInterceptor interceptor = persister.getInstrumentationMetadata().injectInterceptor(
-					entity,
-					persister.getEntityName(),
-					null,
-					source
-			);
-			interceptor.dirty();
 		}
 	}
 

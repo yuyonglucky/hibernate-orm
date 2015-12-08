@@ -16,7 +16,6 @@ import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.Session;
-import org.hibernate.bytecode.instrumentation.spi.FieldInterceptor;
 import org.hibernate.engine.spi.CachedNaturalIdValueSource;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.engine.spi.EntityEntryExtraState;
@@ -91,10 +90,10 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 			final EntityMode entityMode,
 			final String tenantId,
 			final boolean disableVersionIncrement,
-			final boolean lazyPropertiesAreUnfetched,
 			final PersistenceContext persistenceContext) {
 		this( status, loadedState, rowId, id, version, lockMode, existsInDatabase,
-				persister,disableVersionIncrement, lazyPropertiesAreUnfetched, persistenceContext );
+				persister,disableVersionIncrement, persistenceContext
+		);
 	}
 
 	public AbstractEntityEntry(
@@ -107,7 +106,6 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 			final boolean existsInDatabase,
 			final EntityPersister persister,
 			final boolean disableVersionIncrement,
-			final boolean lazyPropertiesAreUnfetched,
 			final PersistenceContext persistenceContext) {
 		setCompressedValue( EnumState.STATUS, status );
 		// not useful strictly speaking but more explicit
@@ -122,7 +120,6 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 		this.version=version;
 		setCompressedValue( EnumState.LOCK_MODE, lockMode );
 		setCompressedValue( BooleanState.IS_BEING_REPLICATED, disableVersionIncrement );
-		setCompressedValue( BooleanState.LOADED_WITH_LAZY_PROPERTIES_UNFETCHED, lazyPropertiesAreUnfetched );
 		this.persister=persister;
 		this.persistenceContext = persistenceContext;
 	}
@@ -143,7 +140,6 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 			final LockMode lockMode,
 			final boolean existsInDatabase,
 			final boolean isBeingReplicated,
-			final boolean loadedWithLazyPropertiesUnfetched,
 			final PersistenceContext persistenceContext) {
 		this.persister = ( factory == null ? null : factory.getEntityPersister( entityName ) );
 		this.id = id;
@@ -155,7 +151,6 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 		setCompressedValue( EnumState.LOCK_MODE, lockMode );
 		setCompressedValue( BooleanState.EXISTS_IN_DATABASE, existsInDatabase );
 		setCompressedValue( BooleanState.IS_BEING_REPLICATED, isBeingReplicated );
-		setCompressedValue( BooleanState.LOADED_WITH_LAZY_PROPERTIES_UNFETCHED, loadedWithLazyPropertiesUnfetched );
 		this.rowId = null; // this is equivalent to the old behavior...
 		this.persistenceContext = persistenceContext;
 	}
@@ -279,21 +274,14 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 			getPersister().setPropertyValue( entity, getPersister().getVersionProperty(), nextVersion );
 		}
 
-		if ( getPersister().getInstrumentationMetadata().isInstrumented() ) {
-			final FieldInterceptor interceptor = getPersister().getInstrumentationMetadata().extractInterceptor( entity );
-			if ( interceptor != null ) {
-				interceptor.clearDirty();
-			}
-		}
-
 		if( entity instanceof SelfDirtinessTracker ) {
 			( (SelfDirtinessTracker) entity ).$$_hibernate_clearDirtyAttributes();
 		}
 
-		persistenceContext.getSession()
+		getPersistenceContext().getSession()
 				.getFactory()
 				.getCustomEntityDirtinessStrategy()
-				.resetDirty( entity, getPersister(), (Session) persistenceContext.getSession() );
+				.resetDirty( entity, getPersister(), (Session) getPersistenceContext().getSession() );
 	}
 
 	@Override
@@ -340,24 +328,18 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 
 	@SuppressWarnings( {"SimplifiableIfStatement"})
 	private boolean isUnequivocallyNonDirty(Object entity) {
-
-		if(entity instanceof SelfDirtinessTracker) {
+		if ( entity instanceof SelfDirtinessTracker ) {
 			return ! ( (SelfDirtinessTracker) entity ).$$_hibernate_hasDirtyAttributes();
 		}
 
 		final CustomEntityDirtinessStrategy customEntityDirtinessStrategy =
-				persistenceContext.getSession().getFactory().getCustomEntityDirtinessStrategy();
-		if ( customEntityDirtinessStrategy.canDirtyCheck( entity, getPersister(), (Session) persistenceContext.getSession() ) ) {
-			return ! customEntityDirtinessStrategy.isDirty( entity, getPersister(), (Session) persistenceContext.getSession() );
+				getPersistenceContext().getSession().getFactory().getCustomEntityDirtinessStrategy();
+		if ( customEntityDirtinessStrategy.canDirtyCheck( entity, getPersister(), (Session) getPersistenceContext().getSession() ) ) {
+			return ! customEntityDirtinessStrategy.isDirty( entity, getPersister(), (Session) getPersistenceContext().getSession() );
 		}
 
 		if ( getPersister().hasMutableProperties() ) {
 			return false;
-		}
-
-		if ( getPersister().getInstrumentationMetadata().isInstrumented() ) {
-			// the entity must be instrumented (otherwise we cant check dirty flag) and the dirty flag is false
-			return ! getPersister().getInstrumentationMetadata().extractInterceptor( entity ).isDirty();
 		}
 
 		return false;
@@ -407,7 +389,7 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 			}
 			setStatus( Status.MANAGED );
 			loadedState = getPersister().getPropertyValues( entity );
-			persistenceContext.getNaturalIdHelper().manageLocalNaturalIdCrossReference(
+			getPersistenceContext().getNaturalIdHelper().manageLocalNaturalIdCrossReference(
 					persister,
 					id,
 					loadedState,
@@ -425,11 +407,6 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 	}
 
 	@Override
-	public boolean isLoadedWithLazyPropertiesUnfetched() {
-		return getCompressedValue( BooleanState.LOADED_WITH_LAZY_PROPERTIES_UNFETCHED );
-	}
-
-	@Override
 	public void serialize(ObjectOutputStream oos) throws IOException {
 		final Status previousStatus = getPreviousStatus();
 		oos.writeObject( getEntityName() );
@@ -443,7 +420,6 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 		oos.writeObject( getLockMode().toString() );
 		oos.writeBoolean( isExistsInDatabase() );
 		oos.writeBoolean( isBeingReplicated() );
-		oos.writeBoolean( isLoadedWithLazyPropertiesUnfetched() );
 	}
 
 
@@ -607,8 +583,7 @@ public abstract class AbstractEntityEntry implements Serializable, EntityEntry {
 	protected enum BooleanState {
 
 		EXISTS_IN_DATABASE(13),
-		IS_BEING_REPLICATED(14),
-		LOADED_WITH_LAZY_PROPERTIES_UNFETCHED(15);
+		IS_BEING_REPLICATED(14);
 
 		private final int offset;
 		private final int mask;

@@ -27,6 +27,8 @@ import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.engine.config.spi.ConfigurationService;
 import org.hibernate.engine.jdbc.connections.spi.JdbcConnectionAccess;
 import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
+import org.hibernate.engine.jdbc.internal.FormatStyle;
+import org.hibernate.engine.jdbc.internal.Formatter;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
@@ -55,6 +57,8 @@ public class SchemaUpdate {
 	private final JdbcConnectionAccess jdbcConnectionAccess;
 	private final List<Exception> exceptions = new ArrayList<Exception>();
 	private String outputFile;
+	private String delimiter;
+	private Formatter formatter;
 
 	/**
 	 * Creates a SchemaUpdate object.  This form is intended for use from tooling
@@ -133,7 +137,7 @@ public class SchemaUpdate {
 		List<org.hibernate.tool.schema.spi.Target> toolTargets = new ArrayList<org.hibernate.tool.schema.spi.Target>();
 
 		if ( target.doScript() ) {
-			toolTargets.add( new TargetStdoutImpl() );
+			toolTargets.add( new TargetStdoutImpl( delimiter, formatter ) );
 		}
 
 		if ( target.doExport() ) {
@@ -142,7 +146,7 @@ public class SchemaUpdate {
 
 		if ( outputFile != null ) {
 			LOG.writingGeneratedSchemaToFile( outputFile );
-			toolTargets.add( new TargetFileImpl( outputFile ) );
+			toolTargets.add( new TargetFileImpl( outputFile, delimiter, formatter ) );
 		}
 
 		return toolTargets;
@@ -161,13 +165,21 @@ public class SchemaUpdate {
 	}
 
 	public void setFormat(boolean format) {
+		formatter = (format ? FormatStyle.DDL : FormatStyle.NONE).getFormatter();
 	}
 
 	public void setOutputFile(String outputFile) {
 		this.outputFile = outputFile;
 	}
 
+	/**
+	 * Set the end of statement delimiter
+	 *
+	 * @param delimiter The delimiter
+	 *
+	 */
 	public void setDelimiter(String delimiter) {
+		this.delimiter = delimiter;
 	}
 
 	public static void main(String[] args) {
@@ -180,6 +192,7 @@ public class SchemaUpdate {
 
 				final SchemaUpdate schemaUpdate = new SchemaUpdate( metadata );
 				schemaUpdate.setOutputFile( parsedArgs.outFile );
+				schemaUpdate.setDelimiter( parsedArgs.delimiter );
 				schemaUpdate.execute( parsedArgs.script, parsedArgs.doUpdate );
 			}
 			finally {
@@ -252,6 +265,7 @@ public class SchemaUpdate {
 		String propertiesFile = null;
 		String cfgXmlFile = null;
 		String outFile = null;
+		String delimiter = null;
 
 		String implicitNamingStrategyImplName = null;
 		String physicalNamingStrategyImplName = null;
@@ -281,6 +295,9 @@ public class SchemaUpdate {
 					}
 					else if ( arg.startsWith( "--naming=" ) ) {
 						DeprecationLogger.DEPRECATION_LOGGER.logDeprecatedNamingStrategyArgument();
+					}
+					else if ( arg.startsWith( "--delimiter=" ) ) {
+						parsedArgs.delimiter = arg.substring( 12 );
 					}
 					else if ( arg.startsWith( "--implicit-naming=" ) ) {
 						parsedArgs.implicitNamingStrategyImplName = arg.substring( 18 );

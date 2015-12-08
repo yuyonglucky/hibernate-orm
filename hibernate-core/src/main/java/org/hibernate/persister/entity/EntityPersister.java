@@ -8,13 +8,14 @@ package org.hibernate.persister.entity;
 
 import java.io.Serializable;
 import java.util.Map;
+import java.util.Set;
 
 import org.hibernate.EntityMode;
 import org.hibernate.HibernateException;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.MappingException;
-import org.hibernate.bytecode.spi.EntityInstrumentationMetadata;
+import org.hibernate.bytecode.spi.BytecodeEnhancementMetadata;
 import org.hibernate.cache.spi.OptimisticCacheSource;
 import org.hibernate.cache.spi.access.EntityRegionAccessStrategy;
 import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
@@ -589,7 +590,7 @@ public interface EntityPersister extends OptimisticCacheSource, EntityDefinition
 	/**
 	 * Called just after the entities properties have been initialized
 	 */
-	public void afterInitialize(Object entity, boolean lazyPropertiesAreUnfetched, SessionImplementor session);
+	void afterInitialize(Object entity, SessionImplementor session);
 
 	/**
 	 * Called just after the entity has been reassociated with the session
@@ -779,7 +780,7 @@ public interface EntityPersister extends OptimisticCacheSource, EntityDefinition
 	public EntityMode getEntityMode();
 	public EntityTuplizer getEntityTuplizer();
 
-	public EntityInstrumentationMetadata getInstrumentationMetadata();
+	public BytecodeEnhancementMetadata getInstrumentationMetadata();
 	
 	public FilterAliasGenerator getFilterAliasGenerator(final String rootAlias);
 

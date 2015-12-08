@@ -31,7 +31,7 @@ import org.hibernate.NonUniqueObjectException;
 import org.hibernate.PersistentObjectException;
 import org.hibernate.TransientObjectException;
 import org.hibernate.action.spi.AfterTransactionCompletionProcess;
-import org.hibernate.bytecode.enhance.spi.interceptor.LazyAttributeLoader;
+import org.hibernate.bytecode.enhance.spi.interceptor.LazyAttributeLoadingInterceptor;
 import org.hibernate.cache.spi.access.NaturalIdRegionAccessStrategy;
 import org.hibernate.cache.spi.access.SoftLock;
 import org.hibernate.collection.spi.PersistentCollection;
@@ -42,7 +42,6 @@ import org.hibernate.engine.spi.CachedNaturalIdValueSource;
 import org.hibernate.engine.spi.CollectionEntry;
 import org.hibernate.engine.spi.CollectionKey;
 import org.hibernate.engine.spi.EntityEntry;
-import org.hibernate.engine.spi.EntityEntryFactory;
 import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.EntityUniqueKey;
 import org.hibernate.engine.spi.ManagedEntity;
@@ -226,8 +225,8 @@ public class StatefulPersistenceContext implements PersistenceContext {
 			// todo : I dont think this need be reentrant safe
 			if ( objectEntityEntryEntry.getKey() instanceof PersistentAttributeInterceptable ) {
 				final PersistentAttributeInterceptor interceptor = ( (PersistentAttributeInterceptable) objectEntityEntryEntry.getKey() ).$$_hibernate_getInterceptor();
-				if ( interceptor instanceof LazyAttributeLoader ) {
-					( (LazyAttributeLoader) interceptor ).unsetSession();
+				if ( interceptor instanceof LazyAttributeLoadingInterceptor ) {
+					( (LazyAttributeLoadingInterceptor) interceptor ).unsetSession();
 				}
 			}
 		}
@@ -384,7 +383,9 @@ public class StatefulPersistenceContext implements PersistenceContext {
 	@Override
 	public void addEntity(EntityKey key, Object entity) {
 		entitiesByKey.put( key, entity );
-		getBatchFetchQueue().removeBatchLoadableEntityKey( key );
+		if( batchFetchQueue != null ) {
+			getBatchFetchQueue().removeBatchLoadableEntityKey(key);
+		}
 	}
 
 	@Override
@@ -410,8 +411,10 @@ public class StatefulPersistenceContext implements PersistenceContext {
 		parentsByChild.clear();
 		entitySnapshotsByKey.remove( key );
 		nullifiableEntityKeys.remove( key );
-		getBatchFetchQueue().removeBatchLoadableEntityKey( key );
-		getBatchFetchQueue().removeSubselect( key );
+		if( batchFetchQueue != null ) {
+			getBatchFetchQueue().removeBatchLoadableEntityKey(key);
+			getBatchFetchQueue().removeSubselect(key);
+		}
 		return entity;
 	}
 
@@ -455,8 +458,7 @@ public class StatefulPersistenceContext implements PersistenceContext {
 			final LockMode lockMode,
 			final boolean existsInDatabase,
 			final EntityPersister persister,
-			final boolean disableVersionIncrement,
-			boolean lazyPropertiesAreUnfetched) {
+			final boolean disableVersionIncrement) {
 		addEntity( entityKey, entity );
 		return addEntry(
 				entity,
@@ -468,8 +470,7 @@ public class StatefulPersistenceContext implements PersistenceContext {
 				lockMode,
 				existsInDatabase,
 				persister,
-				disableVersionIncrement,
-				lazyPropertiesAreUnfetched
+				disableVersionIncrement
 		);
 	}
 
@@ -484,18 +485,26 @@ public class StatefulPersistenceContext implements PersistenceContext {
 			final LockMode lockMode,
 			final boolean existsInDatabase,
 			final EntityPersister persister,
-			final boolean disableVersionIncrement,
-			boolean lazyPropertiesAreUnfetched) {
-
+			final boolean disableVersionIncrement) {
 		final EntityEntry e;
 
-		if( (entity instanceof ManagedEntity) &&  ((ManagedEntity) entity).$$_hibernate_getEntityEntry() != null && status == Status.READ_ONLY) {
-			e = ((ManagedEntity) entity).$$_hibernate_getEntityEntry();
-			e.setStatus( status  );
-		}
-		else {
-			final EntityEntryFactory entityEntryFactory = persister.getEntityEntryFactory();
-			e = entityEntryFactory.createEntityEntry(
+		/*
+			IMPORTANT!!!
+
+			The following instanceof checks and castings are intentional.
+
+			DO NOT REFACTOR to make calls through the EntityEntryFactory interface, which would result
+			in polymorphic call sites which will severely impact performance.
+
+			When a virtual method is called via an interface the JVM needs to resolve which concrete
+			implementation to call.  This takes CPU cycles and is a performance penalty.  It also prevents method
+			in-ling which further degrades performance.  Casting to an implementation and making a direct method call
+			removes the virtual call, and allows the methods to be in-lined.  In this critical code path, it has a very
+			large impact on performance to make virtual method calls.
+		*/
+		if (persister.getEntityEntryFactory() instanceof MutableEntityEntryFactory) {
+			//noinspection RedundantCast
+			e = ( (MutableEntityEntryFactory) persister.getEntityEntryFactory() ).createEntityEntry(
 					status,
 					loadedState,
 					rowId,
@@ -505,16 +514,40 @@ public class StatefulPersistenceContext implements PersistenceContext {
 					existsInDatabase,
 					persister,
 					disableVersionIncrement,
-					lazyPropertiesAreUnfetched,
+					this
+			);
+		}
+		else {
+			//noinspection RedundantCast
+			e = ( (ImmutableEntityEntryFactory) persister.getEntityEntryFactory() ).createEntityEntry(
+					status,
+					loadedState,
+					rowId,
+					id,
+					version,
+					lockMode,
+					existsInDatabase,
+					persister,
+					disableVersionIncrement,
 					this
 			);
 		}
 
 		entityEntryContext.addEntityEntry( entity, e );
-//		entityEntries.put(entity, e);
 
 		setHasNonReadOnlyEnties( status );
 		return e;
+	}
+
+	public EntityEntry addReferenceEntry(
+			final Object entity,
+			final Status status) {
+
+		((ManagedEntity)entity).$$_hibernate_getEntityEntry().setStatus( status );
+		entityEntryContext.addEntityEntry( entity, ((ManagedEntity)entity).$$_hibernate_getEntityEntry() );
+
+		setHasNonReadOnlyEnties( status );
+		return ((ManagedEntity)entity).$$_hibernate_getEntityEntry();
 	}
 
 	@Override
@@ -1382,8 +1415,7 @@ public class StatefulPersistenceContext implements PersistenceContext {
 				oldEntry.getLockMode(),
 				oldEntry.isExistsInDatabase(),
 				oldEntry.getPersister(),
-				oldEntry.isBeingReplicated(),
-				oldEntry.isLoadedWithLazyPropertiesUnfetched()
+				oldEntry.isBeingReplicated()
 		);
 	}
 

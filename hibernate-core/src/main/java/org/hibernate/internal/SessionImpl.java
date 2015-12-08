@@ -42,6 +42,7 @@ import org.hibernate.LobHelper;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.MappingException;
+import org.hibernate.MultiIdentifierLoadAccess;
 import org.hibernate.NaturalIdLoadAccess;
 import org.hibernate.ObjectDeletedException;
 import org.hibernate.ObjectNotFoundException;
@@ -129,6 +130,7 @@ import org.hibernate.jdbc.WorkExecutorVisitable;
 import org.hibernate.loader.criteria.CriteriaLoader;
 import org.hibernate.loader.custom.CustomLoader;
 import org.hibernate.loader.custom.CustomQuery;
+import org.hibernate.loader.entity.DynamicBatchingEntityLoaderBuilder;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.entity.OuterJoinLoadable;
@@ -205,6 +207,7 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 	private transient ExceptionMapper exceptionMapper;
 	private transient ManagedFlushChecker managedFlushChecker;
 	private transient AfterCompletionAction afterCompletionAction;
+	private transient LoadEvent loadEvent; //cached LoadEvent instance
 
 	/**
 	 * Constructor used for openSession(...) processing, as well as construction
@@ -936,8 +939,27 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 
 	@Override
 	public void load(Object object, Serializable id) throws HibernateException {
-		LoadEvent event = new LoadEvent( id, object, this );
+		LoadEvent event = loadEvent;
+		loadEvent = null;
+		if ( event == null ) {
+			event = new LoadEvent( id, object, this );
+		}
+		else {
+			event.setEntityClassName( null );
+			event.setEntityId( id );
+			event.setInstanceToLoad( object );
+			event.setLockMode( LoadEvent.DEFAULT_LOCK_MODE );
+			event.setLockScope( LoadEvent.DEFAULT_LOCK_OPTIONS.getScope() );
+			event.setLockTimeout( LoadEvent.DEFAULT_LOCK_OPTIONS.getTimeOut() );
+		}
 		fireLoad( event, LoadEventListener.RELOAD );
+		if ( loadEvent == null ) {
+			event.setEntityClassName( null );
+			event.setEntityId( null );
+			event.setInstanceToLoad( null );
+			event.setResult( null );
+			loadEvent = event;
+		}
 	}
 
 	@Override
@@ -971,10 +993,19 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 			EntityPersister persister = getFactory().getEntityPersister( entityName );
 			LOG.debugf( "Initializing proxy: %s", MessageHelper.infoString( persister, id, getFactory() ) );
 		}
-
-		LoadEvent event = new LoadEvent( id, entityName, true, this );
+		LoadEvent event = loadEvent;
+		loadEvent = null;
+		event = recycleEventInstance( event, id, entityName );
 		fireLoad( event, LoadEventListener.IMMEDIATE_LOAD );
-		return event.getResult();
+		Object result = event.getResult();
+		if ( loadEvent == null ) {
+			event.setEntityClassName( null );
+			event.setEntityId( null );
+			event.setInstanceToLoad( null );
+			event.setResult( null );
+			loadEvent = event;
+		}
+		return result;
 	}
 
 	@Override
@@ -986,12 +1017,41 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 				: eager
 				? LoadEventListener.INTERNAL_LOAD_EAGER
 				: LoadEventListener.INTERNAL_LOAD_LAZY;
-		LoadEvent event = new LoadEvent( id, entityName, true, this );
+
+		LoadEvent event = loadEvent;
+		loadEvent = null;
+		event = recycleEventInstance( event, id, entityName );
 		fireLoad( event, type );
+		Object result = event.getResult();
 		if ( !nullable ) {
-			UnresolvableObjectException.throwIfNull( event.getResult(), id, entityName );
+			UnresolvableObjectException.throwIfNull( result, id, entityName );
 		}
-		return event.getResult();
+		if ( loadEvent == null ) {
+			event.setEntityClassName( null );
+			event.setEntityId( null );
+			event.setInstanceToLoad( null );
+			event.setResult( null );
+			loadEvent = event;
+		}
+		return result;
+	}
+
+	/**
+	 * Helper to avoid creating many new instances of LoadEvent: it's an allocation hot spot.
+	 */
+	private LoadEvent recycleEventInstance(final LoadEvent event, final Serializable id, final String entityName) {
+		if ( event == null ) {
+			return new LoadEvent( id, entityName, true, this );
+		}
+		else {
+			event.setEntityClassName( entityName );
+			event.setEntityId( id );
+			event.setInstanceToLoad( null );
+			event.setLockMode( LoadEvent.DEFAULT_LOCK_MODE );
+			event.setLockScope( LoadEvent.DEFAULT_LOCK_OPTIONS.getScope() );
+			event.setLockTimeout( LoadEvent.DEFAULT_LOCK_OPTIONS.getTimeOut() );
+			return event;
+		}
 	}
 
 	@Override
@@ -1042,6 +1102,16 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 	@Override
 	public <T> IdentifierLoadAccessImpl<T> byId(Class<T> entityClass) {
 		return new IdentifierLoadAccessImpl<T>( entityClass );
+	}
+
+	@Override
+	public <T> MultiIdentifierLoadAccess<T> byMultipleIds(Class<T> entityClass) {
+		return new MultiIdentifierLoadAccessImpl<T>( locateEntityPersister( entityClass ) );
+	}
+
+	@Override
+	public MultiIdentifierLoadAccess byMultipleIds(String entityName) {
+		return new MultiIdentifierLoadAccessImpl( locateEntityPersister( entityName ) );
 	}
 
 	@Override
@@ -2577,6 +2647,7 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 	private class IdentifierLoadAccessImpl<T> implements IdentifierLoadAccess<T> {
 		private final EntityPersister entityPersister;
 		private LockOptions lockOptions;
+		private CacheMode cacheMode;
 
 		private IdentifierLoadAccessImpl(EntityPersister entityPersister) {
 			this.entityPersister = entityPersister;
@@ -2597,8 +2668,37 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 		}
 
 		@Override
-		@SuppressWarnings("unchecked")
+		public IdentifierLoadAccess<T> with(CacheMode cacheMode) {
+			this.cacheMode = cacheMode;
+			return this;
+		}
+
+		@Override
 		public final T getReference(Serializable id) {
+			CacheMode sessionCacheMode = getCacheMode();
+			boolean cacheModeChanged = false;
+			if ( cacheMode != null ) {
+				// naive check for now...
+				// todo : account for "conceptually equal"
+				if ( cacheMode != sessionCacheMode ) {
+					setCacheMode( cacheMode );
+					cacheModeChanged = true;
+				}
+			}
+
+			try {
+				return doGetReference( id );
+			}
+			finally {
+				if ( cacheModeChanged ) {
+					// change it back
+					setCacheMode( sessionCacheMode );
+				}
+			}
+		}
+
+		@SuppressWarnings("unchecked")
+		protected T doGetReference(Serializable id) {
 			if ( this.lockOptions != null ) {
 				LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), lockOptions, SessionImpl.this );
 				fireLoad( event, LoadEventListener.LOAD );
@@ -2624,8 +2724,31 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 		}
 
 		@Override
-		@SuppressWarnings("unchecked")
 		public final T load(Serializable id) {
+			CacheMode sessionCacheMode = getCacheMode();
+			boolean cacheModeChanged = false;
+			if ( cacheMode != null ) {
+				// naive check for now...
+				// todo : account for "conceptually equal"
+				if ( cacheMode != sessionCacheMode ) {
+					setCacheMode( cacheMode );
+					cacheModeChanged = true;
+				}
+			}
+
+			try {
+				return doLoad( id );
+			}
+			finally {
+				if ( cacheModeChanged ) {
+					// change it back
+					setCacheMode( sessionCacheMode );
+				}
+			}
+		}
+
+		@SuppressWarnings("unchecked")
+		protected final T doLoad(Serializable id) {
 			if ( this.lockOptions != null ) {
 				LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), lockOptions, SessionImpl.this );
 				fireLoad( event, LoadEventListener.GET );
@@ -2645,6 +2768,109 @@ public final class SessionImpl extends AbstractSessionImpl implements EventSourc
 				afterOperation( success );
 			}
 			return (T) event.getResult();
+		}
+	}
+
+	private class MultiIdentifierLoadAccessImpl<T> implements MultiIdentifierLoadAccess<T> {
+		private final EntityPersister entityPersister;
+		private LockOptions lockOptions;
+		private CacheMode cacheMode;
+		private Integer batchSize;
+		private boolean sessionCheckingEnabled;
+
+		public MultiIdentifierLoadAccessImpl(EntityPersister entityPersister) {
+			this.entityPersister = entityPersister;
+		}
+
+		@Override
+		public final MultiIdentifierLoadAccessImpl<T> with(LockOptions lockOptions) {
+			this.lockOptions = lockOptions;
+			return this;
+		}
+
+		@Override
+		public MultiIdentifierLoadAccessImpl<T> with(CacheMode cacheMode) {
+			this.cacheMode = cacheMode;
+			return this;
+		}
+
+		@Override
+		public MultiIdentifierLoadAccess<T> withBatchSize(int batchSize) {
+			if ( batchSize < 1 ) {
+				this.batchSize = null;
+			}
+			else {
+				this.batchSize = batchSize;
+			}
+			return this;
+		}
+
+		@Override
+		public MultiIdentifierLoadAccess<T> enableSessionCheck(boolean enabled) {
+			this.sessionCheckingEnabled = enabled;
+			return this;
+		}
+
+		@Override
+		public <K extends Serializable> List<T> multiLoad(K... ids) {
+			CacheMode sessionCacheMode = getCacheMode();
+			boolean cacheModeChanged = false;
+			if ( cacheMode != null ) {
+				// naive check for now...
+				// todo : account for "conceptually equal"
+				if ( cacheMode != sessionCacheMode ) {
+					setCacheMode( cacheMode );
+					cacheModeChanged = true;
+				}
+			}
+
+			try {
+				return DynamicBatchingEntityLoaderBuilder.INSTANCE.multiLoad(
+						(OuterJoinLoadable) entityPersister,
+						ids,
+						lockOptions,
+						batchSize,
+						sessionCheckingEnabled,
+						SessionImpl.this
+				);
+			}
+			finally {
+				if ( cacheModeChanged ) {
+					// change it back
+					setCacheMode( sessionCacheMode );
+				}
+			}
+		}
+
+		@Override
+		public <K extends Serializable> List<T> multiLoad(List<K> ids) {
+			CacheMode sessionCacheMode = getCacheMode();
+			boolean cacheModeChanged = false;
+			if ( cacheMode != null ) {
+				// naive check for now...
+				// todo : account for "conceptually equal"
+				if ( cacheMode != sessionCacheMode ) {
+					setCacheMode( cacheMode );
+					cacheModeChanged = true;
+				}
+			}
+
+			try {
+				return DynamicBatchingEntityLoaderBuilder.INSTANCE.multiLoad(
+						(OuterJoinLoadable) entityPersister,
+						ids.toArray( new Serializable[ ids.size() ] ),
+						lockOptions,
+						batchSize,
+						sessionCheckingEnabled,
+						SessionImpl.this
+				);
+			}
+			finally {
+				if ( cacheModeChanged ) {
+					// change it back
+					setCacheMode( sessionCacheMode );
+				}
+			}
 		}
 	}
 
